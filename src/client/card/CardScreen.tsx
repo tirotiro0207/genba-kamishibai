@@ -149,6 +149,11 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/route/${encodeURIComponent(card.id)}`} data-testid="card-route">
             経路を見る（部品 → 元の文）
           </a>
+          {card.status !== "signed" && card.status !== "stopped" && (
+            <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}`} data-testid="card-fix">
+              枠で囲んで直す
+            </a>
+          )}
           <button className="card-show" onClick={() => setOpen(false)} data-testid="card-hide">
             閉じる
           </button>

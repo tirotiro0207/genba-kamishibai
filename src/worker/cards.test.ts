@@ -54,3 +54,37 @@ describe("カードの保存と状態（019）", () => {
     expect((await call(`/api/t/demo/cards/${c.id}/status`, json("POST", { to: "pending" }))).status).toBe(404);
   });
 });
+
+describe("枠と指示（044a）", () => {
+  const box = { x: 0.5, y: 0.3, w: 0.3, h: 0.4 };
+  const fix = (id: string, b: unknown) => call(`${base}/${id}/fix`, json("POST", b));
+
+  it("枠と文を ④ 人の直しの 1 行に残す", async () => {
+    const c = await newCard();
+    const res = await fix(c.id, { frame: 1, box, text: "  検電器を盤に近づける  " });
+    expect(res.status).toBe(202);
+    const got = (await res.json()) as { n: number; version: number; t: number; text: string };
+    expect(got).toMatchObject({ version: 1, t: 2, text: "検電器を盤に近づける" });
+    const log = (await (await call(`/api/t/practice/audit/cards/${c.id}`)).json()) as { entries: { kind: string; n: number; payload: Record<string, unknown> }[] };
+    const row = log.entries.find((e) => e.n === got.n)!;
+    expect(row.kind).toBe("edit");
+    expect(row.payload).toMatchObject({ request: "redo", version: 1, frame: 1, t: 2, box, text: "検電器を盤に近づける" });
+  });
+
+  it("枠が無い・小さい・外に出る、文が空、コマの番号が違うときは断る", async () => {
+    const c = await newCard();
+    for (const b of [
+      { frame: 0, text: "x" },
+      { frame: 0, box: { ...box, w: 0.01 }, text: "x" },
+      { frame: 0, box: { ...box, x: 0.9 }, text: "x" },
+      { frame: 0, box, text: "   " },
+      { frame: 3, box, text: "x" },
+    ]) expect((await fix(c.id, b)).status).toBe(400);
+  });
+
+  it("署名済みと停止したカードには送れない", async () => {
+    const c = await newCard();
+    await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
+    expect((await fix(c.id, { frame: 0, box, text: "x" })).status).toBe(409);
+  });
+});

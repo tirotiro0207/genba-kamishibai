@@ -4,6 +4,7 @@
 import { Hono } from "hono";
 import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
+import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
@@ -117,6 +118,20 @@ cards.put("/:id", async (c) => {
     .run();
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
+});
+
+// 枠と指示（044a）: 直したい部分の枠と「ここをこうしたい」を ④ 人の直しの 1 行として残す。作り直すのは 044b
+cards.post("/:id/fix", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードには直しを送れない" }, 409);
+  const b = await c.req.json<Partial<FixRequest> & { actor?: string }>().catch(() => null);
+  const body = JSON.parse(r.body) as CardBody;
+  const errs = validateFix(b, body.frames.length);
+  if (errs.length) return c.json({ error: "枠か文が足りない", errors: errs }, 400);
+  const req = { frame: b!.frame!, t: body.frames[b!.frame!].t, box: b!.box!, text: b!.text!.trim() };
+  const e = await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "edit", actor: actorOf(b as Payload, "supervisor"), payload: { request: "redo", version: r.version, ...req } });
+  return c.json({ n: e.n, version: r.version, ...req }, 202);
 });
 
 cards.post("/:id/status", async (c) => {
