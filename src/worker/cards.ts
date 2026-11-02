@@ -4,6 +4,7 @@
 import { Hono } from "hono";
 import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
+import type { Term } from "../shared/make/words";
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -66,6 +67,26 @@ cards.post("/", async (c) => {
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, actorOf(b, "maker"))), 201);
+});
+
+/** 用語表に積む（036）。同じカードの同じ言葉は 1 行 */
+export async function addTerms(db: D1Database, tenantId: string, cardId: string, terms: Term[]) {
+  if (!terms.length) return;
+  await db.batch(terms.map((t) => db.prepare("INSERT OR IGNORE INTO glossary (tenant_id, ja, vi, card_id) VALUES (?, ?, ?, ?)").bind(tenantId, t.ja.slice(0, 80), t.vi.slice(0, 120), cardId)));
+}
+
+// 用語表: 日本語ごとに、ベトナム語（カードによって違えば全部）と、どのカードで使うか
+cards.get("/glossary", async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT ja, vi, card_id, checked FROM glossary WHERE tenant_id = ? ORDER BY ja, created_at").bind(c.var.tenant.id).all<{ ja: string; vi: string; card_id: string; checked: number }>();
+  const byJa = new Map<string, { ja: string; vi: string[]; cards: string[]; checked: boolean }>();
+  for (const r of results) {
+    const t = byJa.get(r.ja) ?? { ja: r.ja, vi: [], cards: [], checked: true };
+    if (!t.vi.includes(r.vi)) t.vi.push(r.vi);
+    t.cards.push(r.card_id);
+    t.checked &&= r.checked === 1;
+    byJa.set(r.ja, t);
+  }
+  return c.json({ terms: [...byJa.values()] });
 });
 
 cards.get("/:id", async (c) => {
