@@ -69,9 +69,19 @@ export const MOTION_JSON_SCHEMA = {
   },
 } as const;
 
+/** 1 枚の絵の形（キーフレームから時刻と印を除いたもの）。角度だけで 1 枚を決めるときに使う */
+export type FrameJson = Pick<MotionJson["keyframes"][number], "figures" | "props">;
 type Key = MotionJson["keyframes"][number];
 
-function keyToFrame(k: Key): Frame {
+const KEY_ITEMS = MOTION_JSON_SCHEMA.properties.keyframes.items;
+export const FRAME_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["figures", "props"],
+  properties: { figures: KEY_ITEMS.properties.figures, props: KEY_ITEMS.properties.props },
+} as const;
+
+export function keyToFrame(k: FrameJson): Frame {
   return {
     figures: k.figures.map((f) => ({ x: f.x, height: f.height, facing: f.facing, angles: { ...f.angles } })),
     props: k.props.map((p): PropSpec => ({
@@ -80,6 +90,15 @@ function keyToFrame(k: Key): Frame {
       at: p.figure < 0 ? { x: p.x, y: p.y } : { figure: p.figure, joint: p.joint, dx: p.dx, dy: p.dy },
     })),
   };
+}
+
+/** 1 枚の絵の範囲の検査（人形の関節・小物・人数） */
+export function validateFrameJson(k: FrameJson): string[] {
+  const errs: string[] = [];
+  if (!Array.isArray(k?.figures) || !Array.isArray(k?.props)) return ["figures と props が要る"];
+  k.figures.forEach((f, j) => { for (const e of validateFigure(f)) errs.push(`figures[${j}]: ${e}`); });
+  for (const e of validateFrame(keyToFrame(k))) errs.push(e);
+  return errs;
 }
 
 /** 範囲の検査。問題の一覧を返す（空なら通る） */
@@ -94,8 +113,7 @@ export function validateMotion(m: MotionJson): string[] {
     if (k.figures.length !== ks[0].figures.length) errs.push(`keyframes[${i}] の人数が最初と違う`);
     if (k.props.length !== ks[0].props.length || k.props.some((p, j) => p.kind !== ks[0].props[j].kind || p.figure < 0 !== ks[0].props[j].figure < 0))
       errs.push(`keyframes[${i}] の小物の並びが最初と違う`);
-    k.figures.forEach((f, j) => { for (const e of validateFigure(f)) errs.push(`keyframes[${i}].figures[${j}]: ${e}`); });
-    for (const e of validateFrame(keyToFrame(k))) errs.push(`keyframes[${i}]: ${e}`);
+    for (const e of validateFrameJson(k)) errs.push(`keyframes[${i}].${e}`);
   });
   const marks = ks.filter((k) => k.mark).length;
   if (marks < MARKS_MIN || marks > MARKS_MAX) errs.push(`印は ${MARKS_MIN}〜${MARKS_MAX} か所: ${marks}`);
@@ -126,7 +144,7 @@ export function frameAt(m: MotionJson, t: number): Frame {
     const q = b.props[j];
     return { ...p, dx: lerp(p.dx, q.dx, u), dy: lerp(p.dy, q.dy, u), x: lerp(p.x, q.x, u), y: lerp(p.y, q.y, u), size: lerp(p.size, q.size, u) };
   });
-  return keyToFrame({ t, mark: false, figures: figures as Key["figures"], props });
+  return keyToFrame({ figures: figures as Key["figures"], props });
 }
 
 /** 印の付いた時刻のコマ（時刻の順） */
