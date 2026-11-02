@@ -14,9 +14,9 @@ README に入れる 3 つの節の下書き。ライセンスは作者が決め�
 
 ## 利害の開示（Disclosure）
 
-作者は、この仕組みを試しに使ってもらう会社（電気工事会社、1923 年創業）に、別の翻訳のサービスを有償で提供している。そのため、結果を作者に都合よく見せていないことが分かるように、新入社員の答えはアプリが記録し（記録は追記だけで、書き換えも消すこともできない）、名前を消した全部の答えを `docs/answers.csv` で公開した。
+作者は、この仕組みを試しに使ってもらう会社（電気工事会社、1923 年創業）に、別の翻訳のサービスを有償で提供している。そのため、結果を作者に都合よく見せていないことが分かるように、新入社員の答えはアプリが記録し（記録は追記だけで、書き換えも消すこともできない）、公開に同意した人の答えを、名前を消して `docs/answers.csv` で公開した。
 
-> The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer was recorded by the app itself (append-only — no edits, no deletions), and all answers are published anonymously in `docs/answers.csv`.
+> The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer was recorded by the app itself (append-only — no edits, no deletions), and the answers of those who agreed to publication are published anonymously in `docs/answers.csv`.
 
 ## 出どころ（Sources）
 
