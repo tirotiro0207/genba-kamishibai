@@ -15,5 +15,12 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     video: { mode: "on", size: { width: 1280, height: 720 } },
   },
-  webServer: { command: `npx vite --port ${PORT} --strictPort`, port: PORT, reuseExistingServer: true },
+  // 画面と API と手元の D1 を一緒に動かす
+  webServer: {
+    command: `npx vite build && npx wrangler d1 migrations apply DB --local && npx wrangler dev --port ${PORT}`,
+    port: PORT,
+    reuseExistingServer: true,
+    timeout: 120_000,
+    env: { CI: "1" },
+  },
 });
