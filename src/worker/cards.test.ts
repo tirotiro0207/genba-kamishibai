@@ -1,6 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { sampleCard } from "../../tests/fixtures/card";
+import { signRole } from "./people";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
 const json = (method: string, body?: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -41,7 +42,9 @@ describe("カードの保存と状態（019）", () => {
     expect(r).toMatchObject({ status: "draft", version: 2 });
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
     expect((await call(`${base}/${c.id}`, json("PUT", { card: fixed }))).status).toBe(409);
-    expect((await move(c.id, "stopped")).status).toBe(200);
+    // 停止は監修者だけ（030b）
+    const sup = await signRole("test-secret", "practice", { role: "supervisor", slot: 1 });
+    expect((await call(`${base}/${c.id}/status`, { ...json("POST", { to: "stopped" }), headers: { "content-type": "application/json", "x-role": sup } })).status).toBe(200);
     expect((await move(c.id, "signed")).status).toBe(403);
   });
 
