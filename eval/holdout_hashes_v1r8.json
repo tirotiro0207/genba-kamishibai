@@ -1,0 +1,47 @@
+{
+ "version": "v1r8",
+ "algorithm": "sha256 of json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(',', ':')) in UTF-8",
+ "file_sha256": "d719b4516ae3aac3503f50a48189b9f3c86c25142e98ac5e091e6619ff4f3557",
+ "items": [
+  {
+   "no": 4,
+   "sha256": "5d22bed39643ed078537434aacd866f44b75c7fae506ac7e093869699aa7cbe8"
+  },
+  {
+   "no": 6,
+   "sha256": "f3a373504f231eeb4c6f4c0947b4cd7005ccaf9f62616ce6033032205caf0ef8"
+  },
+  {
+   "no": 12,
+   "sha256": "bed711b997e0d52ed1c5a44762c5185577952d8b4a5f01d6150dee51b25f0337"
+  },
+  {
+   "no": 15,
+   "sha256": "5441f6197a66a7b38ed42ccada0f039a4c6d281d37e1bbea3512b8e42b41413b"
+  },
+  {
+   "no": 17,
+   "sha256": "c15de3390723439ba3de656f1cd65858b6dc7a050b3e784af4c9806afe148ff9"
+  },
+  {
+   "no": 19,
+   "sha256": "cd241ab6651bda9fad218252c83cdfd8ec59a02ad61a0ed7258f8295aab8efe8"
+  },
+  {
+   "no": 20,
+   "sha256": "9863fc84da396bef2d1746d966ddb780139630714902b90ee99351ff73b23360"
+  },
+  {
+   "no": 21,
+   "sha256": "c7563efa801c5ad54252a7bc55df15c18eb1e6fde44169b747c307297df0f6ad"
+  },
+  {
+   "no": 25,
+   "sha256": "0d9a852b01fc2ec3d14123b35ff6977b4648e5ffab53efe73392261c3d87f82d"
+  },
+  {
+   "no": 28,
+   "sha256": "b12c797fe0241d0e266c1f05d466dcb05f0f7b85585d51435b5de6d1962cbac5"
+  }
+ ]
+}

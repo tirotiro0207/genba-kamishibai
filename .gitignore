@@ -23,3 +23,6 @@ node_modules/
 dist/
 .next/
 __pycache__/
+
+# 最後の確認だけに使う 10 個（中身は入れず、ハッシュだけ入れる）
+eval/holdout/
