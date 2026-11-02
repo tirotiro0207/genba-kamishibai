@@ -1,6 +1,6 @@
 // 仮の関節の角度（005）。守ることから、1 枚の絵の姿勢と小物を Sonnet に数字で決めさせる。
 import type Anthropic from "@anthropic-ai/sdk";
-import { type CallDeps, guardedCall, type Purpose } from "../claude";
+import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import { ATTACH, JOINT_RANGE, JOINTS, type Pose, POSE_JSON_SCHEMA, PROPS, validatePose } from "./schema";
 
 export const ANGLES_MODEL = "claude-sonnet-5-5";
@@ -39,7 +39,7 @@ export function parsePose(msg: Anthropic.Message): Pose {
   return pose;
 }
 
-export async function decidePose(deps: CallDeps, purpose: Purpose, rule: string, why?: string, feedback?: string): Promise<Pose> {
+export async function decidePose(deps: GuardedDeps, purpose: Purpose, rule: string, why?: string, feedback?: string): Promise<Pose> {
   const msg = await guardedCall(deps, { purpose, label: "関節の角度", params: anglesParams(rule, why, feedback) });
   return parsePose(msg);
 }
