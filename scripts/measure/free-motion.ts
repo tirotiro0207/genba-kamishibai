@@ -1,11 +1,10 @@
 // 姿勢の数字に縛らず、Opus 5.5 に動く SVG を自由に作らせ、場面を切り出して紙芝居にする試し（11/2 作者の案）。
 // 「報告・連絡・相談」を 1 場面ずつ 5 秒の動き（CSS のアニメーション）にさせ（3 場面を同時に呼ぶ）、意味の変わる時刻を一緒に返させる。
 // その時刻でアニメーションを止めて PNG に撮る。正解の絵を先に作ってから、部品の方を合わせるための手本。
-// 出力はリポジトリの外（RECORD_DIR/picto/free-motion）。
+// 出力はリポジトリの private/picto/free-motion（git に入れない）。
 //
 //   npx tsx scripts/measure/free-motion.ts
 import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { chromium } from "@playwright/test";
@@ -13,9 +12,9 @@ import { makeClient } from "../../src/node/client";
 import { FileCallLog } from "../../src/node/file-log";
 import { costUsd, guardedCall } from "../../src/shared/claude";
 import { checkStyle } from "../../src/shared/picto/style";
+import { privatePath } from "../../src/node/private-dir";
 
-const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
-const out = join(RECORD_DIR, "picto", "free-motion");
+const out = privatePath("picto", "free-motion");
 mkdirSync(out, { recursive: true });
 const W = 1000;
 const H = 750;

@@ -1,14 +1,13 @@
-// 姿勢を並べた PNG を作る（015〜016 の確かめ用）。出力はリポジトリの外（RECORD_DIR/picto）。
+// 姿勢を並べた PNG を作る（015〜016 の確かめ用）。出力はリポジトリの private/picto（git に入れない）。
 //
 //   npx tsx scripts/picto-sheet.ts
 import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { svgToPng } from "../src/node/png";
 import { renderFrame } from "../src/shared/picto/scene";
 import { type Bone, type FigureSpec, STANDING } from "../src/shared/picto/skeleton";
+import { privatePath } from "../src/node/private-dir";
 
-const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
 
 const fig = (angles: Partial<Record<Bone, number>>, facing: "left" | "right" = "right"): FigureSpec => ({ x: 0.5, height: 0.62, facing, angles: { ...STANDING, ...angles } });
 
@@ -20,7 +19,7 @@ export const SHEET: [string, FigureSpec][] = [
 ];
 
 function main() {
-  const out = join(RECORD_DIR, "picto");
+  const out = privatePath("picto");
   mkdirSync(out, { recursive: true });
   // 4 つを 2×2 に並べた 1 枚
   const cell = 384;

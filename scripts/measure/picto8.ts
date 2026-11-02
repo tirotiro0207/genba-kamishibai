@@ -1,11 +1,10 @@
 // 絵の作り方を 8 枚で比べる（079b）。守ることは git の外の台本のフォルダ（out/card<n>.json）から読む。
 // 11/2 の見た目の直しのあとは、PICTO_WAYS=motion PICTO_TAG=sketch で「動きから切り出し」だけを流し直す。
 // 3 つの作り方: Sonnet の角度 / Opus 5.5 の角度 / Opus 5.5 の動きから切り出し。
-// どれも作り直しはせず、確かめる AI（仮版）に絵だけを見せて点を出す。並べた PNG はリポジトリの外（RECORD_DIR/picto）。
+// どれも作り直しはせず、確かめる AI（仮版）に絵だけを見せて点を出す。並べた PNG はリポジトリの private/picto（git に入れない）。
 //
 //   npx tsx scripts/measure/picto8.ts [台本のフォルダ]   （既定は scratch/measure8）
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { makeClient } from "../../src/node/client";
@@ -17,11 +16,11 @@ import { cutFrames, type FrameJson, keyToFrame, type MotionJson } from "../../sr
 import { type Frame, renderFrame } from "../../src/shared/picto/scene";
 import { checkStyle } from "../../src/shared/picto/style";
 import { isRed, type Match, matchParams, type Reading, readerParams } from "../../src/shared/verify/verify";
+import { privatePath } from "../../src/node/private-dir";
 
 const dir = process.argv[2] ?? join(import.meta.dirname, "..", "..", "scratch", "measure8");
-const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
 const TAG = process.env.PICTO_TAG || "079b";
-const out = join(RECORD_DIR, "picto", `compare${TAG}`);
+const out = privatePath("picto", `compare${TAG}`);
 mkdirSync(out, { recursive: true });
 
 const ALL_WAYS: { key: string; label: string; model: string; mode: DrawMode }[] = [

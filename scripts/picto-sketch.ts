@@ -1,20 +1,19 @@
 // 作者のスケッチ（docs/sketches）どおりに、部品だけで描けるかを確かめる（11/2 の見た目の直し）。
 // 「迷ったら、ひとりで決めずに上の人に聞く」の 3 コマを、手で書いたキーフレームの JSON から切り出す。
-// この JSON は確かめ用の手本で、絵の数字を決める AI のプロンプトには入れない。出力はリポジトリの外（RECORD_DIR/picto/sketch）。
+// この JSON は確かめ用の手本で、絵の数字を決める AI のプロンプトには入れない。出力はリポジトリの private/picto/sketch（git に入れない）。
 //
 //   npx tsx scripts/picto-sketch.ts
 import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cutPngs } from "../src/node/motion-png";
 import type { MotionJson } from "../src/shared/picto/motion";
 import { POSES } from "../src/shared/picto/poses";
+import { privatePath } from "../src/node/private-dir";
 
 type Key = MotionJson["keyframes"][number];
 type Fig = Key["figures"][number];
 type Prop = Key["props"][number];
 
-const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
 const H = 0.52;
 
 const fig = (role: Fig["role"], x: number, facing: Fig["facing"], angles: Fig["angles"]): Fig => ({ role, x, height: H, facing, angles });
@@ -48,7 +47,7 @@ export const MAYOTTARA: MotionJson = {
 };
 
 function main() {
-  const out = join(RECORD_DIR, "picto", "sketch");
+  const out = privatePath("picto", "sketch");
   mkdirSync(out, { recursive: true });
   const pngs = cutPngs(MAYOTTARA);
   pngs.forEach((c, i) => writeFileSync(join(out, `mayottara_${i + 1}.png`), c.png));
