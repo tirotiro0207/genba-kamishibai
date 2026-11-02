@@ -584,16 +584,19 @@ def mask_generated(s):
 
 
 def own_commit(task_id):
-    """件名の頭がそのマスの番号（「037:」「002・002b:」「109 の直し:」）の、いちばん新しいコミット。無ければ HEAD。
-    HEAD をそのまま使うと、間に別のコミットが挟まったときに次のコミットの番号が入る（11/2 に 12 行ずれた）"""
+    """件名の頭がそのマスの番号とコロン（「037:」「002・002b:」）の、いちばん新しいコミット。「109 の直し:」のような続きは選ばない。
+    HEAD をそのまま使うと、間に別のコミットが挟まったときに次のコミットの番号が入る（11/2 に 12 行ずれた）。
+    当たるコミットが無ければ HEAD を使い、そのことを知らせる"""
     import subprocess
     log = subprocess.run(["git", "log", "--format=%h %s"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True).stdout
     for line in log.splitlines():
         h, _, subject = line.partition(" ")
-        head = re.match(r"^(\d{3}[ab]?(?:・\d{3}[ab]?)*)[: ]", subject)
+        head = re.match(r"^(\d{3}[ab]?(?:・\d{3}[ab]?)*):", subject)
         if head and task_id in head.group(1).split("・"):
             return h
-    return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    h = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    print(f"{task_id}: 件名の頭に「{task_id}:」のあるコミットが無いので、HEAD（{h}）を書いた。違えば plan.md を直す", file=sys.stderr)
+    return h
 
 
 def mark_done(task_id, minutes):

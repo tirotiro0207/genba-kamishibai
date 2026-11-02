@@ -48,6 +48,7 @@ Reference drawings made by hand by the author. The pictogram parts (figure, helm
 - `mayottara_1.jpg`–`mayottara_3.jpg`: three frames of "when unsure, don't decide alone — ask the person above you" (unsure and thinking → points and asks → the person above answers)
 - `alpha_concent.jpg`: telling what you checked with a speech bubble (outlet → ✓)
 - `shinro.jpg`: a redrawing of the route map ([docs/compass.md](docs/compass.md))
+- 1–3 and α were drawn by hand by the author on 11/2, looking at a quick style test made with Claude Code before the event. That test code and its images are not in this repository
 - Photos had metadata removed and were resized to 1,600 px on the long side.
 
 ## How Claude is used
