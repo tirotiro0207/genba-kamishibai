@@ -41,3 +41,30 @@ describe("小物の部品 2（018a）", () => {
     expect(() => renderFrame({ figures: [F()], props: [{ kind: "box", at: { x: 0.5, y: 0.5 }, size: 0.9 }] })).toThrow(/size/);
   });
 });
+
+describe("小物の部品 3（018b）", () => {
+  const KINDS = ["clock", "checklist", "prohibit", "circle_mark", "cross_mark"] as const;
+
+  it("時計・手元のチェックリスト・禁止・○と× がそろい、どれも絵柄のテストが通る", () => {
+    expect([...PROP_KINDS]).toEqual(expect.arrayContaining([...KINDS]));
+    for (const kind of KINDS) {
+      const svg = renderFrame({ figures: [F()], props: [{ kind, at: { x: 0.75, y: 0.3 }, size: 0.2 }] }).svg;
+      expect(svg, kind).toContain('data-part="prop"');
+      expect(checkStyle(svg), kind).toEqual([]);
+    }
+  });
+
+  it("禁止の赤は禁止の部品の中だけで、ほかの部品は赤を使わない", () => {
+    const svg = renderFrame({ figures: [F()], props: [{ kind: "prohibit", at: { figure: 0, joint: "hand_near" }, size: 0.3 }] }).svg;
+    expect(svg).toContain('data-part="prohibit"');
+    expect(svg).toMatch(/#d42a1e/);
+    for (const kind of ["clock", "checklist", "circle_mark", "cross_mark"] as const) {
+      expect(renderFrame({ figures: [F()], props: [{ kind, at: { x: 0.5, y: 0.3 }, size: 0.2 }] }).svg, kind).not.toMatch(/#d42a1e/);
+    }
+  });
+
+  it("チェックリストは手に付き、人形を動かすとついて動く", () => {
+    const p: PropSpec[] = [{ kind: "checklist", at: { figure: 0, joint: "hand_near" }, size: 0.15 }];
+    expect(renderFrame({ figures: [F(0.3)], props: p }).svg).not.toBe(renderFrame({ figures: [F(0.6)], props: p }).svg);
+  });
+});

@@ -5,6 +5,8 @@ import type { Joint, Posed, Pt } from "./skeleton";
 export const PROP_KINDS = [
   // 018a
   "suspended_load", "arrow_down", "broom", "box", "lock", "tag",
+  // 018b
+  "clock", "checklist", "prohibit", "circle_mark", "cross_mark",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -27,11 +29,17 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   box: "hand_near",
   lock: "hand_near",
   tag: "hand_near",
+  clock: null,
+  checklist: "hand_near",
+  prohibit: null,
+  circle_mark: null,
+  cross_mark: null,
 };
 
 const INK = "#000";
 const GRAY = "#8a8a8a";
 const LIGHT = "#d0d0d0";
+const RED = "#d42a1e";
 
 const n = (v: number) => {
   const r = Math.round(v * 10) / 10;
@@ -96,6 +104,37 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number): string {
       // 札: ひもで下げた角の丸い板。中は × の印（触るな）を図形で描く
       return line(cx, cy - h * 0.9, cx, cy - h * 0.45, INK, w * 0.7) + rect(cx - h * 0.7, cy - h * 0.45, h * 1.4, h * 1.25, "#bdbdbd", s * 0.08, INK, w * 0.8) +
         line(cx - h * 0.35, cy - h * 0.1, cx + h * 0.35, cy + h * 0.5) + line(cx + h * 0.35, cy - h * 0.1, cx - h * 0.35, cy + h * 0.5);
+    case "clock":
+      // 時計: 太い輪と 12 時・3 時・6 時・9 時の目盛りと 2 本の針（短い針は 3 時、長い針は 12 時）
+      return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(h - w)}" fill="${LIGHT}" stroke="${INK}" stroke-width="${n(w * 1.4)}"/>` +
+        [0, 1, 2, 3].map((k) => {
+          const a = (k * Math.PI) / 2;
+          return line(cx + Math.sin(a) * h * 0.62, cy - Math.cos(a) * h * 0.62, cx + Math.sin(a) * h * 0.76, cy - Math.cos(a) * h * 0.76, INK, w * 0.8);
+        }).join("") +
+        line(cx, cy, cx, cy - h * 0.55, INK, w * 0.9) + line(cx, cy, cx + h * 0.38, cy, INK, w * 1.2) + `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(w)}" fill="${INK}"/>`;
+    case "checklist": {
+      // 手元のチェックリスト: 板と上の留め具、3 行の欄。上の 2 行に ✓、下の 1 行は空の四角
+      const x0 = cx - h * 0.7;
+      const y0 = cy - h;
+      let out = rect(x0, y0, h * 1.4, s, LIGHT, s * 0.06, INK, w) + rect(cx - h * 0.3, y0 - h * 0.12, h * 0.6, h * 0.24, INK, s * 0.04);
+      for (let k = 0; k < 3; k++) {
+        const ry = y0 + h * (0.5 + k * 0.5);
+        const bx = x0 + h * 0.22;
+        out += rect(bx, ry - h * 0.14, h * 0.28, h * 0.28, "none", s * 0.02, INK, w * 0.5) + line(bx + h * 0.45, ry, x0 + h * 1.2, ry, GRAY, w * 0.6);
+        if (k < 2) out += `<polyline points="${n(bx + h * 0.04)},${n(ry)} ${n(bx + h * 0.13)},${n(ry + h * 0.1)} ${n(bx + h * 0.34)},${n(ry - h * 0.2)}" fill="none" stroke="${INK}" stroke-width="${n(w * 0.8)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+      return out;
+    }
+    case "prohibit":
+      // 禁止: 赤い円と左上から右下への斜線。下のものが透けるよう中は塗らない。赤はこの部品の中だけ（014）
+      return `<g data-part="prohibit"><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(h - w)}" fill="none" stroke="${RED}" stroke-width="${n(w * 1.8)}"/>` +
+        line(cx - (h - w) * 0.7, cy - (h - w) * 0.7, cx + (h - w) * 0.7, cy + (h - w) * 0.7, RED, w * 1.8) + "</g>";
+    case "circle_mark":
+      // ○: 正しいやり方の印。太い黒の輪
+      return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(h * 0.8)}" fill="none" stroke="${INK}" stroke-width="${n(w * 2.2)}"/>`;
+    case "cross_mark":
+      // ×: まちがったやり方の印。太い黒の 2 本線（赤は禁止の部品だけに使う）
+      return line(cx - h * 0.7, cy - h * 0.7, cx + h * 0.7, cy + h * 0.7, INK, w * 2.2) + line(cx + h * 0.7, cy - h * 0.7, cx - h * 0.7, cy + h * 0.7, INK, w * 2.2);
   }
 }
 
