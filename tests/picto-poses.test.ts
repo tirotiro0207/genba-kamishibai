@@ -8,7 +8,7 @@ const at = (name: keyof typeof POSES) => posePoints({ x: 0.5, height: 0.62, faci
 
 describe("主な姿勢 4 つ（016a）", () => {
   it("4 つとも範囲の中で、絵柄のテストが通る", () => {
-    expect(POSE_NAMES).toEqual(["stand", "point", "squat", "raise_hand"]);
+    expect(POSE_NAMES.slice(0, 4)).toEqual(["stand", "point", "squat", "raise_hand"]);
     for (const name of POSE_NAMES) {
       for (const facing of ["right", "left"] as const) {
         const f = { x: 0.5, height: 0.62, facing, angles: POSES[name] };

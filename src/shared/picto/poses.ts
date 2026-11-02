@@ -13,6 +13,14 @@ export const POSES = {
   squat: pose({ torso: 22, neck: -5, leg_near_upper: 100, leg_near_lower: -140, leg_far_upper: 92, leg_far_lower: -135, arm_near_upper: 75, arm_near_lower: 15, arm_far_upper: 65, arm_far_lower: 20 }),
   /** 手を挙げる */
   raise_hand: pose({ arm_near_upper: 150, arm_near_lower: 5, arm_far_upper: -10, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
+  /** 歩く */
+  walk: pose({ torso: 6, arm_near_upper: -30, arm_near_lower: 25, arm_far_upper: 35, arm_far_lower: 25, leg_near_upper: 30, leg_near_lower: -10, leg_far_upper: -25, leg_far_lower: -35 }),
+  /** 倒れる（後ろへ倒れかかる） */
+  fall: pose({ torso: -30, neck: -30, arm_near_upper: 120, arm_near_lower: 20, arm_far_upper: 150, arm_far_lower: 10, leg_near_upper: 45, leg_near_lower: -20, leg_far_upper: 20, leg_far_lower: -5 }),
+  /** 申し出る（少し前へ出て、手前の手を前に上げる） */
+  report: pose({ torso: 10, neck: -5, arm_near_upper: 115, arm_near_lower: 20, arm_far_upper: 10, arm_far_lower: 30, leg_near_upper: 18, leg_far_upper: -12, leg_far_lower: -10 }),
+  /** 手元（手前の手を胸の前へ。手元のアップに使う） */
+  hands: pose({ torso: 15, neck: 25, arm_near_upper: 55, arm_near_lower: 60, arm_far_upper: 45, arm_far_lower: 70, leg_near_upper: 5, leg_far_upper: -5 }),
 } satisfies Record<string, Angles>;
 
 export type PoseName = keyof typeof POSES;

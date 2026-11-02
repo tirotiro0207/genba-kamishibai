@@ -114,15 +114,27 @@ const bar = (a: Pt, b: Pt, w: number, c: string) =>
 export const FIGURE_COLOR = "#000";
 export const FAR_COLOR = "#4a4a4a";
 
+export interface FigureStyle {
+  /** 手前の色（黒かグレー） */
+  color?: string;
+  /** 奥の手足の色 */
+  far?: string;
+  /** 棒の太さの倍率（強調） */
+  width?: number;
+}
+
 /** 人形の SVG（g 1 つ）。奥の手足 → 胴 → 手前の手足 → 頭の順に重ねる */
-export function figureSvg(p: Posed, color = FIGURE_COLOR): string {
+export function figureSvg(p: Posed, style: FigureStyle = {}): string {
   const { joints: j, h } = p;
   const P = PROPORTION;
-  const lw = P.limbWidth * h;
+  const color = style.color ?? FIGURE_COLOR;
+  const far = style.far ?? FAR_COLOR;
+  const k = style.width ?? 1;
+  const lw = P.limbWidth * h * k;
   const parts = [
-    bar(j.hip, j.knee_far, lw, FAR_COLOR), bar(j.knee_far, j.foot_far, lw, FAR_COLOR),
-    bar(j.shoulder, j.elbow_far, lw, FAR_COLOR), bar(j.elbow_far, j.hand_far, lw, FAR_COLOR),
-    bar(j.shoulder, j.hip, P.torsoWidth * h, color),
+    bar(j.hip, j.knee_far, lw, far), bar(j.knee_far, j.foot_far, lw, far),
+    bar(j.shoulder, j.elbow_far, lw, far), bar(j.elbow_far, j.hand_far, lw, far),
+    bar(j.shoulder, j.hip, P.torsoWidth * h * k, color),
     bar(j.hip, j.knee_near, lw, color), bar(j.knee_near, j.foot_near, lw, color),
     bar(j.shoulder, j.elbow_near, lw, color), bar(j.elbow_near, j.hand_near, lw, color),
     `<circle cx="${n(j.head[0])}" cy="${n(j.head[1])}" r="${n(P.head * h)}" fill="${color}"/>`,
