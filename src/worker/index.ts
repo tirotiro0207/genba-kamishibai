@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
+import { cards } from "./cards";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
 
@@ -21,19 +22,7 @@ app.post("/api/t/:tenant/session", async (c) => {
 
 app.use("/api/t/:tenant/*", tenantGuard);
 
-app.get("/api/t/:tenant/cards", async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT id, body, created_at FROM cards WHERE tenant_id = ? ORDER BY created_at, id").bind(c.var.tenant.id).all();
-  return c.json({ cards: results });
-});
-
-app.post("/api/t/:tenant/cards", async (c) => {
-  const { body } = await c.req.json<{ body?: string }>().catch(() => ({ body: undefined }));
-  if (typeof body !== "string" || !body) return c.json({ error: "body が要る" }, 400);
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)").bind(id, c.var.tenant.id, body).run();
-  return c.json({ id }, 201);
-});
-
+app.route("/api/t/:tenant/cards", cards);
 app.route("/api/t/:tenant/trials", trials);
 
 export default app;
