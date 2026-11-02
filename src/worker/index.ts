@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
+import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
 
 export const app = new Hono<{ Bindings: Env; Variables: TenantVars }>();
@@ -32,5 +33,7 @@ app.post("/api/t/:tenant/cards", async (c) => {
   await c.env.DB.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)").bind(id, c.var.tenant.id, body).run();
   return c.json({ id }, 201);
 });
+
+app.route("/api/t/:tenant/trials", trials);
 
 export default app;
