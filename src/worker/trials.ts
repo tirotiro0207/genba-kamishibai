@@ -1,5 +1,6 @@
 // 回答の記録アプリの保存（011）。回を作ると種と割り当てが残り、答えは追記だけ受け付ける。
 import { Hono } from "hono";
+import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
 import { assign, newSeed } from "../shared/assign";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -67,5 +68,44 @@ trials.get("/:id/responses", async (c) => {
   return c.json({ responses: results });
 });
 
+// 採点（025）。採点者は自分の判定だけを見る（もう 1 人の判定を見せない）
+const isGrader = (g: unknown): g is "g1" | "g2" => g === "g1" || g === "g2";
+
+trials.get("/:id/grades", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const grader = c.req.query("grader");
+  if (!isGrader(grader)) return c.json({ error: "grader は g1 か g2" }, 400);
+  const { results } = await c.env.DB.prepare("SELECT seq, response_seq, grader, verdict, answer_ja FROM grades WHERE trial_id = ? AND grader = ? ORDER BY seq").bind(t.id, grader).all();
+  return c.json({ grades: results });
+});
+
+trials.post("/:id/grades", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ response_seq?: unknown; grader?: unknown; verdict?: unknown; answer_ja?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  if (!isGrader(b.grader)) return c.json({ error: "grader は g1 か g2" }, 400);
+  if (!VERDICTS.includes(b.verdict as Verdict)) return c.json({ error: "verdict は correct・wrong・danger" }, 400);
+  const r = await c.env.DB.prepare("SELECT seq FROM responses WHERE seq = ? AND trial_id = ? AND answer IS NOT NULL").bind(Number(b.response_seq), t.id).first();
+  if (!r) return c.json({ error: "この回の答えが無い" }, 400);
+  const answerJa = typeof b.answer_ja === "string" && b.answer_ja.trim() ? b.answer_ja.trim().slice(0, 2000) : null;
+  const row = await c.env.DB.prepare("INSERT INTO grades (trial_id, tenant_id, response_seq, grader, verdict, answer_ja) VALUES (?, ?, ?, ?, ?, ?) RETURNING seq")
+    .bind(t.id, c.var.tenant.id, Number(b.response_seq), b.grader, b.verdict, answerJa)
+    .first<{ seq: number }>();
+  return c.json({ seq: row?.seq }, 201);
+});
+
+// 匿名の書き出し（docs/answers.csv の形）
+trials.get("/:id/answers.csv", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const [rs, gs] = await Promise.all([
+    c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer FROM responses WHERE trial_id = ? ORDER BY seq").bind(t.id).all<ExportResponse>(),
+    c.env.DB.prepare("SELECT seq, response_seq, grader, verdict, answer_ja FROM grades WHERE trial_id = ? ORDER BY seq").bind(t.id).all<ExportGrade>(),
+  ]);
+  const csv = toAnswersCsv(t.seed, JSON.parse(t.participants) as string[], rs.results, gs.results);
+  return c.body("﻿" + csv, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="answers.csv"' });
+});
+
 // 書き換えと消すことは断る
-trials.on(["PUT", "PATCH", "DELETE"], ["/:id", "/:id/responses", "/:id/responses/*"], (c) => c.json({ error: "記録は追記だけ" }, 405));
+trials.on(["PUT", "PATCH", "DELETE"], ["/:id", "/:id/responses", "/:id/responses/*", "/:id/grades", "/:id/grades/*"], (c) => c.json({ error: "記録は追記だけ" }, 405));

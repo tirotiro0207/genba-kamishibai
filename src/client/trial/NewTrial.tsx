@@ -45,6 +45,9 @@ export function NewTrial({ tenant }: { tenant: string }) {
               </li>
             ))}
           </ul>
+          <p>
+            <a href={`#/t/${tenant}/trial/${made.id}/grade/g1`}>③ 採点者 1</a> ・ <a href={`#/t/${tenant}/trial/${made.id}/grade/g2`}>③ 採点者 2</a>
+          </p>
         </div>
       )}
     </form>

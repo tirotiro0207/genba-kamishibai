@@ -36,6 +36,21 @@ export const listResponses = (tenant: string, id: string) => req<{ responses: Re
 export const postResponse = (tenant: string, id: string, body: { participant: string; item: "A" | "B"; ms?: number; answer?: string }) =>
   req<{ seq: number; shown: Shown }>(`${base(tenant)}/${id}/responses`, { method: "POST", body: JSON.stringify(body) });
 
+// 採点（025）
+export type Grader = "g1" | "g2";
+export type Verdict = "correct" | "wrong" | "danger";
+export interface Grade {
+  seq: number;
+  response_seq: number;
+  grader: Grader;
+  verdict: Verdict;
+  answer_ja: string | null;
+}
+export const listGrades = (tenant: string, id: string, grader: Grader) => req<{ grades: Grade[] }>(`${base(tenant)}/${id}/grades?grader=${grader}`).then((r) => r.grades);
+export const postGrade = (tenant: string, id: string, body: { response_seq: number; grader: Grader; verdict: Verdict; answer_ja?: string }) =>
+  req<{ seq: number }>(`${base(tenant)}/${id}/grades`, { method: "POST", body: JSON.stringify(body) });
+export const csvUrl = (tenant: string, id: string) => `${base(tenant)}/${id}/answers.csv`;
+
 /** その参加者・項目で次に見せるもの（済んでいれば null） */
 export function nextShown(a: Assignment, item: "A" | "B", rows: ResponseRow[]): Shown | null {
   const k = rows.filter((r) => r.participant === a.participant && r.item === item).length;

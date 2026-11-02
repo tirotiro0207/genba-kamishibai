@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./app.css";
 import { PoseGallery } from "./picto/PoseGallery";
 import { AnswerScreen } from "./trial/AnswerScreen";
+import { GradeScreen } from "./trial/GradeScreen";
 import { NewTrial } from "./trial/NewTrial";
 import { TimeScreen } from "./trial/TimeScreen";
 
@@ -18,12 +19,13 @@ function useRoute() {
 export function App() {
   const r = useRoute();
   let body = <p>現場の紙芝居</p>;
-  // #/t/<テナント>/trial/new ・ #/t/<テナント>/trial/<回>/time ・ #/t/<テナント>/trial/<回>/answer/<参加者>
+  // #/t/<テナント>/trial/new ・ #/t/<テナント>/trial/<回>/time ・ #/t/<テナント>/trial/<回>/answer/<参加者> ・ #/t/<テナント>/trial/<回>/grade/<g1|g2>
   if (r[0] === "t" && r[2] === "trial") {
     const tenant = r[1];
     if (r[3] === "new") body = <NewTrial tenant={tenant} />;
     else if (r[4] === "time") body = <TimeScreen tenant={tenant} id={r[3]} />;
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
+    else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
   }
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   return <main data-testid="app">{body}</main>;

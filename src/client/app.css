@@ -19,3 +19,11 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .gallery figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .gallery .frame svg { display: block; width: 100%; height: auto; }
 .gallery figcaption { padding: 8px; font-size: 14px; color: var(--muted); }
+.grades { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.grade { border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.grade .said { font-size: 20px; margin: 0; white-space: pre-wrap; }
+.verdicts { display: flex; gap: 8px; flex-wrap: wrap; }
+.pick { font: inherit; font-size: 18px; padding: 10px 14px; border-radius: 8px; border: 2px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.pick.on { border-color: var(--fg); background: var(--fg); color: var(--bg); }
+.pick.on.danger { border-color: var(--err); background: var(--err); color: #fff; }
+.grading > a.big { display: inline-block; text-decoration: none; }
