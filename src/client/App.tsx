@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./app.css";
+import { PoseGallery } from "./picto/PoseGallery";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { NewTrial } from "./trial/NewTrial";
 import { TimeScreen } from "./trial/TimeScreen";
@@ -24,5 +25,6 @@ export function App() {
     else if (r[4] === "time") body = <TimeScreen tenant={tenant} id={r[3]} />;
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
   }
+  if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   return <main data-testid="app">{body}</main>;
 }

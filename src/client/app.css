@@ -15,3 +15,7 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .saved { color: var(--accent); margin: 0; }
 .err { color: var(--err); }
 .done { color: var(--muted); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.gallery figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.gallery .frame svg { display: block; width: 100%; height: auto; }
+.gallery figcaption { padding: 8px; font-size: 14px; color: var(--muted); }
