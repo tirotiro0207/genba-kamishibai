@@ -13,14 +13,21 @@ interface CardView {
   body: CardBody;
 }
 
-/** 状態ごとの帯。署名済みには帯を出さない */
+/** 状態ごとの帯。署名済みには帯を出さない。署名の前（確認待ち・OK も）は「未承認の下書き」と出し、状態は添える */
 function Band({ card }: { card: CardView }) {
   if (card.status === "signed") return null;
   const ai = card.status === "ai_draft";
+  const stopped = card.status === "stopped";
+  const head = ai || stopped ? STATUS_LABEL[card.status] : STATUS_LABEL.draft;
+  const note = ai
+    ? "未承認の下書き。元の文に無い理由を AI が書いています。人が確かめるまで使わないでください"
+    : stopped
+      ? "このカードは止めています"
+      : `${card.status === "draft" ? "" : `${STATUS_LABEL[card.status]}。`}まだ署名されていません`;
   return (
     <p className={`card-band${ai ? " ai" : ""}`} data-testid="card-band" data-status={card.status}>
-      <strong>{STATUS_LABEL[card.status]}</strong>
-      <span>{ai ? "元の文に無い理由を AI が書いています。人が確かめるまで使わないでください" : card.status === "stopped" ? "このカードは止めています" : "まだ署名されていません"}</span>
+      <strong>{head}</strong>
+      <span>{note}</span>
     </p>
   );
 }

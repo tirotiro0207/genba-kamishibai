@@ -1,7 +1,8 @@
 .card { display: flex; flex-direction: column; gap: 12px; max-width: 640px; margin: 0 auto; }
 .card-band { margin: 0; padding: 10px 14px; border-radius: 8px; border: 2px solid var(--line); display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
 .card-band strong { font-size: 20px; }
-.card-band.ai { border-color: #c80; background: #fff4dc; color: #5a3a00; }
+/* AI 下書きは色の意味を増やさず、枠の太さと文字で見分ける（色の意味は赤＝危険と伝わる率だけ） */
+.card-band.ai { border-width: 4px; border-color: var(--fg); }
 .card-face { display: block; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; cursor: pointer; width: 100%; }
 .card-face svg { display: block; width: 100%; height: auto; }
 .card-html { width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: #fff; }

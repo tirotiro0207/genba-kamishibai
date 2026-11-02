@@ -24,14 +24,14 @@ Turns a rule written in Japanese (or spoken by a veteran) into a picture card �
 
 Built so far:
 
-- Input: paste text, or upload a PDF; PDF pages become text with Claude
+- Input: paste text, or attach a PDF. A local script turns the PDF into page images and numbered lines, read from the PDF's text layer; Claude reads only pages that have no text layer (an attached PDF is stored, and the script is run separately for now)
 - Extraction: pick out the rules from the text (what to do, what not to do, why), each with its place in the source
 - Card making: lay out the card's text and the keyframes of the pictogram figure; every part of the picture keeps a **route** back to the sentence it came from
-- Checking: a second Claude call grades the frames of the card and sends it back for another try if it is red
+- Checking: a second Claude call grades the frames of the card and sends it back for another try if it is red. For now this runs from a local script, not from the making screen
 - Roles: author, two supervisors, trainer, new hire. Only supervisors can stop a card. New hires only see signed cards
-- Audit log: append-only, hash-chained record of each card (source → making → checking → human edits → signature), with a screen for supervisors and trainers
+- Audit log: append-only, hash-chained record of each card (source → making → checking → human edits → signature), with a screen for supervisors and trainers. The checking and signature entries are not written yet
 - Answer recording app: records new hires' answers, grades them, and exports anonymized answers as CSV
-- Reader panel: 24 simulated readers (country of origin × Japanese reading level × background) read the cards and the misreadings are counted
+- Reader panel: profiles of 24 simulated readers (country of origin × Japanese reading level × background) and the template that grades their answers and counts misreadings. Not run on cards yet
 
 Not built yet:
 
@@ -43,17 +43,23 @@ Not built yet:
 
 ### Hand-drawn sketches (`docs/sketches/`)
 
-Reference drawings made by hand by the author. The pictogram parts (figure, helmet, speech bubble, tools) were adjusted to match them. Photos had metadata removed and were resized to 1,600 px on the long side.
+Reference drawings made by hand by the author. The pictogram parts (figure, helmet, speech bubble, tools) were adjusted to match them.
+
+- `mayottara_1.jpg`–`mayottara_3.jpg`: three frames of "when unsure, don't decide alone — ask the person above you" (unsure and thinking → points and asks → the person above answers)
+- `alpha_concent.jpg`: telling what you checked with a speech bubble (outlet → ✓)
+- `shinro.jpg`: a redrawing of the route map ([docs/compass.md](docs/compass.md))
+- Photos had metadata removed and were resized to 1,600 px on the long side.
 
 ## How Claude is used
 
 | Where | Model | What it does |
 |---|---|---|
-| PDF → text | Claude Opus 5.5 | Reads each page image and writes the text with line positions |
+| PDF → text | Claude Opus 5.5 | Reads the page image only for pages with no text layer, and writes the text with line positions |
 | Extraction | Claude Opus 5.5 | Picks out rules (what to do / not to do / why) with their source positions |
 | Card making | Claude Opus 5.5 | Writes the keyframes and a route for every part of the picture, as numbers (it does not draw the picture directly) |
 | Checking | Claude Opus 5.5 | Grades the card's frames; red cards are remade, up to a limit per use |
-| Joint angles | Claude Sonnet 5.5 | Turns a described pose into joint angles for the figure |
+| Word field | Claude Opus 5.5 | Writes short plain-Japanese and Vietnamese lines from the card's text only |
+| Joint angles | Claude Sonnet 5.5 | Provisional pipeline only: turns a described pose into joint angles (the formal pipeline uses the keyframes above) |
 | Grading the extraction | Claude Sonnet 5.5 | Compares extracted rules with the evaluation answers |
 | Reader panel | Claude Code subagents (Sonnet 5.5 by default) | Each simulated reader is one subagent; the model ID is kept with every answer |
 
