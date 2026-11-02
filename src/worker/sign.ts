@@ -37,7 +37,9 @@ export async function signCard(db: D1Database, tenantId: string, id: string, per
   if (!r) return { ok: false, status: 404, error: "カードが無い" };
   if (version !== r.version) return { ok: false, status: 409, error: `署名する版が今の版（${r.version}）と違う。読み直して` };
   if (r.status !== "ok") return { ok: false, status: 409, error: `OK のカードだけに署名できる（今は ${r.status}）` };
-  if (!(await currentEvidence(db, tenantId, r))) return { ok: false, status: 409, error: "確認待ち: 確かめる AI の証拠が無い" };
+  const ev = await currentEvidence(db, tenantId, r);
+  if (!ev) return { ok: false, status: 409, error: "確認待ち: 確かめる AI の証拠が無い" };
+  if (ev.dangerous) return { ok: false, status: 409, error: "危険の印: 直して確かめ直すまで署名できない" };
   const actor = actorOf(person);
   const open = await db.prepare("SELECT opened_at FROM card_opens WHERE tenant_id = ? AND card_id = ? AND version = ? AND actor = ?").bind(tenantId, r.id, r.version, actor).first<{ opened_at: string }>();
   const payload: SignPayload = {

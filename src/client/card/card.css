@@ -16,6 +16,14 @@
 .card-text span { display: block; font-size: 13px; color: var(--muted); }
 .card-rule { font-weight: 700; font-size: 20px !important; }
 .card-words p + p { margin-top: 4px; }
+/* 帯（048）: 色の意味は伝わる率の 3 色だけ。赤は「危険」と同じ赤 */
+.card-rate { border-left: 8px solid var(--line); padding-left: 10px; }
+.card-rate.band-green { border-left-color: var(--band-green); }
+.card-rate.band-yellow { border-left-color: var(--band-yellow); }
+.card-rate.band-red { border-left-color: var(--err); }
+.card-danger { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--err); color: #fff; display: flex; flex-direction: column; gap: 2px; }
+.card-danger strong { font-size: 24px; letter-spacing: 0.1em; }
+.card-danger span { font-size: 15px; }
 /* 確認待ちの関門（047）。色は増やさず、枠と文字で出す */
 .card-check { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .card-check p { margin: 0; font-size: 16px; }

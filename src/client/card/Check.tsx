@@ -1,12 +1,13 @@
 // 確認待ちの関門の画面の側（047）。確かめる AI の証拠（どの絵を見て・何点で・なぜか）が今の版に無いカードは「確認待ち」と出し、OK を押せない。
 // 「確かめる AI に見せる」は、コマを端末で PNG にしてサーバーに送る。確かめる AI を呼んで証拠を残すのはサーバーだけ。
-// 帯の色（緑・黄・赤）と「危険」の印は 048 で付ける。ここでは数と文字だけで出す。
+// 帯の色は 3 色だけ（緑・黄・赤。赤は「危険」と同じ赤）。危ない読み違いのカードは、直して確かめ直すまで OK を押せない（048）。
 import { useState } from "react";
 import type { CardBody, CardStatus } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame, SIZE } from "../../shared/picto/scene";
 import type { Evidence } from "../../shared/verify/formal";
 import { req } from "../make/MakeScreen";
+import { statsChanged } from "../stats/StatsBar";
 
 export interface CheckedCard {
   id: string;
@@ -53,6 +54,7 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
     try {
       await f();
       await reload();
+      statsChanged();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -70,7 +72,7 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
     <section className="card-check" data-testid="card-check" data-evidence={ev ? "1" : "0"}>
       {ev ? (
         <div data-testid="card-evidence">
-          <p className="card-rate">
+          <p className={`card-rate band-${ev.band}`} data-testid="card-rate-band" data-band={ev.band}>
             <span>確かめる AI（絵だけを見た新入社員の役）</span>伝わる率 <b data-testid="card-rate">{ev.rate}</b>%・{BAND[ev.band]}
           </p>
           <p>
@@ -105,8 +107,8 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
             確認に回す
           </button>
         ) : card.status === "pending" ? (
-          <button className="big go" onClick={move("ok")} disabled={!ev || !!busy} data-testid="card-ok" title={ev ? "" : "確認待ち: 証拠が無い"}>
-            {ev ? "OK（署名へ）" : "OK（確認待ちのため押せない）"}
+          <button className="big go" onClick={move("ok")} disabled={!ev || ev.dangerous || !!busy} data-testid="card-ok" title={!ev ? "確認待ち: 証拠が無い" : ev.dangerous ? "危険の印: 直してから確かめ直す" : ""}>
+            {!ev ? "OK（確認待ちのため押せない）" : ev.dangerous ? "OK（危険の印のため押せない）" : "OK（署名へ）"}
           </button>
         ) : null}
       </div>

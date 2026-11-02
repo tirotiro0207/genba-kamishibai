@@ -6,6 +6,7 @@ import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from 
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
+import { summarize } from "../shared/stats";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
@@ -51,6 +52,16 @@ export const makePayload = (card: CardBody) => ({ rule: card.rule, why: card.why
 cards.get("/", async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT ${COLS} FROM cards WHERE tenant_id = ? ORDER BY created_at, id`).bind(c.var.tenant.id).all<CardRow>();
   return c.json({ cards: results.map(cardView) });
+});
+
+// いつも出しておく数字（048）: 危ない読み違いの枚数・1 枚の分・伝わる率
+cards.get("/stats", async (c) => {
+  const db = c.env.DB;
+  const tid = c.var.tenant.id;
+  const { results } = await db.prepare(`SELECT ${COLS} FROM cards WHERE tenant_id = ? AND status != 'stopped'`).bind(tid).all<CardRow>();
+  const ev = (await Promise.all(results.map((r) => currentEvidence(db, tid, r)))).filter((e): e is Evidence => !!e);
+  const signs = await db.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND kind = 'sign'").bind(tid).all<{ payload: string }>();
+  return c.json(summarize(ev, signs.results.map((r) => (JSON.parse(r.payload) as { minutes?: number | null }).minutes ?? null)));
 });
 
 /**
@@ -218,7 +229,12 @@ cards.post("/:id/status", async (c) => {
   if (to === "signed") return c.json({ error: "署名は署名の記録からだけ" }, 403);
   if (!canMove(r.status, to!)) return c.json({ error: `${r.status} から ${to} へは移れない` }, 409);
   // 確認待ちの関門（047）: 今の版に確かめる AI の証拠が無ければ OK にしない
-  if (to === "ok" && !(await currentEvidence(c.env.DB, c.var.tenant.id, r))) return c.json({ error: "確認待ち: 確かめる AI の証拠（どの絵を見て・何点で・なぜか）が無いので OK できない" }, 409);
+  if (to === "ok") {
+    const ev = await currentEvidence(c.env.DB, c.var.tenant.id, r);
+    if (!ev) return c.json({ error: "確認待ち: 確かめる AI の証拠（どの絵を見て・何点で・なぜか）が無いので OK できない" }, 409);
+    // 危険の印（048）: 危ない行為をしてよいと読める絵は、直して確かめ直すまで OK にしない
+    if (ev.dangerous) return c.json({ error: "危険の印: 危ない行為をしてよいと読める絵なので、直して確かめ直すまで OK できない" }, 409);
+  }
   const res = await c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status).run();
   if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
   await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "status", actor: actorOf(b, "system"), payload: { version: r.version, from: r.status, to } });

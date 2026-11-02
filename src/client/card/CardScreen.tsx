@@ -97,6 +97,13 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   return (
     <article className="card" data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
+      {card.verify?.dangerous && card.status !== "signed" && card.status !== "stopped" && (
+        // 危険の印（048）は絵の面の外に置く。絵の面は 0 字のまま
+        <p className="card-danger" data-testid="card-danger" role="alert">
+          <strong>危険</strong>
+          <span>危ない行為をしてよいと読める絵です。直して確かめ直すまで OK できません</span>
+        </p>
+      )}
       {b.motion.kind === "keyframes" ? (
         // 絵の面。ここには文字を置かない（番号は下の点で示す）
         <button className="card-face" onClick={() => setOpen((o) => !o)} aria-label="絵（タップで文を出す）" data-testid="card-face" data-frame={at} data-moving={play.moving ? "1" : undefined}>
