@@ -75,3 +75,15 @@ describe("利用者と役割（030b）", () => {
     expect((await login("practice", "trainer", 2)).status).toBe(400);
   });
 });
+
+describe("監査の記録の関所（041）", () => {
+  it("監修者と教育担当は読めて、新入社員は読めない", async () => {
+    const made = (await (await call("/api/t/practice/cards", req("POST", { card: sampleCard() }))).json()) as { id: string };
+    for (const role of ["supervisor", "trainer"]) {
+      const h = { "x-role": (await login("practice", role)).body.token! };
+      expect((await call(`/api/t/practice/audit/cards/${made.id}`, req("GET", undefined, h))).status, role).toBe(200);
+    }
+    const nh = { "x-role": (await login("practice", "newhire")).body.token! };
+    expect((await call(`/api/t/practice/audit/cards/${made.id}`, req("GET", undefined, nh))).status).toBe(403);
+  });
+});

@@ -67,6 +67,12 @@ export async function cardsGate(c: Context<{ Bindings: Env; Variables: PeopleVar
   await next();
 }
 
+/** 監査の記録の関所（041）。新入社員は読めない */
+export async function auditGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
+  if (c.var.person?.role === "newhire") return c.json({ error: "監査の記録は監修者・教育担当・作者が読む" }, 403);
+  await next();
+}
+
 export const people = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 /** 役割で入る。会社のテナントは役割の PIN が要る。練習用と架空の会社は選ぶだけ */
