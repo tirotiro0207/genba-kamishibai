@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { audit } from "./audit";
 import { cards } from "./cards";
+import { extract } from "./extract";
 import { files } from "./files";
 import { reset } from "./reset";
 import { trials } from "./trials";
@@ -38,6 +39,7 @@ app.route("/api/t/:tenant/cards", cards);
 app.route("/api/t/:tenant/audit", audit);
 app.route("/api/t/:tenant/reset", reset);
 app.route("/api/t/:tenant/files", files);
+app.route("/api/t/:tenant/extract", extract);
 app.route("/api/t/:tenant/trials", trials);
 
 export default app;

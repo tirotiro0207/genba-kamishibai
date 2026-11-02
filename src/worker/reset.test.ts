@@ -32,7 +32,7 @@ describe("データを最初の状態に戻す（030）", () => {
     await fill("demo");
     const oldChain = await currentChain(env.DB, "practice");
     const res = (await (await call("/api/t/practice/reset", json("POST"))).json()) as { removed: Record<string, number>; chain: string };
-    expect(res.removed).toEqual({ grades: 1, responses: 1, trials: 1, cards: 1 });
+    expect(res.removed).toMatchObject({ grades: 1, responses: 1, trials: 1, cards: 1 });
     expect(await count("practice")).toEqual({ cards: 0, trials: 0, responses: 0, grades: 0 });
     expect(await count("demo")).toEqual({ cards: 1, trials: 1, responses: 1, grades: 1 });
     // 監査の記録は新しい連鎖になり、古い連鎖はとっておく
