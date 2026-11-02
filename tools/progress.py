@@ -62,7 +62,7 @@ def read_plan(text):
                 raise SystemExit(f"plan.md: {c[0]} の状態「{c[9]}」は 済み・途中・まだ のどれでもない")
             if c[8] not in LANES:
                 raise SystemExit(f"plan.md: {c[0]} の筋「{c[8]}」は {'・'.join(LANES)} のどれでもない")
-            tasks.append({"id": c[0], "work": c[1], "milestone": c[4], "minutes": int(c[6]),
+            tasks.append({"id": c[0], "work": c[1], "done": c[2].replace("`", ""), "check": c[3].replace("`", ""), "milestone": c[4], "minutes": int(c[6]),
                           "star": c[7] == "★", "lane": c[8], "state": c[9],
                           "actual": int(c[10]) if c[10].isdigit() else None,
                           "commit": c[11], "day": section_day})
@@ -253,6 +253,9 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .detail .h b{font-family:var(--mono);font-weight:800}
 .detail .meta{color:var(--muted);font-size:var(--t-xs)}
 .detail .empty{color:var(--muted)}
+.detail dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s-1) var(--s-3);margin:var(--s-1) 0}
+.detail dt{color:var(--muted);font-size:var(--t-xs);font-weight:700;padding-top:2px}
+.detail dd{margin:0;line-height:1.6}
 /* 日ごとの箱 */
 .days{display:flex;flex-direction:column;gap:var(--s-2)}
 details.day{overflow:hidden}
@@ -289,8 +292,9 @@ SCRIPT = """
     var panel=document.getElementById(id);
     var tags=document.querySelectorAll(sel);
     if(!panel||!tags.length)return;
-    function show(t){
-      tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")});
+    var pinned=null;
+    function show(t,pin){
+      if(pin){pinned=t;tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")})}
       var d=t.dataset;
       panel.innerHTML="";
       var h=document.createElement("div");h.className="h";
@@ -298,14 +302,23 @@ SCRIPT = """
       var w=document.createElement("span");w.textContent=(d.star?"★ ":"")+d.work;h.appendChild(w);
       var m=document.createElement("div");m.className="meta num";
       m.textContent=d.state+" ・ "+d.kind+" ・ "+d.ms+" ・ 見込み "+d.min+" 分 ・ 実際 "+(d.act||"—")+" 分"+(d.commit?" ・ コミット "+d.commit:"");
-      panel.appendChild(h);panel.appendChild(m);
+      var l=document.createElement("dl");
+      [["完了の条件",d.done],["確かめ方",d.check]].forEach(function(r){
+        if(!r[1])return;
+        var dt=document.createElement("dt");dt.textContent=r[0];
+        var dd=document.createElement("dd");dd.textContent=r[1];
+        l.appendChild(dt);l.appendChild(dd);
+      });
+      panel.appendChild(h);panel.appendChild(l);panel.appendChild(m);
     }
     tags.forEach(function(t){
-      t.addEventListener("click",function(){show(t)});
-      t.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();show(t)}});
+      t.addEventListener("click",function(){show(t,true)});
+      t.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();show(t,true)}});
+      t.addEventListener("mouseenter",function(){show(t,false)});
+      t.addEventListener("mouseleave",function(){if(pinned)show(pinned,false)});
     });
     var f=document.querySelector(first)||tags[0];
-    if(f)show(f);
+    if(f)show(f,true);
   }
   var tb=document.getElementById("theme"),root=document.documentElement;
   function label(){tb.textContent=root.dataset.theme==="dark"?"明るくする":"暗くする"}
@@ -389,9 +402,9 @@ def route_svg(d, cur):
             k, kl = kind_of(x["work"])
             act = "" if x["actual"] is None else str(x["actual"])
             attrs = (f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{e(label)}" data-ms="{x["milestone"]}"'
-                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}"{" data-star=\"1\"" if x["star"] else ""}')
+                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}')
             P.append(f'<g class="bx pick l-{cls} s-{x["state"]}{" now" if x is cur else ""}" tabindex="0" role="button" aria-label="{x["id"]} {e(x["work"])}"{attrs}>'
-                     f'<title>{x["id"]} {e(x["work"])}</title>'
+                     f'<title>{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}</title>'
                      f'<rect x="{f(cx - h)}" y="{f(cy - h)}" width="{f(size)}" height="{f(size)}" rx="2.5"/>')
             if x["state"] == "済み":
                 P.append(f'<path d="M{f(cx - h * 0.5)} {f(cy)}L{f(cx - h * 0.1)} {f(cy + h * 0.4)}L{f(cx + h * 0.55)} {f(cy - h * 0.45)}" class="r-check"/>')
@@ -416,13 +429,13 @@ def route_svg(d, cur):
 def route_section(d, cur):
     e = html.escape
     tasks = d["tasks"]
-    P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が情報量。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱を押すと中身が出る。</p><div class="card route-card">',
+    P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が情報量。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱に指を置くか押すと中身が出る。</p><div class="card route-card">',
          '<ul class="legend route-legend">'
          + "".join(f'<li><i class="l-{c}"></i>{e(lab)}</li>' for lab, c in LANES.values())
          + '<li><i class="lg-done"></i>済み</li><li><i class="lg-todo"></i>まだ</li></ul>',
          '<p class="route-hint">図は横に動かせます</p>',
          f'<div class="route-scroll">{route_svg(d, cur)}</div>',
-         '<div class="detail" id="route-detail" aria-live="polite"><span class="empty">箱を押すと、ここにそのマスの中身が出ます</span></div>',
+         '<div class="detail" id="route-detail" aria-live="polite"><span class="empty">箱に指を置くか押すと、ここにそのマスの中身が出ます</span></div>',
          '<dl class="route-key"><div><dt>縦（質）</dt><dd>伝わるか。3 本の筋で上げる: 文字 → ピクトグラム・安全網・直しと人の確認。</dd></div>'
          '<div><dt>横（情報量）</dt><dd>元の文から、経路つきでカードに持ってこられた量。終点は「カード ≈ 元の文」。ピクトグラムにしても情報は減らず、折りたたんでいるだけで、部品を開けば元の条文に戻れる。これを進めるのが「折りたたみ」の筋。</dd></div></dl>',
          '<div class="lane-bars">']
@@ -530,7 +543,7 @@ def render_html(d):
                  f'<small class="num">{m["done"]}/{m["n"]} ・ {mw}%</small><div class="fill"><i style="width:{mw}%"></i></div></div>')
     P.append("</div></section>")
     # 日ごとの横棒
-    P.append('<section class="sec"><h2>日ごとのマス<small>札の長さは見込みの分。押すと中身が出る</small></h2><ul class="legend">'
+    P.append('<section class="sec"><h2>日ごとのマス<small>札の長さは見込みの分。指を置くか押すと中身が出る</small></h2><ul class="legend">'
              + "".join(f'<li><i class="k-{k}" style="background:var(--kc)"></i>{lab}</li>' for k, lab, _ in KINDS)
              + '<li>薄い札＝済み</li><li>太い枠＝★ 遅れてはいけない筋</li></ul><div class="lanes card">')
     for day in d["days"]:
@@ -541,11 +554,11 @@ def render_html(d):
             k, lab = kind_of(x["work"])
             cls = f'tag k-{k} s-{x["state"]}' + (" star" if x["star"] else "") + (" now" if x is cur else "")
             act = "" if x["actual"] is None else str(x["actual"])
-            P.append(f'<button type="button" class="{cls}" style="--w:{x["minutes"]}" aria-pressed="false" aria-label="{x["id"]} {e(x["work"])}" title="{x["id"]} {e(x["work"])}"'
+            P.append(f'<button type="button" class="{cls}" style="--w:{x["minutes"]}" aria-pressed="false" aria-label="{x["id"]} {e(x["work"])}" title="{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}"'
                      f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{lab}" data-ms="{x["milestone"]}"'
-                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}"{" data-star=\"1\"" if x["star"] else ""}></button>')
+                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}></button>')
         P.append("</div></div>")
-    P.append('<div class="detail" id="detail" aria-live="polite"><span class="empty">札を押すと、ここにそのマスの中身が出ます</span></div></div></section>')
+    P.append('<div class="detail" id="detail" aria-live="polite"><span class="empty">札に指を置くか押すと、ここにそのマスの中身が出ます</span></div></div></section>')
     # 日ごとの箱
     P.append('<section class="sec"><h2>日ごとの箱</h2><div class="days">')
     for day in d["days"]:
