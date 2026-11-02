@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
 import { cutFrames, frameAt, type MotionJson } from "../../shared/picto/motion";
 import { type Frame, renderFrame } from "../../shared/picto/scene";
+import { req } from "../make/MakeScreen";
 import { reducedMotion, SLIDE_MS } from "../motion/Slide";
+import { needsPin, TenantPin } from "../pin/TenantPin";
 import { Check, type CheckedCard } from "./Check";
 import "./card.css";
 
@@ -65,15 +67,14 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   const [err, setErr] = useState("");
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
-    fetch(`/api/t/${encodeURIComponent(tenant)}/cards/${encodeURIComponent(cardId)}`)
-      .then(async (r) => {
-        const b = await r.json();
-        if (!r.ok) throw new Error((b as { error?: string }).error ?? `HTTP ${r.status}`);
-        setCard(b as CardView);
-      })
+    // 入ったしるし（会社のテナント）と役割のしるしを付けて読む（038）
+    setErr("");
+    req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)
+      .then(setCard)
       .catch((e: Error) => setErr(e.message));
-  }, [tenant, cardId]);
+  }, [tenant, cardId, tries]);
 
   const frames = card?.body.motion.kind === "keyframes" ? cutFrames(card.body.motion.json) : [];
   const n = frames.length;
@@ -89,6 +90,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   const at = Math.min(i, Math.max(n - 1, 0));
   const play = usePlay(card?.body.motion.kind === "keyframes" ? card.body.motion.json : null, frames[at]?.t);
 
+  if (err && needsPin(err)) return <TenantPin tenant={tenant} onDone={() => setTries((t) => t + 1)} />;
   if (err) return <p className="err">{err}</p>;
   if (!card) return <p>読み込み中…</p>;
   const b = card.body;

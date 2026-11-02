@@ -1,8 +1,10 @@
 // 入れる画面（032・工程 1）と抜き出しの画面（033・工程 2〜3）。
 // 入れる: 話した言葉（端末の音声入力で文字にしたもの）を大きな欄に入れるか、資料を添付する。
 // 送る前に、入る文字を行番号付きで画面に出して確かめる。送ると決まりと「どこから」が出て、目で確かめて OK を押す。
+// OK した項目は、1 つずつ「カードにする」で未承認の下書きにする（034a の作成。038）。会社のテナントは先に PIN で入る。
 import { useEffect, useState } from "react";
 import { Slide } from "../motion/Slide";
+import { needsPin, TenantPin } from "../pin/TenantPin";
 import "./make.css";
 
 type Source = { kind: "doc"; doc: string; pages: { page: number; lines: number }[] } | { kind: "speech" };
@@ -252,6 +254,48 @@ function ReviewStep({ tenant, id, text, rules, onDone }: { tenant: string; id: s
   );
 }
 
+/** OK した項目を 1 つずつカードにする。できたカードは未承認の下書きで、カードの画面へのつなぎを出す */
+function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rules: Rule[]; ok: number[] }) {
+  const [made, setMade] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState<number | null>(null);
+  const [err, setErr] = useState("");
+
+  async function make(item: number) {
+    setBusy(item);
+    setErr("");
+    try {
+      const c = await req<{ id: string }>(tenant, `/extract/${encodeURIComponent(id)}/make`, { method: "POST", body: JSON.stringify({ item }) });
+      setMade((m) => ({ ...m, [item]: c.id }));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      <ol className="make-rules" data-testid="make-cards">
+        {ok.map((i) => (
+          <li key={i} className="make-rule" data-testid={`made-${i}`}>
+            <span className="make-text">{rules[i]?.text}</span>
+            {made[i] ? (
+              <a className="big" href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(made[i])}`} data-testid={`card-link-${i}`}>
+                カードを見る（未承認の下書き）
+              </a>
+            ) : (
+              <button className="big go" onClick={() => make(i)} disabled={busy !== null} data-testid={`make-${i}`}>
+                {busy === i ? "作っています…" : "カードにする"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {err && <p className="err">{err}</p>}
+    </>
+  );
+}
+
 export function MakeScreen({ tenant }: { tenant: string }) {
   const [step, setStep] = useState<"input" | "confirm" | "review" | "done">("input");
   const [text, setText] = useState("");
@@ -261,6 +305,11 @@ export function MakeScreen({ tenant }: { tenant: string }) {
   const [err, setErr] = useState("");
   const [x, setX] = useState<{ id: string; rules: Rule[] } | null>(null);
   const [ok, setOk] = useState<number[]>([]);
+  // 会社のテナントは、入ったしるしが無いと置き場も読めない。読めなければ先に PIN を聞く
+  const [gate, setGate] = useState(false);
+  useEffect(() => {
+    req(tenant, "/files?prefix=pdf/").catch((e: Error) => setGate(needsPin(e.message)));
+  }, [tenant]);
 
   async function send() {
     setBusy(true);
@@ -282,6 +331,7 @@ export function MakeScreen({ tenant }: { tenant: string }) {
     setStep(s);
   };
 
+  if (gate) return <TenantPin tenant={tenant} onDone={() => setGate(false)} />;
   return (
     <>
       <Slide k={step} dir={dir}>
@@ -315,6 +365,7 @@ export function MakeScreen({ tenant }: { tenant: string }) {
             <p>
               {ok.length} 項目をカードにします（取り出しの番号 {x.id.slice(0, 8)}）。
             </p>
+            <MakeCards tenant={tenant} id={x.id} rules={x.rules} ok={ok} />
           </section>
         )}
       </Slide>
