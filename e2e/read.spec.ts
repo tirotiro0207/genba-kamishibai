@@ -1,23 +1,26 @@
-import { execSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { sampleCard } from "../tests/fixtures/card";
+import { freshTenant, login, MARK, toOk } from "./helpers/ok";
 
-// 新入社員の閲覧画面（028）: 署名済みのカードだけが出て、1 枚ずつ送れる。署名の API は 051a なので、ここでは手元の D1 で署名済みにする
-// 中身は自前の ID と固定の文だけ（外から来た文字は入れない）
-const sql = (q: string) => execSync(`npx wrangler d1 execute DB --local --command "${q}"`, { stdio: "pipe" });
+// 新入社員の閲覧画面（028）: 署名済みのカードだけが出て、1 枚ずつ送れる。署名は署名の API でする（052 から、署名の記録の無い
+// 署名済みは配らないため）。中身は自前の ID と固定の文だけ（外から来た文字は入れない）
 
 test("署名済みのカードだけを 1 枚ずつ送って見る", async ({ page, request }) => {
-  const tag = `028e2e-${Date.now()}`;
+  const T = freshTenant("r028", "閲覧の確認");
+  const api = `/api/t/${T}`;
   const ids: Record<string, string> = {};
-  for (const s of ["signed1", "draft", "signed2", "stopped"]) {
-    const res = await request.post("/api/t/practice/cards", { data: { card: { ...sampleCard(), rule: `${tag} ${s}` } } });
+  for (const s of ["draft", "signed1", "signed2", "stopped"]) {
+    const res = await request.post(`${api}/cards`, { data: { card: { ...sampleCard(), rule: `028e2e ${s}` } } });
     expect(res.status()).toBe(201);
     ids[s] = ((await res.json()) as { id: string }).id;
   }
-  sql(`UPDATE cards SET status = 'signed' WHERE id IN ('${ids.signed1}', '${ids.signed2}'); UPDATE cards SET status = 'stopped' WHERE id = '${ids.stopped}'`);
+  await toOk(request, T, [ids.signed1, ids.signed2, ids.stopped]);
+  const sup = { "x-role": await login(request, T, "supervisor") };
+  for (const id of [ids.signed1, ids.signed2, ids.stopped]) expect((await request.post(`${api}/cards/${id}/sign`, { headers: sup, data: { version: 1, mark: MARK } })).status()).toBe(200);
+  expect((await request.post(`${api}/cards/${ids.stopped}/status`, { headers: sup, data: { to: "stopped" } })).status()).toBe(200);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/#/t/practice/read");
+  await page.goto(`/#/t/${T}/read`);
   const seen: string[] = [];
   await expect(page.getByTestId("read-card")).toBeVisible();
   const total = Number((await page.getByTestId("read-pos").innerText()).split("/")[1]);

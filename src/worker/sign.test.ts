@@ -5,6 +5,7 @@ import { canonical, sha256Hex } from "../shared/audit";
 import { sampleCard } from "../../tests/fixtures/card";
 import { setClientFactory } from "./claude-client";
 import { signRole } from "./people";
+import { jstDay, SIGN_DAILY_MAX, signCard, signedToday } from "./sign";
 
 // 署名の記録（051a）
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
@@ -106,5 +107,49 @@ describe("署名の記録（051a）", () => {
     // 裏で中身を書き換える
     await env.DB.prepare("UPDATE cards SET body = json_set(body, '$.why', '書き換えた') WHERE id = ?").bind(id).run();
     expect(await sig()).toMatchObject({ signed: true, matches: false });
+  });
+
+  it("日本時間の 1 日の区切りは、前の日の 15:00（UTC）から", () => {
+    expect(jstDay(new Date("2031-03-10T14:59:59Z"))).toEqual({ from: "2031-03-09T15:00:00.000Z", to: "2031-03-10T15:00:00.000Z" });
+    expect(jstDay(new Date("2031-03-10T15:00:00Z"))).toEqual({ from: "2031-03-10T15:00:00.000Z", to: "2031-03-11T15:00:00.000Z" });
+    expect(jstDay(new Date("2031-03-10T00:00:00Z")).from).toBe("2031-03-09T15:00:00.000Z");
+  });
+
+  it("同じ監修者が 1 日（日本時間）に署名できるのは 20 枚まで。21 枚目は断り、翌日（日本時間）と別の監修者は署名できる（052）", async () => {
+    expect(SIGN_DAILY_MAX).toBe(20);
+    const me = { role: "supervisor", slot: 1 } as const;
+    // 他のテストの署名と日が重ならないよう、先の日付で数える。日本時間 2031-03-10 の 23:59 まで
+    const day = new Date("2031-03-10T14:59:00Z");
+    for (let i = 0; i < SIGN_DAILY_MAX; i++) {
+      const res = await signCard(env.DB, "practice", await okCard(), me, 1, MARK, day);
+      expect(res.ok, `${i + 1} 枚目`).toBe(true);
+    }
+    expect(await signedToday(env.DB, "practice", "supervisor.1", day)).toBe(SIGN_DAILY_MAX);
+    const over = await okCard();
+    const no = await signCard(env.DB, "practice", over, me, 1, MARK, day);
+    expect(no).toMatchObject({ ok: false, status: 429 });
+    expect(no.ok ? "" : no.error).toContain("20 枚");
+    // 断った枚は署名済みにならず、署名の行も増えない
+    expect((await env.DB.prepare("SELECT status FROM cards WHERE id = ?").bind(over).first<{ status: string }>())!.status).toBe("ok");
+    expect(await signedToday(env.DB, "practice", "supervisor.1", day)).toBe(SIGN_DAILY_MAX);
+    // もう 1 人の監修者は数えない
+    expect((await signCard(env.DB, "practice", over, { role: "supervisor", slot: 2 }, 1, MARK, new Date("2031-03-10T14:59:30Z"))).ok).toBe(true);
+    // 日本時間で翌日になれば、また署名できる
+    expect((await signCard(env.DB, "practice", await okCard(), me, 1, MARK, new Date("2031-03-10T15:00:00Z"))).ok).toBe(true);
+    // 翌日の署名は前の日の数に入らない
+    expect(await signedToday(env.DB, "practice", "supervisor.1", day)).toBe(SIGN_DAILY_MAX);
+  }, 60_000);
+
+  it("画面の署名の口でも、上限を超えた署名は 429 になる（052）", async () => {
+    // 今日の分を上限まで埋めた別の監修者の役を作れないので、署名の行を直接足して今日の数を上限にする
+    const { appendAudit } = await import("./audit");
+    for (let i = 0; i < SIGN_DAILY_MAX; i++) await appendAudit(env.DB, "practice", { card_id: null, kind: "sign", actor: "supervisor.1", payload: { version: 1, signed_at: new Date().toISOString() } });
+    const id = await okCard();
+    const res = await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, await as("supervisor", 1));
+    expect(res.status).toBe(429);
+    expect(((await res.json()) as { error: string }).error).toContain("1 日に署名できるのは 20 枚まで");
+    expect((await env.DB.prepare("SELECT status FROM cards WHERE id = ?").bind(id).first<{ status: string }>())!.status).toBe("ok");
+    // 監修者 2 は今日もまだ署名できる
+    expect((await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, await as("supervisor", 2))).status).toBe(200);
   });
 });

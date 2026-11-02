@@ -9,7 +9,7 @@ import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
-import { auditGate, cardsGate, type PeopleVars, people, personGuard } from "./people";
+import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard } from "./people";
 import { read } from "./read";
 
 export const app = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
@@ -34,6 +34,11 @@ app.use("/api/t/:tenant/*", personGuard);
 app.use("/api/t/:tenant/cards", cardsGate);
 app.use("/api/t/:tenant/cards/*", cardsGate);
 app.use("/api/t/:tenant/audit/*", auditGate);
+// 新入社員が使わない口（052）。データを戻す・回答の記録・○× の組は、新入社員の役割では開かない
+for (const part of ["reset", "trials", "pairs"]) {
+  app.use(`/api/t/:tenant/${part}`, noNewhireGate);
+  app.use(`/api/t/:tenant/${part}/*`, noNewhireGate);
+}
 app.route("/api/t/:tenant", people);
 // 新入社員の閲覧（028）。署名済みのカードだけ
 app.route("/api/t/:tenant/read", read);

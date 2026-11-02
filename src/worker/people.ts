@@ -73,6 +73,12 @@ export async function auditGate(c: Context<{ Bindings: Env; Variables: PeopleVar
   await next();
 }
 
+/** 新入社員が入れない口の関所（052）。署名済みのカードの入口（read）と自分の役割の口のほかは、新入社員に開けない */
+export async function noNewhireGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
+  if (c.var.person?.role === "newhire") return c.json({ error: "新入社員は署名済みのカードの入口から読む" }, 403);
+  await next();
+}
+
 export const people = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 /** 役割で入る。会社のテナントは役割の PIN が要る。練習用と架空の会社は選ぶだけ */

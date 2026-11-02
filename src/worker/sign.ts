@@ -2,11 +2,34 @@
 // 追記だけの監査の記録 ⑤ に残し、カードを署名済みにする。法律上の電子署名ではなく、社内の承認の記録。
 // 監修者がその版を最初に開いた時刻を残し、署名までの分数（「1 枚 ○分」の元）も ⑤ に入れる。
 // 署名のあとで中身を書き換えると、今の中身のハッシュが ⑤ のハッシュと合わなくなり、分かる。
+// 同じ監修者が 1 日（日本時間の日付）に署名できるのは SIGN_DAILY_MAX 枚まで（052）。数えるのは ⑤ の署名の行。
 import { canonical, sha256Hex } from "../shared/audit";
 import type { CardBody } from "../shared/card";
 import { appendAudit } from "./audit";
 import { type CardRow, currentEvidence, getCard } from "./cards";
 import type { Person } from "./people";
+
+/** 1 人が 1 日（日本時間）に署名できる枚数の上限（052） */
+export const SIGN_DAILY_MAX = 20;
+const JST_MS = 9 * 3600 * 1000;
+const DAY_MS = 24 * 3600 * 1000;
+
+/** now が入る日本時間の 1 日の始まりと終わり（ISO の UTC。署名の日時と文字の順で比べられる） */
+export function jstDay(now: Date): { from: string; to: string } {
+  const jst = now.getTime() + JST_MS;
+  const start = jst - (((jst % DAY_MS) + DAY_MS) % DAY_MS) - JST_MS;
+  return { from: new Date(start).toISOString(), to: new Date(start + DAY_MS).toISOString() };
+}
+
+/** その人がその日（日本時間）に署名した枚数。署名の行の signed_at で数える */
+export async function signedToday(db: D1Database, tenantId: string, actor: string, now: Date): Promise<number> {
+  const { from, to } = jstDay(now);
+  const row = await db
+    .prepare("SELECT count(*) AS n FROM audit_log WHERE tenant_id = ? AND kind = 'sign' AND actor = ? AND json_extract(payload, '$.signed_at') >= ? AND json_extract(payload, '$.signed_at') < ?")
+    .bind(tenantId, actor, from, to)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
 
 export const actorOf = (p: Person | null) => (p ? `${p.role}.${p.slot}` : "anon");
 
@@ -55,7 +78,7 @@ export interface SignPayload {
   mark: { kind: SignMark["kind"]; sha256: string; png: string };
 }
 
-export type SignResult = { ok: true; payload: SignPayload } | { ok: false; status: 400 | 403 | 404 | 409; error: string };
+export type SignResult = { ok: true; payload: SignPayload } | { ok: false; status: 400 | 403 | 404 | 409 | 429; error: string };
 
 export async function signCard(db: D1Database, tenantId: string, id: string, person: Person | null, version: unknown, mark: unknown, now = new Date()): Promise<SignResult> {
   if (person?.role !== "supervisor") return { ok: false, status: 403, error: "署名は監修者だけ" };
@@ -69,6 +92,9 @@ export async function signCard(db: D1Database, tenantId: string, id: string, per
   const m = await markOf(mark);
   if (typeof m === "string") return { ok: false, status: 400, error: m };
   const actor = actorOf(person);
+  // 1 日の上限（052）。署名しすぎると 1 枚ずつ確かめなくなるので、上限を超える署名は断る
+  const done = await signedToday(db, tenantId, actor, now);
+  if (done >= SIGN_DAILY_MAX) return { ok: false, status: 429, error: `1 日に署名できるのは ${SIGN_DAILY_MAX} 枚まで（今日は ${done} 枚済み）。明日（日本時間）また署名できる` };
   const open = await db.prepare("SELECT opened_at FROM card_opens WHERE tenant_id = ? AND card_id = ? AND version = ? AND actor = ?").bind(tenantId, r.id, r.version, actor).first<{ opened_at: string }>();
   const payload: SignPayload = {
     version: r.version,
@@ -83,6 +109,12 @@ export async function signCard(db: D1Database, tenantId: string, id: string, per
   if (!res.meta.changes) return { ok: false, status: 409, error: "ほかの操作と重なった。読み直して" };
   await appendAudit(db, tenantId, { card_id: r.id, kind: "sign", actor, payload });
   return { ok: true, payload };
+}
+
+/** 署名の行の中身（payload の JSON）が、今のカードの版と中身に合うか */
+export async function signIntact(r: Pick<CardRow, "body" | "version">, payloadJson: string): Promise<boolean> {
+  const p = JSON.parse(payloadJson) as SignPayload;
+  return p.content_sha256 === (await contentHash(r.body)) && p.version === r.version;
 }
 
 /** 最後の署名と、今の中身のハッシュが合うか（署名のあとの書き換えが分かる） */
