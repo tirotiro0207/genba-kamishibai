@@ -1,0 +1,33 @@
+// データを最初の状態に戻すスクリプト（030）。練習用は一度で戻る。ほかのテナントは番号を打って確かめる。
+//
+//   npx tsx scripts/reset.ts practice                 # 手元の開発サーバー（BASE_URL、無ければ http://127.0.0.1:8787）
+//   npx tsx scripts/reset.ts <会社のテナント>          # 番号を聞かれ、打つと戻す。PIN は RESET_PIN から読む
+import { createInterface } from "node:readline/promises";
+
+const BASE = process.env.BASE_URL ?? "http://127.0.0.1:8787";
+
+async function main() {
+  const tenant = process.argv[2];
+  if (!tenant) throw new Error("テナントの番号を渡してください（例: practice）");
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  let confirm: string | undefined;
+  if (tenant !== "practice") {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    confirm = (await rl.question(`${BASE} の ${tenant} を最初の状態に戻します。確かめのため番号をもう一度打ってください: `)).trim();
+    rl.close();
+    if (confirm !== tenant) throw new Error("番号が合わないので止めた");
+    if (process.env.RESET_PIN) {
+      const s = await fetch(`${BASE}/api/t/${tenant}/session`, { method: "POST", headers, body: JSON.stringify({ pin: process.env.RESET_PIN }) });
+      if (!s.ok) throw new Error(`PIN で入れない: ${s.status}`);
+      headers.authorization = `Bearer ${((await s.json()) as { token: string }).token}`;
+    }
+  }
+  const res = await fetch(`${BASE}/api/t/${tenant}/reset`, { method: "POST", headers, body: JSON.stringify({ confirm }) });
+  console.log(res.status, await res.text());
+  if (!res.ok) process.exitCode = 1;
+}
+
+main().catch((e) => {
+  console.error(String(e?.message ?? e));
+  process.exitCode = 1;
+});
