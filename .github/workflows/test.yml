@@ -1,0 +1,26 @@
+# テストの自動実行（110）。push のたびに型と単体テスト（サーバー・画面の部品）を流す。
+# 録画のテスト（Playwright）は外す。手元だけの決まり（コミットの前の検査）はここでは流さない。
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: 型
+        run: npx tsc
+      - name: 単体テスト
+        run: npx vitest run

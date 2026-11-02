@@ -1,5 +1,7 @@
 # genba-kamishibai
 
+[![test](https://github.com/tirotiro0207/genba-kamishibai/actions/workflows/test.yml/badge.svg)](https://github.com/tirotiro0207/genba-kamishibai/actions/workflows/test.yml)
+
 開発中です。作る過程は [docs/progress.md](docs/progress.md)（進み具合）と [docs/plan.md](docs/plan.md)（作業の表）で見られます。
 
 ## 評価データ（`eval/`）
