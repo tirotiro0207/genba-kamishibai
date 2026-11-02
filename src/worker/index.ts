@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
+import { audit } from "./audit";
 import { cards } from "./cards";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
@@ -23,6 +24,7 @@ app.post("/api/t/:tenant/session", async (c) => {
 app.use("/api/t/:tenant/*", tenantGuard);
 
 app.route("/api/t/:tenant/cards", cards);
+app.route("/api/t/:tenant/audit", audit);
 app.route("/api/t/:tenant/trials", trials);
 
 export default app;
