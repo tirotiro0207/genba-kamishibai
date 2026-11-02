@@ -6,6 +6,7 @@ import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
 import { cardsGate, type PeopleVars, people, personGuard } from "./people";
+import { read } from "./read";
 
 export const app = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
@@ -29,6 +30,8 @@ app.use("/api/t/:tenant/*", personGuard);
 app.use("/api/t/:tenant/cards", cardsGate);
 app.use("/api/t/:tenant/cards/*", cardsGate);
 app.route("/api/t/:tenant", people);
+// 新入社員の閲覧（028）。署名済みのカードだけ
+app.route("/api/t/:tenant/read", read);
 
 app.route("/api/t/:tenant/cards", cards);
 app.route("/api/t/:tenant/audit", audit);

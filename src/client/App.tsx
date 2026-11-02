@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./app.css";
 import { PoseGallery } from "./picto/PoseGallery";
+import { ReadScreen } from "./read/ReadScreen";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { GradeScreen } from "./trial/GradeScreen";
 import { NewTrial } from "./trial/NewTrial";
@@ -27,6 +28,8 @@ export function App() {
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
   }
+  // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
+  if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   return <main data-testid="app">{body}</main>;
 }

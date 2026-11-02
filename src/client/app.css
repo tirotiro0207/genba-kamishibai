@@ -27,3 +27,14 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .pick.on { border-color: var(--fg); background: var(--fg); color: var(--bg); }
 .pick.on.danger { border-color: var(--err); background: var(--err); color: #fff; }
 .grading > a.big { display: inline-block; text-decoration: none; }
+.read { display: flex; flex-direction: column; gap: 12px; max-width: 720px; margin: 0 auto; }
+.read-pos { margin: 0; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.read-frames { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.read-frame { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.read-frame svg { display: block; width: 100%; height: auto; }
+.read-n { position: absolute; top: 6px; left: 8px; font-weight: 700; color: #111; }
+.read-html { width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.read-text p { margin: 4px 0; font-size: 18px; }
+.read-rule { font-weight: 700; font-size: 20px !important; }
+.read-nav { display: flex; gap: 12px; }
+.read-nav .big { flex: 1; }
