@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
 import { assign, newSeed } from "../shared/assign";
+import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
 
@@ -46,6 +47,8 @@ trials.post("/:id/responses", async (c) => {
   const b = await c.req.json<{ participant?: unknown; item?: unknown; ms?: unknown; answer?: unknown }>().catch(() => ({}) as Record<string, unknown>);
   const a = view(t).assignments.find((x) => x.participant === b.participant);
   if (!a) return c.json({ error: "この回の参加者ではない" }, 400);
+  const gone = await c.env.DB.prepare("SELECT 1 FROM responses WHERE trial_id = ? AND participant = ? AND erased = 1 LIMIT 1").bind(t.id, a.participant).first();
+  if (gone) return c.json({ error: "この参加者の答えは消してある" }, 409);
   if (b.item !== "A" && b.item !== "B") return c.json({ error: "item は A か B" }, 400);
   const ms = b.ms === undefined || b.ms === null ? null : Number(b.ms);
   if (ms !== null && (!Number.isInteger(ms) || ms < 0 || ms > 3_600_000)) return c.json({ error: "ms が範囲の外" }, 400);
@@ -100,11 +103,27 @@ trials.get("/:id/answers.csv", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
   const [rs, gs] = await Promise.all([
-    c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer FROM responses WHERE trial_id = ? ORDER BY seq").bind(t.id).all<ExportResponse>(),
-    c.env.DB.prepare("SELECT seq, response_seq, grader, verdict, answer_ja FROM grades WHERE trial_id = ? ORDER BY seq").bind(t.id).all<ExportGrade>(),
+    c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer FROM responses WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<ExportResponse>(),
+    c.env.DB.prepare("SELECT seq, response_seq, grader, verdict, answer_ja FROM grades WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<ExportGrade>(),
   ]);
   const csv = toAnswersCsv(t.seed, JSON.parse(t.participants) as string[], rs.results, gs.results);
   return c.body("﻿" + csv, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="answers.csv"' });
+});
+
+// やめた参加者の答えを消す（025b）。答え・秒・日本語の訳を空にして印を付け、監査の記録に「消した」の 1 行だけを足す。
+// 消したあとはその人の答えを受け付けない。書き出しには出さない
+trials.post("/:id/erase", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ participant?: unknown }>().catch(() => ({}) as { participant?: unknown });
+  const p = b.participant;
+  if (typeof p !== "string" || !(JSON.parse(t.participants) as string[]).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
+  const [g, r] = await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE grades SET answer_ja = NULL, erased = 1 WHERE trial_id = ? AND erased = 0 AND response_seq IN (SELECT seq FROM responses WHERE trial_id = ? AND participant = ?)").bind(t.id, t.id, p),
+    c.env.DB.prepare("UPDATE responses SET answer = NULL, ms = NULL, erased = 1 WHERE trial_id = ? AND participant = ? AND erased = 0").bind(t.id, p),
+  ]);
+  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes } });
+  return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes } });
 });
 
 // 書き換えと消すことは断る

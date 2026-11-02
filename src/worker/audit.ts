@@ -19,6 +19,15 @@ export async function currentChain(db: D1Database, tenantId: string): Promise<st
   return "c1";
 }
 
+/** 連鎖を新しく始める（025b のリセット）。古い連鎖は消さずに残り、確かめられる */
+export async function startNewChain(db: D1Database, tenantId: string): Promise<string> {
+  await currentChain(db, tenantId);
+  const row = await db.prepare("SELECT count(*) AS n FROM audit_chains WHERE tenant_id = ?").bind(tenantId).first<{ n: number }>();
+  const chain = `c${(row?.n ?? 0) + 1}`;
+  await db.prepare("INSERT INTO audit_chains (tenant_id, chain, started_at) VALUES (?, ?, ?)").bind(tenantId, chain, new Date().toISOString()).run();
+  return chain;
+}
+
 export interface AuditInput {
   card_id: string | null;
   kind: AuditKind;
