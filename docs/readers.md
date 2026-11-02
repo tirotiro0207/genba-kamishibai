@@ -17,7 +17,9 @@
 1. `npx tsx scripts/readers-prompts.ts <絵の PNG のフォルダ> [種]` を流す。`private/readers/<回>/` に、読み手ごとの指示（`prompts/R01.md` …）・番号の名前の絵（`pictures/`）・対応表（`manifest.json`、読み手には渡さない）ができる
 2. Claude Code で、読み手ごとにサブエージェントを 1 つ出す（`manifest.json` の `agentModel` を model に渡す）。中身は `prompts/<読み手>.md` そのまま。24 人を同時に出す
 3. 各サブエージェントは `answers/<読み手>.json` を書く。`parseReaderResult` で、全部の絵に答えているか・モデルが合っているかを確かめる
-4. カードの「守ること・なぜ」との照合と、危ない読み違いの数え方は、カードのデータの形（019）ができてから足す
+4. `npx tsx scripts/readers-score.ts judge <回のフォルダ> <cards.json>` で、判定役のサブエージェントへの指示（`judge.md`）を書く。cards.json はカードの API の返すもの。絵の元のファイル名は `<カードの ID>.png` にしておく
+5. 判定役のサブエージェントを 1 つ出す（同じモデル）。判定役には読み手の設定を渡さず、答えをカードの守ること・なぜに照らして、合う・一部合う・合わない・危ない読み違い（逆の意味に取った）の 4 つで判定させる
+6. `npx tsx scripts/readers-score.ts tally <回のフォルダ>` で、カードごとの伝わる率と危ない読み違いの数を `score.md` の表にする。数えるのはコードで、判定役には数えさせない。判定にもモデルを書かせ、違えば数えない
 
 ## 読み手（24 人）
 
