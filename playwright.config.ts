@@ -1,9 +1,9 @@
-// 録画の土台（010）。録画はリポジトリの外に置く。置き場所は環境変数 RECORD_DIR で渡す（無ければ OS の一時フォルダ）
-import { tmpdir } from "node:os";
+// 録画の土台（010）。録画は private/rec（git に入らない）。置き場所は環境変数 RECORD_DIR で変えられる
 import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
+import { privatePath } from "./src/node/private-dir";
 
-export const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
+export const RECORD_DIR = process.env.RECORD_DIR || privatePath("rec");
 const PORT = 5179;
 
 export default defineConfig({

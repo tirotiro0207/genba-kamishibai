@@ -1,12 +1,10 @@
 // 動画の素材を集める（013）。録画のテストの出力（RECORD_DIR/runs）から .webm を日付のフォルダへ写し、
-// 素材の一覧（index.md）を作る。どれもリポジトリの外に置く。
+// 素材の一覧（index.md）を作る。素材は private/material（git に入らない）。
 //
 //   npx tsx scripts/collect-recordings.ts           # 今日の日付のフォルダへ
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-
-const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
+import { privatePath, RECORD_DIR } from "../src/node/private-dir";
 
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -20,7 +18,7 @@ export function materialName(runsDir: string, file: string): string {
 function main() {
   const runs = join(RECORD_DIR, "runs");
   const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-  const out = join(RECORD_DIR, "material", day);
+  const out = privatePath("material", day);
   mkdirSync(out, { recursive: true });
   const files = walk(runs).filter((f) => f.endsWith(".webm"));
   const rows = files.map((f) => {

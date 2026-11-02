@@ -1,18 +1,18 @@
-// 同意書の必要な項目の検査（026）。下書きはリポジトリの外（RECORD_DIR/consent）に言葉ごとに置き、ここでは項目の印だけを調べる
+// 同意書の必要な項目の検査（026）。下書きは private/consent（git に入らない）に言葉ごとに置き、ここでは項目の印だけを調べる
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { privatePath } from "../src/node/private-dir";
 
-const DIR = join(process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec"), "consent");
+const DIR = privatePath("consent");
 
 /** 必要な項目。並びは書面の順番。中身は docs/consent.md */
 const CONSENT_ITEMS = ["purpose", "voluntary", "no-boss", "stop-delete", "not-to-company", "not-evaluation", "recording", "publish-anonymous", "reuse", "questions", "sign"] as const;
 
 /** 言葉ごとに、書面にかならず入る言い回し（言葉を足したら足す） */
 const MUST: Record<string, Partial<Record<(typeof CONSENT_ITEMS)[number], RegExp[]>>> = {
-  "ja-easy": { "publish-anonymous": [/名前を 出さずに 公開/], recording: [/顔と 声は/, /手.*画面.*だけ/] },
-  vi: { "publish-anonymous": [/công khai mà không ghi tên/], recording: [/khuôn mặt/, /giọng nói/, /Chỉ quay tay và màn hình/] },
+  "ja-easy": { "publish-anonymous": [/名前を けした こたえ だけ/], recording: [/顔と 声は/, /手.*画面.*だけ/], reuse: [/AI（Claude）に わたす/, /それ いがいの ために、外（そと）の サービスには わたしません/] },
+  vi: { "publish-anonymous": [/công khai mà không ghi tên/, /chỉ công khai câu trả lời đã xóa tên/], recording: [/khuôn mặt/, /giọng nói/, /Chỉ quay tay và màn hình/], reuse: [/cho AI \(Claude\)/, /không đưa câu trả lời cho dịch vụ bên ngoài/] },
 };
 
 const files = existsSync(DIR) ? readdirSync(DIR).filter((f) => /^consent\.[a-z-]+\.md$/.test(f)) : [];

@@ -1,6 +1,6 @@
 # 3 分の動画の構成メモ
 
-録画はリポジトリに入れない。置き場所は環境変数 `RECORD_DIR`。素材は `npx tsx scripts/collect-recordings.ts` で日付のフォルダに集まり、そこに一覧（index.md）ができる。
+録画は git に入れない。置き場所は `private/rec`（環境変数 `RECORD_DIR` で変えられる）。素材は `npx tsx scripts/collect-recordings.ts` で `private/material` の日付のフォルダに集まり、そこに一覧（index.md）ができる。
 
 ## 形
 

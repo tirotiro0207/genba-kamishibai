@@ -1,13 +1,14 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { appendHistory, historyRow, loadTuneItems, ROOT, runEval, watchedHash } from "../scripts/eval-hook";
+import { privatePath } from "../src/node/private-dir";
 import { claimsFromItem } from "../src/shared/eval/score";
 
 describe("変更のたびに流すフック（003b）", () => {
   it("見張るファイルの中身が変わったときだけハッシュが変わる（改行の違いは見ない）", () => {
-    const dir = mkdtempSync(join(tmpdir(), "hook-"));
+    mkdirSync(privatePath("tmp"), { recursive: true });
+    const dir = mkdtempSync(join(privatePath("tmp"), "hook-"));
     mkdirSync(join(dir, "w"));
     writeFileSync(join(dir, "w", "a.ts"), "const a = 1;\n");
     const h1 = watchedHash(dir, ["w"]);
@@ -17,6 +18,7 @@ describe("変更のたびに流すフック（003b）", () => {
     expect(watchedHash(dir, ["w"])).toBe(h1);
     writeFileSync(join(dir, "w", "a.ts"), "const a = 2;\n");
     expect(watchedHash(dir, ["w"])).not.toBe(h1);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("調整用の 20 項目だけを読む", () => {

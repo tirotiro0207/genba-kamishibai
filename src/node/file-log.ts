@@ -1,11 +1,12 @@
 // 手元のスクリプトの呼び出しの記録。1 回 1 行の JSON をファイルに足す（中身は残さない）
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { CallLog, CallRecord, Purpose } from "../shared/claude";
+import { privatePath } from "./private-dir";
 
-/** 置き場所は環境変数 CALL_LOG。無ければリポジトリの scratch/logs（git に入らない） */
+/** 置き場所は環境変数 CALL_LOG。無ければリポジトリの private/logs（git に入らない） */
 export function defaultLogPath(): string {
-  return process.env.CALL_LOG ?? join(import.meta.dirname, "..", "..", "scratch", "logs", "api-calls.jsonl");
+  return process.env.CALL_LOG ?? privatePath("logs", "api-calls.jsonl");
 }
 
 export class FileCallLog implements CallLog {
