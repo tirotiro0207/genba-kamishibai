@@ -2,6 +2,7 @@
 // 入れる: 話した言葉（端末の音声入力で文字にしたもの）を大きな欄に入れるか、資料を添付する。
 // 送る前に、入る文字を行番号付きで画面に出して確かめる。送ると決まりと「どこから」が出て、目で確かめて OK を押す。
 import { useEffect, useState } from "react";
+import { Slide } from "../motion/Slide";
 import "./make.css";
 
 type Source = { kind: "doc"; doc: string; pages: { page: number; lines: number }[] } | { kind: "speech" };
@@ -112,30 +113,32 @@ function InputStep({ tenant, onConfirm }: { tenant: string; onConfirm: (text: st
           資料から
         </button>
       </div>
-      {mode === "speech" ? (
-        <label>
-          キーボードのマイク（音声入力）で話すか、文を書く
-          <textarea className="make-big" rows={10} value={speech} onChange={(e) => setSpeech(e.target.value)} placeholder="例: 盤に触る前に、検電器で電気が来ていないか確かめる。感電するから。" data-testid="speech" />
-        </label>
-      ) : (
-        <div className="make-doc">
+      <Slide k={mode} dir={mode === "doc" ? 1 : -1}>
+        {mode === "speech" ? (
           <label>
-            資料
-            <select value={doc} onChange={(e) => setDoc(e.target.value)} data-testid="doc">
-              <option value="">選ぶ</option>
-              {docs.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            キーボードのマイク（音声入力）で話すか、文を書く
+            <textarea className="make-big" rows={10} value={speech} onChange={(e) => setSpeech(e.target.value)} placeholder="例: 盤に触る前に、検電器で電気が来ていないか確かめる。感電するから。" data-testid="speech" />
           </label>
-          <label>
-            ページ（例: 27, 30-31）
-            <input value={pages} onChange={(e) => setPages(e.target.value)} data-testid="pages" />
-          </label>
-        </div>
-      )}
+        ) : (
+          <div className="make-doc">
+            <label>
+              資料
+              <select value={doc} onChange={(e) => setDoc(e.target.value)} data-testid="doc">
+                <option value="">選ぶ</option>
+                {docs.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              ページ（例: 27, 30-31）
+              <input value={pages} onChange={(e) => setPages(e.target.value)} data-testid="pages" />
+            </label>
+          </div>
+        )}
+      </Slide>
       <label>
         資料を添付する（文字か PDF）
         <input type="file" accept=".txt,.md,.pdf,text/plain,application/pdf" onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0])} data-testid="file" />
@@ -264,7 +267,7 @@ export function MakeScreen({ tenant }: { tenant: string }) {
     setErr("");
     try {
       setX(await req<{ id: string; rules: Rule[] }>(tenant, "/extract", { method: "POST", body: JSON.stringify({ text, source, focus: focus || undefined }) }));
-      setStep("review");
+      go("review");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -272,40 +275,49 @@ export function MakeScreen({ tenant }: { tenant: string }) {
     }
   }
 
+  const order = ["input", "confirm", "review", "done"];
+  const [dir, setDir] = useState(1);
+  const go = (s: typeof step) => {
+    setDir(order.indexOf(s) < order.indexOf(step) ? -1 : 1);
+    setStep(s);
+  };
+
   return (
     <>
-      {step === "input" && (
-        <InputStep
-          tenant={tenant}
-          onConfirm={(t, s, f) => {
-            setText(t);
-            setSource(s);
-            setFocus(f);
-            setStep("confirm");
-          }}
-        />
-      )}
-      {step === "confirm" && <ConfirmStep text={text} busy={busy} onBack={() => setStep("input")} onSend={send} />}
-      {step === "review" && x && (
-        <ReviewStep
-          tenant={tenant}
-          id={x.id}
-          text={text}
-          rules={x.rules}
-          onDone={(o) => {
-            setOk(o);
-            setStep("done");
-          }}
-        />
-      )}
-      {step === "done" && x && (
-        <section className="make" data-testid="make-done">
-          <h1>OK しました</h1>
-          <p>
-            {ok.length} 項目をカードにします（取り出しの番号 {x.id.slice(0, 8)}）。
-          </p>
-        </section>
-      )}
+      <Slide k={step} dir={dir}>
+        {step === "input" && (
+          <InputStep
+            tenant={tenant}
+            onConfirm={(t, s, f) => {
+              setText(t);
+              setSource(s);
+              setFocus(f);
+              go("confirm");
+            }}
+          />
+        )}
+        {step === "confirm" && <ConfirmStep text={text} busy={busy} onBack={() => go("input")} onSend={send} />}
+        {step === "review" && x && (
+          <ReviewStep
+            tenant={tenant}
+            id={x.id}
+            text={text}
+            rules={x.rules}
+            onDone={(o) => {
+              setOk(o);
+              go("done");
+            }}
+          />
+        )}
+        {step === "done" && x && (
+          <section className="make" data-testid="make-done">
+            <h1>OK しました</h1>
+            <p>
+              {ok.length} 項目をカードにします（取り出しの番号 {x.id.slice(0, 8)}）。
+            </p>
+          </section>
+        )}
+      </Slide>
       {err && <p className="err">{err}</p>}
     </>
   );

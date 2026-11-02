@@ -1,9 +1,11 @@
 // カードの画面（037）。3〜4 コマを紙芝居のように 1 コマずつ送る。絵の面は文字 0 字で、番号や帯は面の外に置く。
 // 絵をタップすると「守ること・なぜ・言葉」が出る。署名の前は「未承認の下書き」、元の文に無い理由を足した枚は「AI 下書き」の帯を出す。
-import { useEffect, useState } from "react";
+// コマを送るときは、同じ動きの JSON をコマの間だけ 0.35 秒で再生する（076a）。「動きを減らす」設定では飛ぶ。
+import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
-import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { cutFrames, frameAt, type MotionJson } from "../../shared/picto/motion";
+import { type Frame, renderFrame } from "../../shared/picto/scene";
+import { reducedMotion, SLIDE_MS } from "../motion/Slide";
 import "./card.css";
 
 interface CardView {
@@ -32,6 +34,35 @@ function Band({ card }: { card: CardView }) {
   );
 }
 
+/** 今のコマの時刻 t へ、前のコマの時刻から動きを再生して進む。動いている間は moving が true */
+function usePlay(json: MotionJson | null, t: number | undefined): { frame: Frame | null; moving: boolean } {
+  const [view, setView] = useState<{ frame: Frame | null; moving: boolean }>({ frame: null, moving: false });
+  const from = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!json || t === undefined) return;
+    const t0 = from.current;
+    from.current = t;
+    if (t0 === undefined || t0 === t || reducedMotion()) {
+      setView({ frame: frameAt(json, t), moving: false });
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const step = (now: number) => {
+      const u = Math.min((now - start) / SLIDE_MS, 1);
+      const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+      setView({ frame: frameAt(json, t0 + (t - t0) * e), moving: u < 1 });
+      if (u < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(raf);
+      setView({ frame: frameAt(json, t), moving: false });
+    };
+  }, [json, t]);
+  return view;
+}
+
 export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string }) {
   const [card, setCard] = useState<CardView | null>(null);
   const [err, setErr] = useState("");
@@ -58,17 +89,19 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
     return () => removeEventListener("keydown", on);
   }, [n]);
 
+  const at = Math.min(i, Math.max(n - 1, 0));
+  const play = usePlay(card?.body.motion.kind === "keyframes" ? card.body.motion.json : null, frames[at]?.t);
+
   if (err) return <p className="err">{err}</p>;
   if (!card) return <p>読み込み中…</p>;
   const b = card.body;
-  const at = Math.min(i, Math.max(n - 1, 0));
   return (
     <article className="card" data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
       {b.motion.kind === "keyframes" ? (
         // 絵の面。ここには文字を置かない（番号は下の点で示す）
-        <button className="card-face" onClick={() => setOpen((o) => !o)} aria-label="絵（タップで文を出す）" data-testid="card-face" data-frame={at}>
-          <span dangerouslySetInnerHTML={{ __html: renderFrame(frames[at].frame).svg }} />
+        <button className="card-face" onClick={() => setOpen((o) => !o)} aria-label="絵（タップで文を出す）" data-testid="card-face" data-frame={at} data-moving={play.moving ? "1" : undefined}>
+          <span dangerouslySetInnerHTML={{ __html: renderFrame(play.frame ?? frames[at].frame).svg }} />
         </button>
       ) : (
         // AI が書いた動きの HTML は、スクリプトを動かさない枠の中で見せる

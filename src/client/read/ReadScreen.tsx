@@ -1,8 +1,10 @@
 // 新入社員の閲覧画面（028）。署名済みのカードだけを 1 枚ずつ送って見る。絵（3〜4 コマ）が先、文は下
+// カードを送るときは、紙芝居の絵を抜くように今のカードが動く（076a）
 import { useEffect, useState } from "react";
 import type { CardMotion } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
+import { Slide } from "../motion/Slide";
 
 interface ReadCard {
   id: string;
@@ -34,6 +36,11 @@ function Frames({ motion }: { motion: CardMotion }) {
 export function ReadScreen({ tenant }: { tenant: string }) {
   const [cards, setCards] = useState<ReadCard[] | null>(null);
   const [i, setI] = useState(0);
+  const [dir, setDir] = useState(1);
+  const go = (d: number) => {
+    setDir(d);
+    setI((x) => x + d);
+  };
   const [err, setErr] = useState("");
   useEffect(() => {
     fetch(`/api/t/${encodeURIComponent(tenant)}/read/cards`)
@@ -54,24 +61,26 @@ export function ReadScreen({ tenant }: { tenant: string }) {
       <p className="read-pos" data-testid="read-pos">
         {i + 1} / {cards.length}
       </p>
-      <Frames motion={c.motion} />
-      <section className="read-text">
-        <p className="read-rule">{c.rule}</p>
-        <p className="read-why">なぜ: {c.why}</p>
-        {c.words && (
-          <>
-            <p className="read-words">{c.words.ja}</p>
-            <p className="read-words" lang="vi">
-              {c.words.vi}
-            </p>
-          </>
-        )}
-      </section>
+      <Slide k={c.id} dir={dir}>
+        <Frames motion={c.motion} />
+        <section className="read-text">
+          <p className="read-rule">{c.rule}</p>
+          <p className="read-why">なぜ: {c.why}</p>
+          {c.words && (
+            <>
+              <p className="read-words">{c.words.ja}</p>
+              <p className="read-words" lang="vi">
+                {c.words.vi}
+              </p>
+            </>
+          )}
+        </section>
+      </Slide>
       <nav className="read-nav">
-        <button className="big" disabled={i === 0} onClick={() => setI(i - 1)} data-testid="read-prev">
+        <button className="big" disabled={i === 0} onClick={() => go(-1)} data-testid="read-prev">
           ← まえ
         </button>
-        <button className="big go" disabled={i >= cards.length - 1} onClick={() => setI(i + 1)} data-testid="read-next">
+        <button className="big go" disabled={i >= cards.length - 1} onClick={() => go(1)} data-testid="read-next">
           つぎ →
         </button>
       </nav>

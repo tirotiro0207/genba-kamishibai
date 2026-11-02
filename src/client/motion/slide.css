@@ -1,0 +1,10 @@
+/* 紙芝居の切り替え（076a）。写しは押せない。下の本物の画面はすぐ操作できる */
+.slide { position: relative; }
+.slide-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.slide-layer:empty { display: none; }
+.slide-piece { position: absolute; inset: 0; background: var(--bg); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); animation-fill-mode: both; }
+.slide-out { animation-name: slide-pull; }
+.slide-in { animation-name: slide-push; box-shadow: 8px 0 16px color-mix(in srgb, var(--fg) 18%, transparent); }
+@keyframes slide-pull { from { transform: translateX(0); } to { transform: translateX(-105%); } }
+@keyframes slide-push { from { transform: translateX(-105%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .slide-layer { display: none; } }
