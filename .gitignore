@@ -1,0 +1,25 @@
+# ローカル専用の設定と秘密
+CLAUDE.local.md
+.claude/settings.local.json
+.env
+.env.*
+!.env.example
+
+# 録画（置き場所は環境変数で渡す。リポジトリ内に置いた場合の保険）
+recordings/
+*.mp4
+*.mov
+*.webm
+
+# 練習で書き出したカード
+practice-cards/
+exports/
+
+# 測るための仮の台本とデータ
+scratch/
+
+# 依存とビルド
+node_modules/
+dist/
+.next/
+__pycache__/
