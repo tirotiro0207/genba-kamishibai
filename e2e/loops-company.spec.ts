@@ -56,7 +56,9 @@ test("輪 1・2 を会社のテナントで未承認の下書きにし、経路�
   await expect(page.getByTestId("make-input")).toBeVisible();
 
   const made: { loop: number; card: string; status: string; parts: number; rules: number; ms: number }[] = [];
-  for (const l of conf.loops) {
+  // LOOP_ONLY=2 のように番号を渡すと、その輪だけ流す（流し直しで同じ輪のカードを増やさない）
+  const only = process.env.LOOP_ONLY?.split(",").map(Number);
+  for (const l of conf.loops.filter((x) => !only || only.includes(x.loop))) {
     const t0 = Date.now();
     await page.goto(`/#/t/${TENANT}/make`);
     await page.reload();
@@ -119,6 +121,6 @@ test("輪 1・2 を会社のテナントで未承認の下書きにし、経路�
 
   // 結果は数だけ（中身は手元の D1 にある）
   mkdirSync(privatePath("loops"), { recursive: true });
-  writeFileSync(privatePath("loops", "038-result.json"), JSON.stringify({ at: new Date().toISOString(), made }, null, 2), "utf-8");
+  writeFileSync(privatePath("loops", `038-result-${Date.now()}.json`), JSON.stringify({ at: new Date().toISOString(), made }, null, 2), "utf-8");
   console.log(made.map((m) => `輪 ${m.loop}: ${m.status}・部品 ${m.parts}・決まり ${m.rules} から 1 つ・${(m.ms / 1000).toFixed(0)} 秒`).join("\n"));
 });

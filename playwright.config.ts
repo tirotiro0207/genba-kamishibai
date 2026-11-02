@@ -4,11 +4,12 @@ import { defineConfig } from "@playwright/test";
 import { privatePath } from "./src/node/private-dir";
 
 export const RECORD_DIR = process.env.RECORD_DIR || privatePath("rec");
-const PORT = 5179;
+// 2 本のスレッドが同時に流すときは、口と録画の置き場を分ける（E2E_PORT・E2E_RUNS）。置き場は流すたびに空になるため
+const PORT = Number(process.env.E2E_PORT ?? 5179);
 
 export default defineConfig({
   testDir: "e2e",
-  outputDir: join(RECORD_DIR, "runs"),
+  outputDir: join(RECORD_DIR, process.env.E2E_RUNS ?? "runs"),
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${PORT}`,
