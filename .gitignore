@@ -5,7 +5,10 @@ CLAUDE.local.md
 .env.*
 !.env.example
 
-# 録画（置き場所は環境変数で渡す。リポジトリ内に置いた場合の保険）
+# 作ったもの（録画・同意書・絵の試し・画面の写し・動画の素材・手描き）。GitHub に上げない
+private/
+
+# 録画（private/rec の外に出したときの保険）
 recordings/
 *.mp4
 *.mov
