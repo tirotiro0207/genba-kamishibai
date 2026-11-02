@@ -62,3 +62,21 @@ test("資料はページを選んで入れ、送る前に行番号付きで確�
   await expect(page.getByTestId("from-0")).toContainText("4 ページ 1 行");
   expect(sent!.source).toEqual({ kind: "doc", doc: "sample", pages: [{ page: 3, lines: 2 }, { page: 4, lines: 2 }] });
 });
+
+test("資料を添付する: 文字のファイルは欄に入り、PDF は置き場に入る", async ({ page, request }) => {
+  await page.goto("/#/t/practice/make");
+  await page.getByTestId("file").setInputFiles({ name: "rule.txt", mimeType: "text/plain", buffer: Buffer.from("盤に触る前に、検電器で確かめる。\n感電するから。", "utf-8") });
+  await expect(page.getByTestId("speech")).toHaveValue("盤に触る前に、検電器で確かめる。\n感電するから。");
+  await page.getByTestId("to-confirm").click();
+  await expect(page.getByTestId("confirm-text").locator("li")).toHaveCount(2);
+  await page.waitForTimeout(400);
+
+  await page.getByTestId("back").click();
+  const pdf = Buffer.from("%PDF-1.4\n% e2e\n", "latin1");
+  await page.getByTestId("file").setInputFiles({ name: "manual e2e.pdf", mimeType: "application/pdf", buffer: pdf });
+  await expect(page.getByText("PDF を置き場に入れました（inbox/manual_e2e.pdf）")).toBeVisible();
+  const got = await request.get("/api/t/practice/files/inbox/manual_e2e.pdf");
+  expect(got.status()).toBe(200);
+  expect(Buffer.from(await got.body()).equals(pdf)).toBe(true);
+  await page.waitForTimeout(400);
+});
