@@ -47,3 +47,32 @@ describe("正式な流れの作成の API（034a）", () => {
     expect(text.slice(s.start, s.end)).toBe("盤に触る前に検電する");
   });
 });
+
+describe("AI 下書きの判定（035）", () => {
+  beforeAll(() =>
+    setClientFactory(() => ({
+      messages: {
+        create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          if (String(p.system).includes("カードの下ごしらえ"))
+            return reply({ rules: [{ kind: "do", text: "盤に触る前に 2 回検電する", from: { quote: "盤に触る前に検電する", lines: [2] }, reasons: [{ text: "感電を防ぐ", from: { quote: "盤に触る前に検電する", lines: [2] }, stated: false }], checklist: false, reworded: false }] });
+          return reply({ motion: MOTION, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s2", reason: "盤" }], why: null });
+        },
+      },
+    })),
+  );
+  afterAll(() => setClientFactory(null));
+
+  it("元の文に無い理由と数字のカードは AI 下書きで保存され、監査の記録にその理由が残る", async () => {
+    const x = (await (await call("/api/t/practice/extract", json("POST", { text: "見出し\n盤に触る前に検電する" }))).json()) as { id: string };
+    await call(`/api/t/practice/extract/${x.id}/ok`, json("POST", { items: [0] }));
+    const card = (await (await call(`/api/t/practice/extract/${x.id}/make`, json("POST", { item: 0 }))).json()) as { id: string; status: string; body: unknown };
+    expect(card.status).toBe("ai_draft");
+    const audit = (await (await call(`/api/t/practice/audit/cards/${card.id}`)).json()) as { entries: { kind: string; payload: { reasons?: string[] } }[] };
+    expect(audit.entries.map((e) => e.kind)).toEqual(["source", "make", "ai_draft"]);
+    expect(audit.entries[2].payload.reasons).toEqual(["s2 の理由は元の文に無い（AI が書いた）", "s1 の数字 「2」が元の文に無い"]);
+
+    // 人が直しても AI が書いた文が残っていれば AI 下書きのまま
+    const put = await call(`/api/t/practice/cards/${card.id}`, json("PUT", { card: card.body, reason: "言い回し" }));
+    expect(((await put.json()) as { status: string }).status).toBe("ai_draft");
+  });
+});

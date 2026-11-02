@@ -94,7 +94,7 @@ extract.post("/:id/make", async (c) => {
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const rule = x.rules[item as number] as OkRule;
   const made = await makeCard({ client, log: new D1CallLog(c.env.DB) }, "app", rule, locator(x.id, x.input.text, x.input.source));
-  const row = await createCard(c.env.DB, c.var.tenant.id, made.card, "maker");
+  const row = await createCard(c.env.DB, c.var.tenant.id, made.card, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)]);
   return c.json(cardView(row), 201);
 });
 

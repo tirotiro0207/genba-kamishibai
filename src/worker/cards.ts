@@ -3,6 +3,7 @@
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { Hono } from "hono";
 import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
+import { aiDraftReasons } from "../shared/make/ai-draft";
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -45,12 +46,17 @@ cards.get("/", async (c) => {
   return c.json({ cards: results.map(cardView) });
 });
 
-/** 未承認の下書きとして保存し、監査の記録に ① と ② を足す（034a の作成からも使う） */
-export async function createCard(db: D1Database, tenantId: string, card: CardBody, actor: string): Promise<CardRow> {
+/**
+ * 未承認の下書きとして保存し、監査の記録に ① と ② を足す（034a の作成からも使う）。
+ * 元の文に無い理由か数字があれば「AI 下書き」で保存し、その理由を監査の記録に残す（035）。origins は元の文の抜き出し
+ */
+export async function createCard(db: D1Database, tenantId: string, card: CardBody, actor: string, origins?: string[]): Promise<CardRow> {
   const id = crypto.randomUUID();
-  await db.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at) VALUES (?, ?, ?, 'draft', 1, datetime('now'))").bind(id, tenantId, JSON.stringify(card)).run();
+  const reasons = aiDraftReasons(card, origins);
+  await db.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at) VALUES (?, ?, ?, ?, 1, datetime('now'))").bind(id, tenantId, JSON.stringify(card), reasons.length ? "ai_draft" : "draft").run();
   await appendAudit(db, tenantId, { card_id: id, kind: "source", actor, payload: { version: 1, ...sourcePayload(card) } });
   await appendAudit(db, tenantId, { card_id: id, kind: "make", actor, payload: { version: 1, ...makePayload(card) } });
+  if (reasons.length) await appendAudit(db, tenantId, { card_id: id, kind: "ai_draft", actor: "system", payload: { version: 1, reasons } });
   return (await getCard(db, tenantId, id))!;
 }
 
@@ -67,7 +73,7 @@ cards.get("/:id", async (c) => {
   return r ? c.json(cardView(r)) : c.json({ error: "カードが無い" }, 404);
 });
 
-// 中身を直すと版が 1 つ上がり、未承認の下書きに戻る。署名済みは先に停止する
+// 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。署名済みは先に停止する
 cards.put("/:id", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
@@ -84,9 +90,11 @@ cards.put("/:id", async (c) => {
     actor: actorOf(b, "editor"),
     payload: { from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), reason: typeof b.reason === "string" ? b.reason.slice(0, 1000) : null },
   });
-  await c.env.DB.prepare("UPDATE cards SET body = ?, status = 'draft', version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
-    .bind(JSON.stringify(card), r.id, c.var.tenant.id)
+  const reasons = aiDraftReasons(card);
+  await c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
+    .bind(JSON.stringify(card), reasons.length ? "ai_draft" : "draft", r.id, c.var.tenant.id)
     .run();
+  if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 });
 
