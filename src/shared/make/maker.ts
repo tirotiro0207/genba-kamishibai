@@ -47,7 +47,7 @@ const PARTS_SCHEMA = {
 const WHY_SCHEMA = { type: ["string", "null"] } as const;
 
 
-export function makerParams(rule: OkRule, statements: Statement[], fix?: string): Anthropic.MessageCreateParamsNonStreaming {
+export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string): Anthropic.MessageCreateParamsNonStreaming {
   const why = statements.filter((s) => s.field === "why").map((s) => s.text).join("。");
   const base = drawParams(MAKER_MODEL, "motion", rule.kind === "dont" ? `${rule.text}（してはいけないこと）` : rule.text, why || undefined);
   const lines = statements.map((s) => `${s.id}（${s.field === "rule" ? "守ること" : "なぜ"}）: ${s.text}`).join("\n");
@@ -56,7 +56,8 @@ ${rule.checklist ? "この決まりは点検表・チェックリストの型。
 あわせて、部品ごとの経路を parts に書いてください。キーフレームの figures と props の 1 つずつ（type と、最初のキーフレームでの番号 index）について、
 どのカードの文（statement に s1 などの番号）から描いたかと、なぜそう描いたか（reason。短く）を書く。経路の無い部品は置かない。
 ${why ? "" : "元の文に理由が無いので、新入社員に伝える理由を why に 1 文で書く（文から分かる危険だけ。元の文に無い数字や決まりは足さない）。\n"}`;
-  const content = `カードの文:\n${lines}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
+  const again = feedback ? `\n\n前の絵の結果: ${feedback}\n絵だけで伝わるように、姿勢・小物・吹き出しを直してください。` : "";
+  const content = `カードの文:\n${lines}${again}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
   return {
     ...base,
     system,
@@ -81,13 +82,23 @@ export interface Made {
   messages: Anthropic.Message[];
 }
 
-/** 1 項目から未承認の下書き 1 枚の中身を作る（保存は呼ぶ側） */
-export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate): Promise<Made> {
+/** 手元の✓の型（034b）: 点検表の決まりは、チェックリストと ✓ の印が絵にあること */
+export function checklistErrors(rule: OkRule, motion: MotionJson): string[] {
+  if (!rule.checklist) return [];
+  const kinds = new Set((motion?.keyframes ?? []).flatMap((k) => k.props.filter((p) => p.show !== false).map((p) => p.kind)));
+  const e: string[] = [];
+  if (!kinds.has("checklist")) e.push("点検表の型なのに checklist の小物が無い");
+  if (!kinds.has("check_mark") && !kinds.has("bubble_check") && !kinds.has("think_check")) e.push("点検表の型なのに ✓ の印が無い");
+  return e;
+}
+
+/** 1 項目から未承認の下書き 1 枚の中身を作る（保存は呼ぶ側）。feedback は前の絵を確かめる AI がどう読んだか */
+export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate, feedback?: string): Promise<Made> {
   const base = assign(rule, locate);
   const messages: Anthropic.Message[] = [];
   let fix: string | undefined;
   for (let i = 0; i < 2; i++) {
-    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix) });
+    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix, feedback) });
     messages.push(msg);
     const out = JSON.parse(textOf(msg)) as { motion: MotionJson; parts: { type: "figure" | "prop"; index: number; statement: string; reason: string }[]; why: string | null };
     const statements = base.slice();
@@ -101,7 +112,7 @@ export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule
       frames: (out.motion?.keyframes ?? []).filter((k) => k.mark).map((k) => ({ t: k.t })),
       parts: (out.parts ?? []).map((p, j) => ({ id: `p${j + 1}`, target: { type: p.type, index: p.index }, statement: p.statement, reason: p.reason })),
     };
-    const errs = validateCard(card);
+    const errs = [...validateCard(card), ...checklistErrors(rule, out.motion)];
     if (!errs.length) return { card, messages };
     fix = errs.slice(0, 6).join(" / ");
   }
