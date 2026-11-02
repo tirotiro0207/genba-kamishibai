@@ -1,262 +1,459 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>現場の紙芝居 進み具合</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap"><style>
+<title>現場の紙芝居 進み具合</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400;700;800&display=swap"><style>
+/* 並び: 題 → いまの箱 → 数字 4 枚 → 軸 5 つ → 目印の帯 → 日ごとの横棒（札） → 日ごとの箱 */
 :root{
---paper:#f4f4f2;--surface:#ffffff;--ink:#141414;--ink-soft:#5c5c5a;--mid:#b9b9b5;--line:#d9d9d5;--on-ink:#ffffff;--alert:#c8221d;--alert-soft:#fbe9e8;
---font:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
---t-xs:12px;--t-sm:13px;--t-md:15px;--t-lg:20px;--t-xl:30px;--t-xxl:44px;
---s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:40px;--s-7:64px;--r:6px}
+--paper:#efede8;--card:#ffffff;--ink:#2a2723;--muted:#77716a;--line:#e2ded6;--track:#e7e4dd;
+--now:#e39a12;--now-soft:#fcf0d6;--done:#2f8656;--done-soft:#e1f1e6;--late:#c4372c;--late-soft:#fbe5e2;
+--k-build:#3f6ea6;--k-video:#3f8a7a;--k-submit:#7657a3;--k-people:#9c7432;
+--body:"BIZ UDPGothic","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+--mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+--t-xs:12px;--t-sm:13px;--t-md:15px;--t-lg:19px;--t-xl:26px;--t-xxl:40px;
+--s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:36px;--s-7:56px;--r:10px;
+--shadow:0 1px 2px rgba(40,34,26,.06),0 2px 8px rgba(40,34,26,.05)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
---paper:#121212;--surface:#1b1b1b;--ink:#ededeb;--ink-soft:#a3a3a0;--mid:#5a5a58;--line:#2e2e2d;--on-ink:#121212;--alert:#ff6b61;--alert-soft:#3a1715;color-scheme:dark}}
+--paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
+--k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}}
 :root[data-theme="dark"]{
---paper:#121212;--surface:#1b1b1b;--ink:#ededeb;--ink-soft:#a3a3a0;--mid:#5a5a58;--line:#2e2e2d;--on-ink:#121212;--alert:#ff6b61;--alert-soft:#3a1715;color-scheme:dark}
+--paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
+--k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--paper);color:var(--ink);font:400 var(--t-md)/1.65 var(--font)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 var(--t-md)/1.7 var(--body)}
 .wrap{max-width:1120px;margin:0 auto;padding-block:var(--s-6) var(--s-7);
-padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:var(--s-6)}
+padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:var(--s-5)}
 h1,h2,h3{margin:0;text-wrap:balance}
-.num{font-variant-numeric:tabular-nums}
-.eyebrow{font-size:var(--t-xs);font-weight:700;letter-spacing:.12em;color:var(--ink-soft)}
-.sec{display:flex;flex-direction:column;gap:var(--s-4)}
-.sec>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-2) var(--s-4);border-bottom:3px solid var(--ink);padding-bottom:var(--s-2)}
-.sec>header h2{font-size:var(--t-lg);font-weight:900}
-.sec>header p{margin:0;font-size:var(--t-sm);color:var(--ink-soft)}
-/* 上の見出し */
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-5);align-items:end}
-.top h1{font-size:var(--t-xl);font-weight:900;line-height:1.25}
-.top .src{margin:var(--s-2) 0 0;font-size:var(--t-sm);color:var(--ink-soft);max-width:60ch}
-.total{display:flex;gap:var(--s-5);align-items:end}
-.total div{display:flex;flex-direction:column}
-.total b{font-size:var(--t-xxl);font-weight:900;line-height:1}
-.total small{font-size:var(--t-sm);color:var(--ink-soft)}
-.total span.u{font-size:var(--t-md);font-weight:700;margin-left:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line)}
+.label{font-size:var(--t-xs);font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.sec{display:flex;flex-direction:column;gap:var(--s-3)}
+.sec>h2{font-size:var(--t-md);font-weight:700;display:flex;align-items:baseline;gap:var(--s-3);flex-wrap:wrap}
+.sec>h2 small{font-weight:400;font-size:var(--t-sm);color:var(--muted)}
+/* 題 */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--s-2) var(--s-4)}
+.top h1{font-size:var(--t-xl);font-weight:700;line-height:1.3}
+.top p{margin:0;font-size:var(--t-sm);color:var(--muted)}
+/* いま */
+.now{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-4) var(--s-6);align-items:center;padding:var(--s-5);border-left:8px solid var(--now)}
+.now .label{color:var(--now)}
+.now h2{font-size:var(--t-lg);font-weight:700;line-height:1.45;margin-top:var(--s-1)}
+.now h2 .id{font-family:var(--mono);font-weight:800;margin-right:var(--s-2)}
+.now .next{margin:var(--s-2) 0 0;font-size:var(--t-sm);color:var(--muted)}
+.now .next b{color:var(--ink);font-weight:700}
+.now .rest{text-align:right}
+.now .rest b{display:block;font-family:var(--mono);font-size:var(--t-xxl);font-weight:800;line-height:1.05}
+.now .rest b span{font-size:var(--t-md);font-weight:700;margin-left:2px}
+.now.over{border-left-color:var(--late)}
+.now.over .rest b{color:var(--late)}
+/* 数字 4 枚 */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-3)}
+.stat{padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.stat b{font-family:var(--mono);font-size:var(--t-xl);font-weight:800;line-height:1.15}
+.stat b span{font-size:var(--t-sm);font-weight:700;color:var(--muted);margin-left:3px}
+.stat .bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:var(--s-1)}
+.stat .bar i{display:block;height:100%;background:var(--done)}
+.stat.over b{color:var(--late)}
 /* 軸 */
-.axis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-3)}
-.ax{background:var(--surface);border:1px solid var(--line);border-top:6px solid var(--ink);border-radius:0 0 var(--r) var(--r);padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-2);min-width:0}
-.ax h3{font-size:var(--t-md);font-weight:900}
-.ax p{margin:0;font-size:var(--t-sm);color:var(--ink-soft);line-height:1.6}
+.axis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-2)}
+.ax{padding:var(--s-3);display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.ax h3{font-size:var(--t-sm);font-weight:700}
+.ax p{margin:0;font-size:var(--t-xs);line-height:1.6;color:var(--muted)}
 /* 目印の帯 */
-.band{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:var(--s-1)}
-.seg{display:flex;flex-direction:column;gap:var(--s-2);min-width:0}
-.seg .meter{position:relative;height:22px;border:2px solid var(--ink);background:var(--surface);overflow:hidden}
-.seg .meter i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
-.seg .lab .mid{font-size:var(--t-md);font-weight:900;color:var(--ink)}
-.seg.late .lab .mid{color:var(--alert)}
-.seg .lab{display:flex;flex-direction:column;font-size:var(--t-xs);color:var(--ink-soft);line-height:1.45}
-.seg .lab b{font-size:var(--t-sm);color:var(--ink)}
-.seg.late .meter{border-color:var(--alert)}
-.seg.late .lab b{color:var(--alert)}
-.seg.done .meter{background:var(--ink)}
-/* 日ごとのマス */
-.legend{display:flex;flex-wrap:wrap;gap:var(--s-2) var(--s-4);font-size:var(--t-sm);color:var(--ink-soft);margin:0;padding:0;list-style:none}
-.legend li{display:flex;align-items:center;gap:var(--s-2)}
-.sw{display:inline-block;width:18px;height:18px;border-radius:3px;border:2px solid var(--ink)}
-.sw.s-済み{background:var(--ink)}.sw.s-途中{background:var(--mid);border-color:var(--mid)}.sw.s-まだ{background:var(--surface);border:1px solid var(--line)}
-.day{display:flex;flex-direction:column;gap:var(--s-3)}
-.day>h3{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-2) var(--s-3);font-size:var(--t-md);font-weight:900}
-.day>h3 small{font-weight:400;font-size:var(--t-sm);color:var(--ink-soft)}
-.day.today>h3::before{content:"今日";font-size:var(--t-xs);font-weight:700;letter-spacing:.12em;background:var(--ink);color:var(--on-ink);padding:1px var(--s-2);border-radius:3px}
-.tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s-2)}
-.t{display:flex;flex-direction:column;gap:var(--s-1);padding:var(--s-3);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);min-width:0;font-size:var(--t-sm)}
-.t .h{display:flex;align-items:center;gap:var(--s-2)}
-.t .id{font-weight:900;font-size:var(--t-md)}
-.t .st{margin-left:auto;font-size:var(--t-xs);font-weight:700;letter-spacing:.06em;padding:0 var(--s-2);border-radius:3px;border:1px solid currentColor}
-.t .w{line-height:1.5;overflow-wrap:anywhere}
-.t .m{font-size:var(--t-xs);color:var(--ink-soft)}
-.t.s-済み{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
-.t.s-済み .m{color:var(--on-ink);opacity:.72}
-.t.s-途中{background:var(--mid);border-color:var(--mid)}
-.t.s-途中 .m{color:var(--ink)}
-.t.s-まだ{color:var(--ink-soft)}
-.t.s-まだ .id,.t.s-まだ .w{color:var(--ink)}
-.t.star{border-width:3px;border-color:var(--ink)}
-.t.star.s-まだ{box-shadow:inset 0 0 0 1px var(--ink)}
-.t .sm{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:var(--t-sm);font-weight:900;background:var(--ink);color:var(--on-ink)}
-.t.s-済み .sm{background:var(--on-ink);color:var(--ink)}
-/* 今日の残り */
-.left{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--s-3)}
-.box{background:var(--surface);border:2px solid var(--ink);border-radius:var(--r);padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-3);min-width:0}
-.box.over{border-color:var(--alert);background:var(--alert-soft)}
-.box .big{display:flex;gap:var(--s-5);align-items:end;flex-wrap:wrap}
-.box .big b{font-size:var(--t-xl);font-weight:900;line-height:1}
-.box .big small{display:block;font-size:var(--t-xs);color:var(--ink-soft)}
-.box .warn{margin:0;font-weight:700;color:var(--alert);font-size:var(--t-sm)}
-.box ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s-1);font-size:var(--t-sm)}
-.box li{display:flex;gap:var(--s-2)}
-.box li .id{font-weight:900;min-width:3.2em}
-.box .none{margin:0;color:var(--ink-soft);font-size:var(--t-sm)}
-@media (max-width:900px){.axis{grid-template-columns:repeat(2,minmax(0,1fr))}.band{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:var(--s-3)}}
-@media (max-width:560px){.top{grid-template-columns:1fr}.axis{grid-template-columns:1fr}.total b{font-size:var(--t-xl)}}
-@media (prefers-reduced-motion:no-preference){.seg .meter i{transition:width .3s ease}}
+.band{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:var(--s-2)}
+.seg{padding:var(--s-2) var(--s-3);display:flex;flex-direction:column;gap:var(--s-1);min-width:0;position:relative;overflow:hidden}
+.seg .fill{position:absolute;inset:auto 0 0 0;height:4px;background:var(--track)}
+.seg .fill i{display:block;height:100%;background:var(--done)}
+.seg b{font-family:var(--mono);font-weight:800;font-size:var(--t-md)}
+.seg small{font-size:var(--t-xs);color:var(--muted);line-height:1.4}
+.seg.today{border:2px solid var(--now);background:var(--now-soft)}
+.seg.late{border:2px solid var(--late);background:var(--late-soft)}
+.seg.late b{color:var(--late)}
+.seg.full b{color:var(--done)}
+/* 日ごとの横棒 */
+.legend{display:flex;flex-wrap:wrap;gap:var(--s-1) var(--s-4);margin:0;padding:0;list-style:none;font-size:var(--t-xs);color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:3px}
+.lanes{padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-2)}
+.lane{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:var(--s-3);align-items:center}
+.lane .d{font-size:var(--t-xs);line-height:1.35;color:var(--muted);min-width:0}
+.lane .d b{display:block;font-size:var(--t-sm);color:var(--ink)}
+.lane.today .d b{color:var(--now)}
+.lane.today .track{outline:2px solid var(--now);outline-offset:3px}
+.track{display:flex;gap:2px;min-width:0;border-radius:4px}
+.tag{flex:var(--w) 1 0;min-width:5px;height:26px;border:0;border-radius:4px;padding:0;cursor:pointer;background:var(--kc);position:relative}
+.tag.s-済み{opacity:.32}
+.tag.s-途中{background:repeating-linear-gradient(135deg,var(--kc) 0 5px,var(--card) 5px 8px)}
+.tag.star{box-shadow:inset 0 0 0 2px var(--ink)}
+.tag.now{box-shadow:inset 0 0 0 3px var(--now),0 0 0 2px var(--now)}
+.tag[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px;z-index:1}
+.tag:focus-visible{outline:3px solid var(--now);outline-offset:2px}
+.k-build{--kc:var(--k-build)}.k-video{--kc:var(--k-video)}.k-submit{--kc:var(--k-submit)}.k-people{--kc:var(--k-people)}
+.detail{margin-top:var(--s-2);padding:var(--s-3) var(--s-4);border-radius:8px;background:var(--paper);display:flex;flex-direction:column;gap:var(--s-1);font-size:var(--t-sm);min-height:3.4em}
+.detail .h{display:flex;flex-wrap:wrap;gap:var(--s-2) var(--s-3);align-items:baseline}
+.detail .h b{font-family:var(--mono);font-weight:800}
+.detail .meta{color:var(--muted);font-size:var(--t-xs)}
+.detail .empty{color:var(--muted)}
+/* 日ごとの箱 */
+.days{display:flex;flex-direction:column;gap:var(--s-2)}
+details.day{overflow:hidden}
+details.day>summary{list-style:none;cursor:pointer;padding:var(--s-3) var(--s-4);display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-1) var(--s-3)}
+details.day>summary::-webkit-details-marker{display:none}
+details.day>summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);align-self:center;margin-right:var(--s-1)}
+details.day[open]>summary::before{transform:rotate(45deg)}
+details.day>summary b{font-size:var(--t-md)}
+details.day>summary small{font-size:var(--t-xs);color:var(--muted)}
+details.day.today{border-color:var(--now)}
+details.day.today>summary b::after{content:"今日";margin-left:var(--s-2);font-size:var(--t-xs);font-weight:700;padding:1px 6px;border-radius:4px;background:var(--now);color:var(--card)}
+.tbl{overflow-x:auto;border-top:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:var(--t-sm)}
+th,td{text-align:left;padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:var(--t-xs);font-weight:700;color:var(--muted);white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.w{min-width:16em}
+tr.s-済み td{color:var(--muted)}
+.st{display:inline-block;font-size:var(--t-xs);font-weight:700;padding:0 6px;border-radius:4px;white-space:nowrap}
+.st.s-済み{background:var(--done-soft);color:var(--done)}.st.s-途中{background:var(--now-soft);color:var(--now)}.st.s-まだ{border:1px solid var(--line);color:var(--muted)}
+.kd{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:var(--t-xs)}
+.kd i{width:8px;height:8px;border-radius:2px;background:var(--kc)}
+.star-mark{font-weight:700}
+@media (max-width:860px){.axis{grid-template-columns:repeat(5,minmax(150px,1fr));overflow-x:auto;padding-bottom:var(--s-1);scroll-snap-type:x mandatory}.ax{scroll-snap-align:start}
+.band{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.now{grid-template-columns:1fr}.now .rest{text-align:left}
+.band{grid-template-columns:repeat(3,minmax(0,1fr))}.lane{grid-template-columns:4.6em minmax(0,1fr)}}
+@media (prefers-reduced-motion:no-preference){.tag{transition:transform .15s ease,opacity .15s ease}.tag:hover{transform:translateY(-2px)}}
 </style></head><body><div class="wrap">
-<header class="top"><div><p class="eyebrow">進み具合</p><h1>現場の紙芝居</h1>
-<p class="src">plan.md と compass.md から tools/progress.py が作る（手で書かない）。作った日: 2026-11-02（日本時間）</p></div>
-<div class="total num"><div><small>済んだマス</small><b>23<span class="u">/ 125</span></b></div><div><small>見込みの分で</small><b>18%</b></div><div><small>実際の分</small><b>94<span class="u">分</span></b></div></div></header>
-<section class="sec"><header><h2>軸</h2><p>何から何へ変えるか</p></header><div class="axis">
-<article class="ax"><h3>始点</h3><p>現場のルールや安全の決まりは、文字の資料と、ベテランの頭の中にある</p><p>外国籍の新入社員には、日本語の文字ではそれが届かない</p></article>
-<article class="ax"><h3>終点</h3><p>文字を読めなくても、絵のカードで「守ること」と「その理由」が分かる</p><p>新入社員に届くのは、会社の監修者が直して署名したカードだけ</p></article>
-<article class="ax"><h3>終点の先</h3><p>業界: 電気工事から始めて、建設・製造・介護など、外国籍の人が働くほかの業界へ</p><p>言葉: ベトナム語から、英語・クメール語へ</p></article>
-<article class="ax"><h3>変化の質</h3><p>自然な言葉や文章が、絵になる</p><p>話した言葉や資料の文章が、ピクトグラムのカードに変わる</p></article>
-<article class="ax"><h3>変化の量</h3><p>膨大な情報が、ピクトグラムに収束する</p><p>見る人が受け取る量は減るが、情報は失わない</p></article>
+<header class="top"><h1>現場の紙芝居　進み具合</h1><p>plan.md から自動で作成 ・ <span class="num" data-generated>2026-11-02 15:49</span>（日本時間）</p></header>
+<section class="now card"><div>
+<div class="label">いま</div><h2><span class="id">018b</span>小物の部品 3（時計・手元・禁止・○×）</h2>
+<p class="next">次: <b class="num">017</b> 小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）</p>
+</div><div class="rest"><div class="label">今日の残り（11/2）</div><b>0<span>分</span></b></div></section>
+<section class="stats"><div class="stat card"><span class="label">済んだマス／全部</span><b>23<span>/ 125</span></b></div><div class="stat card"><span class="label">見積もりの分での進み</span><b>18%</b><div class="bar"><i style="width:18%"></i></div></div><div class="stat card"><span class="label">実際の分</span><b>94<span>分</span></b></div><div class="stat card"><span class="label">今日の残り</span><b>0<span>マス</span> 0<span>分</span></b></div></section>
+<section class="sec"><h2>軸<small>何から何へ変えるか</small></h2><div class="axis">
+<article class="ax card"><h3>始点</h3><p>現場のルールや安全の決まりは、文字の資料と、ベテランの頭の中にある</p><p>外国籍の新入社員には、日本語の文字ではそれが届かない</p></article>
+<article class="ax card"><h3>終点</h3><p>文字を読めなくても、絵のカードで「守ること」と「その理由」が分かる</p><p>新入社員に届くのは、会社の監修者が直して署名したカードだけ</p></article>
+<article class="ax card"><h3>終点の先</h3><p>業界: 電気工事から始めて、建設・製造・介護など、外国籍の人が働くほかの業界へ</p><p>言葉: ベトナム語から、英語・クメール語へ</p></article>
+<article class="ax card"><h3>変化の質</h3><p>自然な言葉や文章が、絵になる</p><p>話した言葉や資料の文章が、ピクトグラムのカードに変わる</p></article>
+<article class="ax card"><h3>変化の量</h3><p>膨大な情報が、ピクトグラムに収束する</p><p>見る人が受け取る量は減るが、情報は失わない</p></article>
 </div></section>
-<section class="sec"><header><h2>目印の進み具合</h2><p class="num">800 / 4465 分 ・ 遅れている目印なし</p></header><div class="band">
-<div class="seg done" title="骨組み・API の記録・変更のたびに流すフック・3 つのテナント・録画の土台が動く。仮の流れでデモの 8 枚が最後まで通り、1 枚の費用（作り直し込み・無し）と時間が `docs/numbers.md` にある。回答の記録アプリ（保存・乱数・ストップウォッチ）が動く"><div class="lab num"><span class="mid">M1</span></div><div class="meter"><i style="width:100%"></i></div><div class="lab num"><b>11/2</b><span>17 / 17 マス</span><span>585 / 585 分</span></div></div>
-<div class="seg" title="正式な人形と小物で主な姿勢が「ピクトグラムの見た目」（1b）で描け、絵柄の決まりがテストで守られる。8 枚で 3 つの作り方を比べ、絵の作り方が決まっている。経路とカードのデータの形、監査の記録（追記だけ）ができている。正式な取り出しのプロンプトを 20 項目で測れる。Managed Agents の可否が決まり、夜間の走り手が止めても続きから再開できる。仕分けの指示がある。同意書と読み手パネルの土台がある。新入社員の閲覧画面がある"><div class="lab num"><span class="mid">M2</span></div><div class="meter"><i style="width:27%"></i></div><div class="lab num"><b>11/3</b><span>5 / 18 マス</span><span>185 / 675 分</span></div></div>
-<div class="seg" title="入れる → 抜き出し → 作成 → カードの画面が正式な流れでつながり、輪 1〜5 が「未承認の下書き」として会社のテナントに並び、枠で囲んで直せる。監査の記録の画面とリセットのスクリプトがある。現場の確認の日の日時・場所・人数が決まっている。読み手パネル前半 1 回目（5 枚）が回っている。夜: 夜間の仕分けが流れ終わる"><div class="lab num"><span class="mid">M3</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/4</b><span>0 / 18 マス</span><span>0 / 650 分</span></div></div>
-<div class="seg" title="8 枚がそろい、監修者が経路を見て直し、署名できる（確かめる AI の正式版・帯・危険の印・確認待ちの関門・差分の保存・署名の上限・裏から配れないこと付き）。読み手パネル前半で絵の正解表を確定。用語表は確認を頼み済み。記録アプリに 8 枚が載り、教育担当の勘を集めてある"><div class="lab num"><span class="mid">M4</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/5 日中</b><span>0 / 15 マス</span><span>0 / 535 分</span></div></div>
-<div class="seg" title="夜間の一括で約 120 枚を流し終え（途中で止めて再開を確かめる）、乱数の 20 枚と監修者の記入欄がある。練習用テナントで当日の通しリハーサルが済んでいる"><div class="lab num"><span class="mid">M5</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/5 夜（前夜）</b><span>0 / 6 マス</span><span>0 / 200 分</span></div></div>
-<div class="seg" title="監修 → 署名 → 発行、新入社員の ①分かるまでの時間 ②絵だけ、監修者の 20 枚の判定が終わり、`docs/answers.csv`・本物の正解表・20 枚の結果がそろう。読み手パネル後半で本物の答えと並べた"><div class="lab num"><span class="mid">M6</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/6（現場の確認の日）</b><span>0 / 11 マス</span><span>0 / 380 分</span></div></div>
-<div class="seg" title="読み違えた絵と確かめる AI の指示を直した。直しが次の下書きの手本に入る。発行と停止・MCP・公開デモ・見る人が答えるデモ・動画用の画面・動画冒頭の紙芝居 6〜8 枚ができている。30 項目を確定版の正解で両モデルに解かせた"><div class="lab num"><span class="mid">M7</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/7</b><span>0 / 18 マス</span><span>0 / 660 分</span></div></div>
-<div class="seg" title="危ない読み違いが絵で 0、2 回目の実測、最後の 10 項目、`docs/failures.md` が済み、タグ `hackathon-release` で固めた"><div class="lab num"><span class="mid">M8</span></div><div class="meter"><i style="width:0%"></i></div><div class="lab num"><b>11/8 12:00</b><span>0 / 5 マス</span><span>0 / 175 分</span></div></div>
-<div class="seg" title="動画（3 分・日本語・誰でも見られる）・README（日英・冒頭に触り方）・概要を一度提出し、別の端末から開けることを確かめた。20:00 までは差し替えだけ"><div class="lab num"><span class="mid">M9</span></div><div class="meter"><i style="width:5%"></i></div><div class="lab num"><b>11/8 18:00</b><span>1 / 17 マス</span><span>30 / 605 分</span></div></div>
+<section class="sec"><h2>目印<small class="num">800 / 4465 分 ・ 遅れなし</small></h2><div class="band">
+<div class="seg card today full" title="骨組み・API の記録・変更のたびに流すフック・3 つのテナント・録画の土台が動く。仮の流れでデモの 8 枚が最後まで通り、1 枚の費用（作り直し込み・無し）と時間が `docs/numbers.md` にある。回答の記録アプリ（保存・乱数・ストップウォッチ）が動く"><b>M1</b><small>11/2</small><small class="num">17/17 ・ 100%</small><div class="fill"><i style="width:100%"></i></div></div>
+<div class="seg card" title="正式な人形と小物で主な姿勢が「ピクトグラムの見た目」（1b）で描け、絵柄の決まりがテストで守られる。8 枚で 3 つの作り方を比べ、絵の作り方が決まっている。経路とカードのデータの形、監査の記録（追記だけ）ができている。正式な取り出しのプロンプトを 20 項目で測れる。Managed Agents の可否が決まり、夜間の走り手が止めても続きから再開できる。仕分けの指示がある。同意書と読み手パネルの土台がある。新入社員の閲覧画面がある"><b>M2</b><small>11/3</small><small class="num">5/18 ・ 27%</small><div class="fill"><i style="width:27%"></i></div></div>
+<div class="seg card" title="入れる → 抜き出し → 作成 → カードの画面が正式な流れでつながり、輪 1〜5 が「未承認の下書き」として会社のテナントに並び、枠で囲んで直せる。監査の記録の画面とリセットのスクリプトがある。現場の確認の日の日時・場所・人数が決まっている。読み手パネル前半 1 回目（5 枚）が回っている。夜: 夜間の仕分けが流れ終わる"><b>M3</b><small>11/4</small><small class="num">0/18 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="8 枚がそろい、監修者が経路を見て直し、署名できる（確かめる AI の正式版・帯・危険の印・確認待ちの関門・差分の保存・署名の上限・裏から配れないこと付き）。読み手パネル前半で絵の正解表を確定。用語表は確認を頼み済み。記録アプリに 8 枚が載り、教育担当の勘を集めてある"><b>M4</b><small>11/5 日中</small><small class="num">0/15 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="夜間の一括で約 120 枚を流し終え（途中で止めて再開を確かめる）、乱数の 20 枚と監修者の記入欄がある。練習用テナントで当日の通しリハーサルが済んでいる"><b>M5</b><small>11/5 夜（前夜）</small><small class="num">0/6 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="監修 → 署名 → 発行、新入社員の ①分かるまでの時間 ②絵だけ、監修者の 20 枚の判定が終わり、`docs/answers.csv`・本物の正解表・20 枚の結果がそろう。読み手パネル後半で本物の答えと並べた"><b>M6</b><small>11/6（現場の確認の日）</small><small class="num">0/11 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="読み違えた絵と確かめる AI の指示を直した。直しが次の下書きの手本に入る。発行と停止・MCP・公開デモ・見る人が答えるデモ・動画用の画面・動画冒頭の紙芝居 6〜8 枚ができている。30 項目を確定版の正解で両モデルに解かせた"><b>M7</b><small>11/7</small><small class="num">0/18 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="危ない読み違いが絵で 0、2 回目の実測、最後の 10 項目、`docs/failures.md` が済み、タグ `hackathon-release` で固めた"><b>M8</b><small>11/8 12:00</small><small class="num">0/5 ・ 0%</small><div class="fill"><i style="width:0%"></i></div></div>
+<div class="seg card" title="動画（3 分・日本語・誰でも見られる）・README（日英・冒頭に触り方）・概要を一度提出し、別の端末から開けることを確かめた。20:00 までは差し替えだけ"><b>M9</b><small>11/8 18:00</small><small class="num">1/17 ・ 5%</small><div class="fill"><i style="width:5%"></i></div></div>
 </div></section>
-<section class="sec"><header><h2>日ごとのマス</h2><p>★ は一番遅れてはいけない筋</p></header><ul class="legend"><li><span class="sw s-済み"></span>済み</li><li><span class="sw s-途中"></span>途中</li><li><span class="sw s-まだ"></span>まだ</li><li><span class="sw"></span>太い枠と ★ は遅れてはいけない筋</li></ul>
-<div class="day today"><h3>11/2<small class="num">18 / 18 マス ・ 見込み 615 分 ・ 実際 63 分</small></h3><div class="tasks">
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">109</span><span class="st">済み</span></div><div class="w">進み具合の画面（作る過程を誰でも見られるように）</div><div class="m num">見込み 40 分 ・ 実際 7 分 ・ M1 ・ cf14eee</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">000</span><span class="st">済み</span></div><div class="w">技術と置き場を決める</div><div class="m num">見込み 30 分 ・ 実際 3 分 ・ M1 ・ aab0759</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">001</span><span class="st">済み</span></div><div class="w">Web アプリの骨組み（画面・サーバー・DB・テストの実行）</div><div class="m num">見込み 35 分 ・ 実際 3 分 ・ M1 ・ 6169e5e</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">002</span><span class="st">済み</span></div><div class="w">API を呼ぶ共通部品</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M1 ・ 29718a1</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">002b</span><span class="st">済み</span></div><div class="w">費用の上限と再試行</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M1 ・ 3e14a0c</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">003a</span><span class="st">済み</span></div><div class="w">取り出しの採点の仕組み</div><div class="m num">見込み 35 分 ・ 実際 2 分 ・ M1 ・ 75c1a57</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">003b</span><span class="st">済み</span></div><div class="w">変更のたびに流すフック（20 項目）</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M1 ・ 77a5da8</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">004</span><span class="st">済み</span></div><div class="w">仮の取り出し（Opus・直書きの指示）</div><div class="m num">見込み 35 分 ・ 実際 4 分 ・ M1 ・ f2d4c91</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">005</span><span class="st">済み</span></div><div class="w">仮の関節の角度（Sonnet）</div><div class="m num">見込み 30 分 ・ 実際 3 分 ・ M1 ・ 2c3535d</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">006</span><span class="st">済み</span></div><div class="w">最小の仮の人形</div><div class="m num">見込み 35 分 ・ 実際 2 分 ・ M1 ・ 1f833e2</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">006b</span><span class="st">済み</span></div><div class="w">SVG を PNG にし、確かめる AI に渡す画像を作る</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M1 ・ 3af5985</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">007</span><span class="st">済み</span></div><div class="w">仮の確かめる AI（Opus の画像理解）</div><div class="m num">見込み 35 分 ・ 実際 2 分 ・ M1 ・ 168cf1e</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">008</span><span class="st">済み</span></div><div class="w">デモの 8 枚の費用の実測（作者の依頼で流す）</div><div class="m num">見込み 40 分 ・ 実際 17 分 ・ M1 ・ ef6c30e</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">009</span><span class="st">済み</span></div><div class="w">テナントの土台（練習用・会社のテナント・架空の会社）</div><div class="m num">見込み 40 分 ・ 実際 2 分 ・ M1 ・ 7fe8c23</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">010</span><span class="st">済み</span></div><div class="w">Playwright の録画の土台</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M1 ・ e04cfdf</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">011</span><span class="st">済み</span></div><div class="w">回答の記録アプリ 1: 保存と順番の乱数</div><div class="m num">見込み 40 分 ・ 実際 2 分 ・ M1 ・ 689b15a</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">012</span><span class="st">済み</span></div><div class="w">回答の記録アプリ 2: 画面</div><div class="m num">見込み 40 分 ・ 実際 4 分 ・ M1 ・ b68a11f</div></div>
-<div class="t s-済み"><div class="h"><span class="id num">013</span><span class="st">済み</span></div><div class="w">動画の素材 1 日目と制作記録</div><div class="m num">見込み 30 分 ・ 実際 2 分 ・ M9 ・ a285d8a</div></div>
+<section class="sec"><h2>日ごとのマス<small>札の長さは見込みの分。押すと中身が出る</small></h2><ul class="legend"><li><i class="k-video" style="background:var(--kc)"></i>動画</li><li><i class="k-submit" style="background:var(--kc)"></i>提出</li><li><i class="k-people" style="background:var(--kc)"></i>人とのやりとり</li><li><i class="k-build" style="background:var(--kc)"></i>作る</li><li>薄い札＝済み</li><li>太い枠＝★ 遅れてはいけない筋</li></ul><div class="lanes card">
+<div class="lane today"><div class="d"><b>11/2</b><span class="num">18/18</span></div><div class="track">
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="109 進み具合の画面（作る過程を誰でも見られるように）" title="109 進み具合の画面（作る過程を誰でも見られるように）" data-id="109" data-work="進み具合の画面（作る過程を誰でも見られるように）" data-state="済み" data-kind="作る" data-ms="M1" data-min="40" data-act="7" data-commit="cf14eee" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="000 技術と置き場を決める" title="000 技術と置き場を決める" data-id="000" data-work="技術と置き場を決める" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="3" data-commit="aab0759" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="001 Web アプリの骨組み（画面・サーバー・DB・テストの実行）" title="001 Web アプリの骨組み（画面・サーバー・DB・テストの実行）" data-id="001" data-work="Web アプリの骨組み（画面・サーバー・DB・テストの実行）" data-state="済み" data-kind="作る" data-ms="M1" data-min="35" data-act="3" data-commit="6169e5e" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="002 API を呼ぶ共通部品" title="002 API を呼ぶ共通部品" data-id="002" data-work="API を呼ぶ共通部品" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="2" data-commit="29718a1" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="002b 費用の上限と再試行" title="002b 費用の上限と再試行" data-id="002b" data-work="費用の上限と再試行" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="2" data-commit="3e14a0c" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="003a 取り出しの採点の仕組み" title="003a 取り出しの採点の仕組み" data-id="003a" data-work="取り出しの採点の仕組み" data-state="済み" data-kind="作る" data-ms="M1" data-min="35" data-act="2" data-commit="75c1a57" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="003b 変更のたびに流すフック（20 項目）" title="003b 変更のたびに流すフック（20 項目）" data-id="003b" data-work="変更のたびに流すフック（20 項目）" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="2" data-commit="77a5da8" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="004 仮の取り出し（Opus・直書きの指示）" title="004 仮の取り出し（Opus・直書きの指示）" data-id="004" data-work="仮の取り出し（Opus・直書きの指示）" data-state="済み" data-kind="作る" data-ms="M1" data-min="35" data-act="4" data-commit="f2d4c91" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="005 仮の関節の角度（Sonnet）" title="005 仮の関節の角度（Sonnet）" data-id="005" data-work="仮の関節の角度（Sonnet）" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="3" data-commit="2c3535d" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="006 最小の仮の人形" title="006 最小の仮の人形" data-id="006" data-work="最小の仮の人形" data-state="済み" data-kind="作る" data-ms="M1" data-min="35" data-act="2" data-commit="1f833e2" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="006b SVG を PNG にし、確かめる AI に渡す画像を作る" title="006b SVG を PNG にし、確かめる AI に渡す画像を作る" data-id="006b" data-work="SVG を PNG にし、確かめる AI に渡す画像を作る" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="2" data-commit="3af5985" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="007 仮の確かめる AI（Opus の画像理解）" title="007 仮の確かめる AI（Opus の画像理解）" data-id="007" data-work="仮の確かめる AI（Opus の画像理解）" data-state="済み" data-kind="作る" data-ms="M1" data-min="35" data-act="2" data-commit="168cf1e" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="008 デモの 8 枚の費用の実測（作者の依頼で流す）" title="008 デモの 8 枚の費用の実測（作者の依頼で流す）" data-id="008" data-work="デモの 8 枚の費用の実測（作者の依頼で流す）" data-state="済み" data-kind="作る" data-ms="M1" data-min="40" data-act="17" data-commit="ef6c30e" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="009 テナントの土台（練習用・会社のテナント・架空の会社）" title="009 テナントの土台（練習用・会社のテナント・架空の会社）" data-id="009" data-work="テナントの土台（練習用・会社のテナント・架空の会社）" data-state="済み" data-kind="作る" data-ms="M1" data-min="40" data-act="2" data-commit="7fe8c23" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="010 Playwright の録画の土台" title="010 Playwright の録画の土台" data-id="010" data-work="Playwright の録画の土台" data-state="済み" data-kind="作る" data-ms="M1" data-min="30" data-act="2" data-commit="e04cfdf" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="011 回答の記録アプリ 1: 保存と順番の乱数" title="011 回答の記録アプリ 1: 保存と順番の乱数" data-id="011" data-work="回答の記録アプリ 1: 保存と順番の乱数" data-state="済み" data-kind="作る" data-ms="M1" data-min="40" data-act="2" data-commit="689b15a" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="012 回答の記録アプリ 2: 画面" title="012 回答の記録アプリ 2: 画面" data-id="012" data-work="回答の記録アプリ 2: 画面" data-state="済み" data-kind="作る" data-ms="M1" data-min="40" data-act="4" data-commit="b68a11f" data-star="1"></button>
+<button type="button" class="tag k-video s-済み" style="--w:30" aria-pressed="false" aria-label="013 動画の素材 1 日目と制作記録" title="013 動画の素材 1 日目と制作記録" data-id="013" data-work="動画の素材 1 日目と制作記録" data-state="済み" data-kind="動画" data-ms="M9" data-min="30" data-act="2" data-commit="a285d8a"></button>
 </div></div>
-<div class="day"><h3>11/3<small class="num">5 / 22 マス ・ 見込み 805 分 ・ 実際 31 分</small></h3><div class="tasks">
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">014</span><span class="st">済み</span></div><div class="w">絵柄の決まりをテストにする</div><div class="m num">見込み 30 分 ・ 実際 4 分 ・ M2 ・ d1685dc</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">015</span><span class="st">済み</span></div><div class="w">人形の骨格の正式版</div><div class="m num">見込み 40 分 ・ 実際 6 分 ・ M2 ・ 4baddd8</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">016a</span><span class="st">済み</span></div><div class="w">主な姿勢 4 つと一覧のページ</div><div class="m num">見込み 40 分 ・ 実際 6 分 ・ M2 ・ 57c5a39</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">016b</span><span class="st">済み</span></div><div class="w">主な姿勢 4 つと視線・距離・強調</div><div class="m num">見込み 40 分 ・ 実際 6 分 ・ M2 ・ 60d66a0</div></div>
-<div class="t s-済み star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">018a</span><span class="st">済み</span></div><div class="w">小物の部品 2（輪 6〜8 に要るもの）</div><div class="m num">見込み 35 分 ・ 実際 9 分 ・ M2 ・ 直近</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">018b</span><span class="st">まだ</span></div><div class="w">小物の部品 3（時計・手元・禁止・○×）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">017</span><span class="st">まだ</span></div><div class="w">小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">079a</span><span class="st">まだ</span></div><div class="w">動きを再生してコマを切り出す部品</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">079b</span><span class="st">まだ</span></div><div class="w">絵の作り方を 8 枚で比べる</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">019</span><span class="st">まだ</span></div><div class="w">経路とカードのデータの形</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">020</span><span class="st">まだ</span></div><div class="w">監査の記録（追記だけ・ハッシュの連鎖）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">021</span><span class="st">まだ</span></div><div class="w">正式な取り出しのプロンプトをゼロから書く（Opus）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">022</span><span class="st">まだ</span></div><div class="w">Managed Agents の試作（講座のあと）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">023</span><span class="st">まだ</span></div><div class="w">夜間の走り手の土台</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">024</span><span class="st">まだ</span></div><div class="w">仕分けの指示と照合スクリプト</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">025</span><span class="st">まだ</span></div><div class="w">回答の記録アプリ 3: 採点と書き出し</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">025b</span><span class="st">まだ</span></div><div class="w">「追記だけ」と「消す」の決まり</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">026</span><span class="st">まだ</span></div><div class="w">同意書の下書きと確認の依頼</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">027</span><span class="st">まだ</span></div><div class="w">読み手パネルの土台</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">028</span><span class="st">まだ</span></div><div class="w">新入社員の閲覧画面</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">028b</span><span class="st">まだ</span></div><div class="w">本番の置き場に出す</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M2</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">029</span><span class="st">まだ</span></div><div class="w">動画の素材 2 日目と制作記録</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
+<div class="lane"><div class="d"><b>11/3</b><span class="num">5/22</span></div><div class="track">
+<button type="button" class="tag k-build s-済み star" style="--w:30" aria-pressed="false" aria-label="014 絵柄の決まりをテストにする" title="014 絵柄の決まりをテストにする" data-id="014" data-work="絵柄の決まりをテストにする" data-state="済み" data-kind="作る" data-ms="M2" data-min="30" data-act="4" data-commit="d1685dc" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="015 人形の骨格の正式版" title="015 人形の骨格の正式版" data-id="015" data-work="人形の骨格の正式版" data-state="済み" data-kind="作る" data-ms="M2" data-min="40" data-act="6" data-commit="4baddd8" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="016a 主な姿勢 4 つと一覧のページ" title="016a 主な姿勢 4 つと一覧のページ" data-id="016a" data-work="主な姿勢 4 つと一覧のページ" data-state="済み" data-kind="作る" data-ms="M2" data-min="40" data-act="6" data-commit="57c5a39" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:40" aria-pressed="false" aria-label="016b 主な姿勢 4 つと視線・距離・強調" title="016b 主な姿勢 4 つと視線・距離・強調" data-id="016b" data-work="主な姿勢 4 つと視線・距離・強調" data-state="済み" data-kind="作る" data-ms="M2" data-min="40" data-act="6" data-commit="60d66a0" data-star="1"></button>
+<button type="button" class="tag k-build s-済み star" style="--w:35" aria-pressed="false" aria-label="018a 小物の部品 2（輪 6〜8 に要るもの）" title="018a 小物の部品 2（輪 6〜8 に要るもの）" data-id="018a" data-work="小物の部品 2（輪 6〜8 に要るもの）" data-state="済み" data-kind="作る" data-ms="M2" data-min="35" data-act="9" data-commit="直近" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star now" style="--w:35" aria-pressed="false" aria-label="018b 小物の部品 3（時計・手元・禁止・○×）" title="018b 小物の部品 3（時計・手元・禁止・○×）" data-id="018b" data-work="小物の部品 3（時計・手元・禁止・○×）" data-state="まだ" data-kind="作る" data-ms="M2" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="017 小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）" title="017 小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）" data-id="017" data-work="小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）" data-state="まだ" data-kind="作る" data-ms="M2" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="079a 動きを再生してコマを切り出す部品" title="079a 動きを再生してコマを切り出す部品" data-id="079a" data-work="動きを再生してコマを切り出す部品" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="079b 絵の作り方を 8 枚で比べる" title="079b 絵の作り方を 8 枚で比べる" data-id="079b" data-work="絵の作り方を 8 枚で比べる" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="019 経路とカードのデータの形" title="019 経路とカードのデータの形" data-id="019" data-work="経路とカードのデータの形" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="020 監査の記録（追記だけ・ハッシュの連鎖）" title="020 監査の記録（追記だけ・ハッシュの連鎖）" data-id="020" data-work="監査の記録（追記だけ・ハッシュの連鎖）" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="021 正式な取り出しのプロンプトをゼロから書く（Opus）" title="021 正式な取り出しのプロンプトをゼロから書く（Opus）" data-id="021" data-work="正式な取り出しのプロンプトをゼロから書く（Opus）" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="022 Managed Agents の試作（講座のあと）" title="022 Managed Agents の試作（講座のあと）" data-id="022" data-work="Managed Agents の試作（講座のあと）" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="023 夜間の走り手の土台" title="023 夜間の走り手の土台" data-id="023" data-work="夜間の走り手の土台" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="024 仕分けの指示と照合スクリプト" title="024 仕分けの指示と照合スクリプト" data-id="024" data-work="仕分けの指示と照合スクリプト" data-state="まだ" data-kind="作る" data-ms="M2" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="025 回答の記録アプリ 3: 採点と書き出し" title="025 回答の記録アプリ 3: 採点と書き出し" data-id="025" data-work="回答の記録アプリ 3: 採点と書き出し" data-state="まだ" data-kind="作る" data-ms="M2" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="025b 「追記だけ」と「消す」の決まり" title="025b 「追記だけ」と「消す」の決まり" data-id="025b" data-work="「追記だけ」と「消す」の決まり" data-state="まだ" data-kind="作る" data-ms="M3" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ star" style="--w:30" aria-pressed="false" aria-label="026 同意書の下書きと確認の依頼" title="026 同意書の下書きと確認の依頼" data-id="026" data-work="同意書の下書きと確認の依頼" data-state="まだ" data-kind="人とのやりとり" data-ms="M6" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="027 読み手パネルの土台" title="027 読み手パネルの土台" data-id="027" data-work="読み手パネルの土台" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="028 新入社員の閲覧画面" title="028 新入社員の閲覧画面" data-id="028" data-work="新入社員の閲覧画面" data-state="まだ" data-kind="作る" data-ms="M2" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="028b 本番の置き場に出す" title="028b 本番の置き場に出す" data-id="028b" data-work="本番の置き場に出す" data-state="まだ" data-kind="作る" data-ms="M2" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-video s-まだ" style="--w:30" aria-pressed="false" aria-label="029 動画の素材 2 日目と制作記録" title="029 動画の素材 2 日目と制作記録" data-id="029" data-work="動画の素材 2 日目と制作記録" data-state="まだ" data-kind="動画" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/4<small class="num">0 / 20 マス ・ 見込み 720 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">030</span><span class="st">まだ</span></div><div class="w">データを最初の状態に戻すスクリプト</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">030b</span><span class="st">まだ</span></div><div class="w">利用者と役割（監修者 2 名・教育担当・新入社員・作者）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">031a</span><span class="st">まだ</span></div><div class="w">会社のテナントの非公開の置き場</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">031b</span><span class="st">まだ</span></div><div class="w">PDF → ページの画像 → 行番号付きの文字</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">032</span><span class="st">まだ</span></div><div class="w">入れる画面（工程 1）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">033</span><span class="st">まだ</span></div><div class="w">抜き出しの画面（工程 2〜3）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">034a</span><span class="st">まだ</span></div><div class="w">正式な流れ: 割り付け → 動きか角度（079b で決めた作り方） → ピクトグラムのコマと経路（工程 4）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">034b</span><span class="st">まだ</span></div><div class="w">手元の✓と直しのループ（工程 5）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">035</span><span class="st">まだ</span></div><div class="w">「AI 下書き」の判定</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">036</span><span class="st">まだ</span></div><div class="w">「言葉」の欄と用語表</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">037</span><span class="st">まだ</span></div><div class="w">カードの画面</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">038</span><span class="st">まだ</span></div><div class="w">輪 1・2 を正式な流れで作る（会社のテナント）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">039</span><span class="st">まだ</span></div><div class="w">輪 3〜5（輪 4 は職長向けの文を作業員の側に言い換える。輪 5 は時間を比べる 1 つ目）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">041</span><span class="st">まだ</span></div><div class="w">監査の記録の画面</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">042</span><span class="st">まだ</span></div><div class="w">現場の確認の日の確定と段取り表</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">043</span><span class="st">まだ</span></div><div class="w">夜間の仕分けを流す（夜）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">044a</span><span class="st">まだ</span></div><div class="w">枠と指示の画面（工程 7）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">044b</span><span class="st">まだ</span></div><div class="w">枠 → 部品 → その 1 枚だけ作り直す</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M3</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">045</span><span class="st">まだ</span></div><div class="w">読み手パネル前半 1 回目（輪 1〜5）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">046</span><span class="st">まだ</span></div><div class="w">動画の素材 3 日目と制作記録</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
+<div class="lane"><div class="d"><b>11/4</b><span class="num">0/20</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="030 データを最初の状態に戻すスクリプト" title="030 データを最初の状態に戻すスクリプト" data-id="030" data-work="データを最初の状態に戻すスクリプト" data-state="まだ" data-kind="作る" data-ms="M3" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ star" style="--w:40" aria-pressed="false" aria-label="030b 利用者と役割（監修者 2 名・教育担当・新入社員・作者）" title="030b 利用者と役割（監修者 2 名・教育担当・新入社員・作者）" data-id="030b" data-work="利用者と役割（監修者 2 名・教育担当・新入社員・作者）" data-state="まだ" data-kind="人とのやりとり" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-submit s-まだ star" style="--w:35" aria-pressed="false" aria-label="031a 会社のテナントの非公開の置き場" title="031a 会社のテナントの非公開の置き場" data-id="031a" data-work="会社のテナントの非公開の置き場" data-state="まだ" data-kind="提出" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="031b PDF → ページの画像 → 行番号付きの文字" title="031b PDF → ページの画像 → 行番号付きの文字" data-id="031b" data-work="PDF → ページの画像 → 行番号付きの文字" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="032 入れる画面（工程 1）" title="032 入れる画面（工程 1）" data-id="032" data-work="入れる画面（工程 1）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="033 抜き出しの画面（工程 2〜3）" title="033 抜き出しの画面（工程 2〜3）" data-id="033" data-work="抜き出しの画面（工程 2〜3）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="034a 正式な流れ: 割り付け → 動きか角度（079b で決めた作り方） → ピクトグラムのコマと経路（工程 4）" title="034a 正式な流れ: 割り付け → 動きか角度（079b で決めた作り方） → ピクトグラムのコマと経路（工程 4）" data-id="034a" data-work="正式な流れ: 割り付け → 動きか角度（079b で決めた作り方） → ピクトグラムのコマと経路（工程 4）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="034b 手元の✓と直しのループ（工程 5）" title="034b 手元の✓と直しのループ（工程 5）" data-id="034b" data-work="手元の✓と直しのループ（工程 5）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="035 「AI 下書き」の判定" title="035 「AI 下書き」の判定" data-id="035" data-work="「AI 下書き」の判定" data-state="まだ" data-kind="作る" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="036 「言葉」の欄と用語表" title="036 「言葉」の欄と用語表" data-id="036" data-work="「言葉」の欄と用語表" data-state="まだ" data-kind="作る" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="037 カードの画面" title="037 カードの画面" data-id="037" data-work="カードの画面" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="038 輪 1・2 を正式な流れで作る（会社のテナント）" title="038 輪 1・2 を正式な流れで作る（会社のテナント）" data-id="038" data-work="輪 1・2 を正式な流れで作る（会社のテナント）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="039 輪 3〜5（輪 4 は職長向けの文を作業員の側に言い換える。輪 5 は時間を比べる 1 つ目）" title="039 輪 3〜5（輪 4 は職長向けの文を作業員の側に言い換える。輪 5 は時間を比べる 1 つ目）" data-id="039" data-work="輪 3〜5（輪 4 は職長向けの文を作業員の側に言い換える。輪 5 は時間を比べる 1 つ目）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="041 監査の記録の画面" title="041 監査の記録の画面" data-id="041" data-work="監査の記録の画面" data-state="まだ" data-kind="作る" data-ms="M3" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ star" style="--w:30" aria-pressed="false" aria-label="042 現場の確認の日の確定と段取り表" title="042 現場の確認の日の確定と段取り表" data-id="042" data-work="現場の確認の日の確定と段取り表" data-state="まだ" data-kind="人とのやりとり" data-ms="M6" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="043 夜間の仕分けを流す（夜）" title="043 夜間の仕分けを流す（夜）" data-id="043" data-work="夜間の仕分けを流す（夜）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="044a 枠と指示の画面（工程 7）" title="044a 枠と指示の画面（工程 7）" data-id="044a" data-work="枠と指示の画面（工程 7）" data-state="まだ" data-kind="作る" data-ms="M3" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="044b 枠 → 部品 → その 1 枚だけ作り直す" title="044b 枠 → 部品 → その 1 枚だけ作り直す" data-id="044b" data-work="枠 → 部品 → その 1 枚だけ作り直す" data-state="まだ" data-kind="作る" data-ms="M3" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="045 読み手パネル前半 1 回目（輪 1〜5）" title="045 読み手パネル前半 1 回目（輪 1〜5）" data-id="045" data-work="読み手パネル前半 1 回目（輪 1〜5）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-video s-まだ" style="--w:30" aria-pressed="false" aria-label="046 動画の素材 3 日目と制作記録" title="046 動画の素材 3 日目と制作記録" data-id="046" data-work="動画の素材 3 日目と制作記録" data-state="まだ" data-kind="動画" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/5 日中<small class="num">0 / 15 マス ・ 見込み 520 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">047</span><span class="st">まだ</span></div><div class="w">確かめる AI の正式版と確認待ちの関門</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">048</span><span class="st">まだ</span></div><div class="w">帯・「危険」の印・いつも出しておく数字</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">050</span><span class="st">まだ</span></div><div class="w">修正の差分の保存（監査の記録 ④）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">051a</span><span class="st">まだ</span></div><div class="w">署名の記録（サーバー）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">051b</span><span class="st">まだ</span></div><div class="w">署名の入力（工程 8）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">052</span><span class="st">まだ</span></div><div class="w">サーバー側の関門（署名の上限と、裏から配らないこと）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">053</span><span class="st">まだ</span></div><div class="w">経路の画面</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">076a</span><span class="st">まだ</span></div><div class="w">紙芝居の切り替え（最小版・§3b）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">054</span><span class="st">まだ</span></div><div class="w">輪 6・7（輪 6 は時間を比べる 2 つ目）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">055</span><span class="st">まだ</span></div><div class="w">輪 8（元に理由が無い）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">056</span><span class="st">まだ</span></div><div class="w">用語表の確認の依頼と、時間を比べる 2 項目の訳</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">057</span><span class="st">まだ</span></div><div class="w">読み手パネル前半 2 回目（8 枚）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">058</span><span class="st">まだ</span></div><div class="w">伝わらない絵を直して回し直し、絵の正解表を確定する</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M4</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">059</span><span class="st">まだ</span></div><div class="w">記録アプリに 8 枚と 2 項目を載せ、教育担当の勘を集める</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">060</span><span class="st">まだ</span></div><div class="w">監修者の○△×を取り込み、20 項目を確定版に差し替える（戻り次第。遅くとも 11/5）</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M7</div></div>
+<div class="lane"><div class="d"><b>11/5 日中</b><span class="num">0/15</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="047 確かめる AI の正式版と確認待ちの関門" title="047 確かめる AI の正式版と確認待ちの関門" data-id="047" data-work="確かめる AI の正式版と確認待ちの関門" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="048 帯・「危険」の印・いつも出しておく数字" title="048 帯・「危険」の印・いつも出しておく数字" data-id="048" data-work="帯・「危険」の印・いつも出しておく数字" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="050 修正の差分の保存（監査の記録 ④）" title="050 修正の差分の保存（監査の記録 ④）" data-id="050" data-work="修正の差分の保存（監査の記録 ④）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="051a 署名の記録（サーバー）" title="051a 署名の記録（サーバー）" data-id="051a" data-work="署名の記録（サーバー）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="051b 署名の入力（工程 8）" title="051b 署名の入力（工程 8）" data-id="051b" data-work="署名の入力（工程 8）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="052 サーバー側の関門（署名の上限と、裏から配らないこと）" title="052 サーバー側の関門（署名の上限と、裏から配らないこと）" data-id="052" data-work="サーバー側の関門（署名の上限と、裏から配らないこと）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="053 経路の画面" title="053 経路の画面" data-id="053" data-work="経路の画面" data-state="まだ" data-kind="作る" data-ms="M4" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="076a 紙芝居の切り替え（最小版・§3b）" title="076a 紙芝居の切り替え（最小版・§3b）" data-id="076a" data-work="紙芝居の切り替え（最小版・§3b）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="054 輪 6・7（輪 6 は時間を比べる 2 つ目）" title="054 輪 6・7（輪 6 は時間を比べる 2 つ目）" data-id="054" data-work="輪 6・7（輪 6 は時間を比べる 2 つ目）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="055 輪 8（元に理由が無い）" title="055 輪 8（元に理由が無い）" data-id="055" data-work="輪 8（元に理由が無い）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="056 用語表の確認の依頼と、時間を比べる 2 項目の訳" title="056 用語表の確認の依頼と、時間を比べる 2 項目の訳" data-id="056" data-work="用語表の確認の依頼と、時間を比べる 2 項目の訳" data-state="まだ" data-kind="作る" data-ms="M4" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="057 読み手パネル前半 2 回目（8 枚）" title="057 読み手パネル前半 2 回目（8 枚）" data-id="057" data-work="読み手パネル前半 2 回目（8 枚）" data-state="まだ" data-kind="作る" data-ms="M4" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:35" aria-pressed="false" aria-label="058 伝わらない絵を直して回し直し、絵の正解表を確定する" title="058 伝わらない絵を直して回し直し、絵の正解表を確定する" data-id="058" data-work="伝わらない絵を直して回し直し、絵の正解表を確定する" data-state="まだ" data-kind="作る" data-ms="M4" data-min="35" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ star" style="--w:30" aria-pressed="false" aria-label="059 記録アプリに 8 枚と 2 項目を載せ、教育担当の勘を集める" title="059 記録アプリに 8 枚と 2 項目を載せ、教育担当の勘を集める" data-id="059" data-work="記録アプリに 8 枚と 2 項目を載せ、教育担当の勘を集める" data-state="まだ" data-kind="人とのやりとり" data-ms="M6" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ" style="--w:35" aria-pressed="false" aria-label="060 監修者の○△×を取り込み、20 項目を確定版に差し替える（戻り次第。遅くとも 11/5）" title="060 監修者の○△×を取り込み、20 項目を確定版に差し替える（戻り次第。遅くとも 11/5）" data-id="060" data-work="監修者の○△×を取り込み、20 項目を確定版に差し替える（戻り次第。遅くとも 11/5）" data-state="まだ" data-kind="人とのやりとり" data-ms="M7" data-min="35" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/5 夜。前夜<small class="num">0 / 6 マス ・ 見込み 200 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">061</span><span class="st">まだ</span></div><div class="w">確認待ちの列と、仕分けの入れ替え</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M5</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">062</span><span class="st">まだ</span></div><div class="w">夜間の下書きの走り手</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M5</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">063</span><span class="st">まだ</span></div><div class="w">夜間の一括を流す（約 120 枚）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M5</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">064</span><span class="st">まだ</span></div><div class="w">20 枚を乱数で選び、監修者の記入欄を作る</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M5</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">065a</span><span class="st">まだ</span></div><div class="w">練習用テナントで通しの録画</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M5</div></div>
-<div class="t s-まだ star"><div class="h"><span class="sm" aria-label="遅れてはいけない筋">★</span><span class="id num">065b</span><span class="st">まだ</span></div><div class="w">撮影の練習と片付け</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M5</div></div>
+<div class="lane"><div class="d"><b>11/5 夜。前夜</b><span class="num">0/6</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="061 確認待ちの列と、仕分けの入れ替え" title="061 確認待ちの列と、仕分けの入れ替え" data-id="061" data-work="確認待ちの列と、仕分けの入れ替え" data-state="まだ" data-kind="作る" data-ms="M5" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="062 夜間の下書きの走り手" title="062 夜間の下書きの走り手" data-id="062" data-work="夜間の下書きの走り手" data-state="まだ" data-kind="作る" data-ms="M5" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="063 夜間の一括を流す（約 120 枚）" title="063 夜間の一括を流す（約 120 枚）" data-id="063" data-work="夜間の一括を流す（約 120 枚）" data-state="まだ" data-kind="作る" data-ms="M5" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-people s-まだ star" style="--w:30" aria-pressed="false" aria-label="064 20 枚を乱数で選び、監修者の記入欄を作る" title="064 20 枚を乱数で選び、監修者の記入欄を作る" data-id="064" data-work="20 枚を乱数で選び、監修者の記入欄を作る" data-state="まだ" data-kind="人とのやりとり" data-ms="M5" data-min="30" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:40" aria-pressed="false" aria-label="065a 練習用テナントで通しの録画" title="065a 練習用テナントで通しの録画" data-id="065a" data-work="練習用テナントで通しの録画" data-state="まだ" data-kind="作る" data-ms="M5" data-min="40" data-act="" data-commit="" data-star="1"></button>
+<button type="button" class="tag k-build s-まだ star" style="--w:30" aria-pressed="false" aria-label="065b 撮影の練習と片付け" title="065b 撮影の練習と片付け" data-id="065b" data-work="撮影の練習と片付け" data-state="まだ" data-kind="作る" data-ms="M5" data-min="30" data-act="" data-commit="" data-star="1"></button>
 </div></div>
-<div class="day"><h3>11/6 現場の確認の日<small class="num">0 / 15 マス ・ 見込み 530 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ"><div class="h"><span class="id num">066</span><span class="st">まだ</span></div><div class="w">当日の準備</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">067</span><span class="st">まだ</span></div><div class="w">監修者 2 名が 8 枚を経路を見て直し、署名・発行する。8 枚の要点（やること・やらないこと・なぜ）も確定</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">068</span><span class="st">まだ</span></div><div class="w">新入社員 ① 分かるまでの時間</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">069</span><span class="st">まだ</span></div><div class="w">新入社員 ② 絵だけで 8 枚</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">070</span><span class="st">まだ</span></div><div class="w">監修者 1 名が仕分けの一覧と 20 枚を見る（新入社員と並行）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">071</span><span class="st">まだ</span></div><div class="w">2 人が別々に採点し、`docs/answers.csv` を書き出す</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">072</span><span class="st">まだ</span></div><div class="w">本物の正解表と集計</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">073</span><span class="st">まだ</span></div><div class="w">20 枚の結果</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M6</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">074</span><span class="st">まだ</span></div><div class="w">動画の素材 5 日目と制作記録</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">075</span><span class="st">まだ</span></div><div class="w">読み手パネル後半</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">076b</span><span class="st">まだ</span></div><div class="w">紙芝居の切り替えの凝った部分</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">077</span><span class="st">まだ</span></div><div class="w">PNG・SVG の書き出し</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">078</span><span class="st">まだ</span></div><div class="w">ライセンスの決定・利害の開示・出どころの文</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">080</span><span class="st">まだ</span></div><div class="w">Skills（電気工事・労働条件）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">081</span><span class="st">まだ</span></div><div class="w">折りたたみの画面と文字数のスクリプト</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
+<div class="lane"><div class="d"><b>11/6 現場の確認の日</b><span class="num">0/15</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="066 当日の準備" title="066 当日の準備" data-id="066" data-work="当日の準備" data-state="まだ" data-kind="作る" data-ms="M6" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-people s-まだ" style="--w:40" aria-pressed="false" aria-label="067 監修者 2 名が 8 枚を経路を見て直し、署名・発行する。8 枚の要点（やること・やらないこと・なぜ）も確定" title="067 監修者 2 名が 8 枚を経路を見て直し、署名・発行する。8 枚の要点（やること・やらないこと・なぜ）も確定" data-id="067" data-work="監修者 2 名が 8 枚を経路を見て直し、署名・発行する。8 枚の要点（やること・やらないこと・なぜ）も確定" data-state="まだ" data-kind="人とのやりとり" data-ms="M6" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="068 新入社員 ① 分かるまでの時間" title="068 新入社員 ① 分かるまでの時間" data-id="068" data-work="新入社員 ① 分かるまでの時間" data-state="まだ" data-kind="作る" data-ms="M6" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="069 新入社員 ② 絵だけで 8 枚" title="069 新入社員 ② 絵だけで 8 枚" data-id="069" data-work="新入社員 ② 絵だけで 8 枚" data-state="まだ" data-kind="作る" data-ms="M6" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-people s-まだ" style="--w:30" aria-pressed="false" aria-label="070 監修者 1 名が仕分けの一覧と 20 枚を見る（新入社員と並行）" title="070 監修者 1 名が仕分けの一覧と 20 枚を見る（新入社員と並行）" data-id="070" data-work="監修者 1 名が仕分けの一覧と 20 枚を見る（新入社員と並行）" data-state="まだ" data-kind="人とのやりとり" data-ms="M6" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="071 2 人が別々に採点し、`docs/answers.csv` を書き出す" title="071 2 人が別々に採点し、`docs/answers.csv` を書き出す" data-id="071" data-work="2 人が別々に採点し、`docs/answers.csv` を書き出す" data-state="まだ" data-kind="作る" data-ms="M6" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="072 本物の正解表と集計" title="072 本物の正解表と集計" data-id="072" data-work="本物の正解表と集計" data-state="まだ" data-kind="作る" data-ms="M6" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="073 20 枚の結果" title="073 20 枚の結果" data-id="073" data-work="20 枚の結果" data-state="まだ" data-kind="作る" data-ms="M6" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:30" aria-pressed="false" aria-label="074 動画の素材 5 日目と制作記録" title="074 動画の素材 5 日目と制作記録" data-id="074" data-work="動画の素材 5 日目と制作記録" data-state="まだ" data-kind="動画" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="075 読み手パネル後半" title="075 読み手パネル後半" data-id="075" data-work="読み手パネル後半" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="076b 紙芝居の切り替えの凝った部分" title="076b 紙芝居の切り替えの凝った部分" data-id="076b" data-work="紙芝居の切り替えの凝った部分" data-state="まだ" data-kind="作る" data-ms="M7" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="077 PNG・SVG の書き出し" title="077 PNG・SVG の書き出し" data-id="077" data-work="PNG・SVG の書き出し" data-state="まだ" data-kind="作る" data-ms="M7" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="078 ライセンスの決定・利害の開示・出どころの文" title="078 ライセンスの決定・利害の開示・出どころの文" data-id="078" data-work="ライセンスの決定・利害の開示・出どころの文" data-state="まだ" data-kind="作る" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="080 Skills（電気工事・労働条件）" title="080 Skills（電気工事・労働条件）" data-id="080" data-work="Skills（電気工事・労働条件）" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="081 折りたたみの画面と文字数のスクリプト" title="081 折りたたみの画面と文字数のスクリプト" data-id="081" data-work="折りたたみの画面と文字数のスクリプト" data-state="まだ" data-kind="作る" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/7<small class="num">0 / 19 マス ・ 見込み 710 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ"><div class="h"><span class="id num">082</span><span class="st">まだ</span></div><div class="w">読み違えた絵を直す 1</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">083</span><span class="st">まだ</span></div><div class="w">読み違えた絵を直す 2</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">084</span><span class="st">まだ</span></div><div class="w">確かめる AI の指示を直す</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">085</span><span class="st">まだ</span></div><div class="w">会社の言葉の保存（§5 L1 ③）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">086</span><span class="st">まだ</span></div><div class="w">手本の渡し方（§5 L3）と Managed Agents のセッションの後片付け（L4）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">087</span><span class="st">まだ</span></div><div class="w">「前回の修正を手本にしました」の表示</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">088</span><span class="st">まだ</span></div><div class="w">発行と停止・見た人の一覧・回収の知らせ・毎週 2 枚の抜き取り</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">090</span><span class="st">まだ</span></div><div class="w">30 項目を確定版の正解で、Opus と Fable の両方に解かせる</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">091</span><span class="st">まだ</span></div><div class="w">絵の部品を 1 つずつ動かす</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">092</span><span class="st">まだ</span></div><div class="w">MCP サーバー</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">093a</span><span class="st">まだ</span></div><div class="w">架空の会社の元の文と 10 枚</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">093b</span><span class="st">まだ</span></div><div class="w">公開デモの入口</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">094</span><span class="st">まだ</span></div><div class="w">見る人が答える公開デモ</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M7</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">095</span><span class="st">まだ</span></div><div class="w">時計 2 つの画面</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">096a</span><span class="st">まだ</span></div><div class="w">動画冒頭の紙芝居: 物語を受け取り、足りない部品を足す</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">096b</span><span class="st">まだ</span></div><div class="w">動画冒頭の紙芝居 6〜8 枚を描く</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">097</span><span class="st">まだ</span></div><div class="w">数えるスクリプトと `docs/failures.md` の骨子</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M8</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">098</span><span class="st">まだ</span></div><div class="w">動画の素材 6 日目と仮の 3 分版</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">098b</span><span class="st">まだ</span></div><div class="w">台本と声</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
+<div class="lane"><div class="d"><b>11/7</b><span class="num">0/19</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="082 読み違えた絵を直す 1" title="082 読み違えた絵を直す 1" data-id="082" data-work="読み違えた絵を直す 1" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="083 読み違えた絵を直す 2" title="083 読み違えた絵を直す 2" data-id="083" data-work="読み違えた絵を直す 2" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:35" aria-pressed="false" aria-label="084 確かめる AI の指示を直す" title="084 確かめる AI の指示を直す" data-id="084" data-work="確かめる AI の指示を直す" data-state="まだ" data-kind="作る" data-ms="M7" data-min="35" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="085 会社の言葉の保存（§5 L1 ③）" title="085 会社の言葉の保存（§5 L1 ③）" data-id="085" data-work="会社の言葉の保存（§5 L1 ③）" data-state="まだ" data-kind="作る" data-ms="M7" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="086 手本の渡し方（§5 L3）と Managed Agents のセッションの後片付け（L4）" title="086 手本の渡し方（§5 L3）と Managed Agents のセッションの後片付け（L4）" data-id="086" data-work="手本の渡し方（§5 L3）と Managed Agents のセッションの後片付け（L4）" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="087 「前回の修正を手本にしました」の表示" title="087 「前回の修正を手本にしました」の表示" data-id="087" data-work="「前回の修正を手本にしました」の表示" data-state="まだ" data-kind="作る" data-ms="M7" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="088 発行と停止・見た人の一覧・回収の知らせ・毎週 2 枚の抜き取り" title="088 発行と停止・見た人の一覧・回収の知らせ・毎週 2 枚の抜き取り" data-id="088" data-work="発行と停止・見た人の一覧・回収の知らせ・毎週 2 枚の抜き取り" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="090 30 項目を確定版の正解で、Opus と Fable の両方に解かせる" title="090 30 項目を確定版の正解で、Opus と Fable の両方に解かせる" data-id="090" data-work="30 項目を確定版の正解で、Opus と Fable の両方に解かせる" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:35" aria-pressed="false" aria-label="091 絵の部品を 1 つずつ動かす" title="091 絵の部品を 1 つずつ動かす" data-id="091" data-work="絵の部品を 1 つずつ動かす" data-state="まだ" data-kind="作る" data-ms="M7" data-min="35" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="092 MCP サーバー" title="092 MCP サーバー" data-id="092" data-work="MCP サーバー" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="093a 架空の会社の元の文と 10 枚" title="093a 架空の会社の元の文と 10 枚" data-id="093a" data-work="架空の会社の元の文と 10 枚" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:35" aria-pressed="false" aria-label="093b 公開デモの入口" title="093b 公開デモの入口" data-id="093b" data-work="公開デモの入口" data-state="まだ" data-kind="作る" data-ms="M7" data-min="35" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="094 見る人が答える公開デモ" title="094 見る人が答える公開デモ" data-id="094" data-work="見る人が答える公開デモ" data-state="まだ" data-kind="作る" data-ms="M7" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="095 時計 2 つの画面" title="095 時計 2 つの画面" data-id="095" data-work="時計 2 つの画面" data-state="まだ" data-kind="作る" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:40" aria-pressed="false" aria-label="096a 動画冒頭の紙芝居: 物語を受け取り、足りない部品を足す" title="096a 動画冒頭の紙芝居: 物語を受け取り、足りない部品を足す" data-id="096a" data-work="動画冒頭の紙芝居: 物語を受け取り、足りない部品を足す" data-state="まだ" data-kind="動画" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:40" aria-pressed="false" aria-label="096b 動画冒頭の紙芝居 6〜8 枚を描く" title="096b 動画冒頭の紙芝居 6〜8 枚を描く" data-id="096b" data-work="動画冒頭の紙芝居 6〜8 枚を描く" data-state="まだ" data-kind="動画" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:35" aria-pressed="false" aria-label="097 数えるスクリプトと `docs/failures.md` の骨子" title="097 数えるスクリプトと `docs/failures.md` の骨子" data-id="097" data-work="数えるスクリプトと `docs/failures.md` の骨子" data-state="まだ" data-kind="作る" data-ms="M8" data-min="35" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:40" aria-pressed="false" aria-label="098 動画の素材 6 日目と仮の 3 分版" title="098 動画の素材 6 日目と仮の 3 分版" data-id="098" data-work="動画の素材 6 日目と仮の 3 分版" data-state="まだ" data-kind="動画" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="098b 台本と声" title="098b 台本と声" data-id="098b" data-work="台本と声" data-state="まだ" data-kind="作る" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/8 12:00<small class="num">0 / 4 マス ・ 見込み 140 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ"><div class="h"><span class="id num">099</span><span class="st">まだ</span></div><div class="w">危ない読み違い 0 の確認と枚数の一致</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M8</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">100</span><span class="st">まだ</span></div><div class="w">2 回目の実測</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M8</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">101</span><span class="st">まだ</span></div><div class="w">最後の確認用 10 項目</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M8</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">102</span><span class="st">まだ</span></div><div class="w">公開物を検査して固める</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M8</div></div>
+<div class="lane"><div class="d"><b>11/8 12:00</b><span class="num">0/4</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="099 危ない読み違い 0 の確認と枚数の一致" title="099 危ない読み違い 0 の確認と枚数の一致" data-id="099" data-work="危ない読み違い 0 の確認と枚数の一致" data-state="まだ" data-kind="作る" data-ms="M8" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="100 2 回目の実測" title="100 2 回目の実測" data-id="100" data-work="2 回目の実測" data-state="まだ" data-kind="作る" data-ms="M8" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="101 最後の確認用 10 項目" title="101 最後の確認用 10 項目" data-id="101" data-work="最後の確認用 10 項目" data-state="まだ" data-kind="作る" data-ms="M8" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-build s-まだ" style="--w:40" aria-pressed="false" aria-label="102 公開物を検査して固める" title="102 公開物を検査して固める" data-id="102" data-work="公開物を検査して固める" data-state="まだ" data-kind="作る" data-ms="M8" data-min="40" data-act="" data-commit=""></button>
 </div></div>
-<div class="day"><h3>11/8 18:00<small class="num">0 / 6 マス ・ 見込み 225 分 ・ 実際 0 分</small></h3><div class="tasks">
-<div class="t s-まだ"><div class="h"><span class="id num">103</span><span class="st">まだ</span></div><div class="w">付録（作る側の生産性。優先度は一番低い）</div><div class="m num">見込み 30 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">104</span><span class="st">まだ</span></div><div class="w">動画の編集 1</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">105</span><span class="st">まだ</span></div><div class="w">動画の編集 2</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">106</span><span class="st">まだ</span></div><div class="w">README（英語）</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">107</span><span class="st">まだ</span></div><div class="w">README（日本語）と docs の仕上げ</div><div class="m num">見込み 35 分 ・ 実際 — 分 ・ M9</div></div>
-<div class="t s-まだ"><div class="h"><span class="id num">108</span><span class="st">まだ</span></div><div class="w">概要を書いて提出し、提出後を確かめる</div><div class="m num">見込み 40 分 ・ 実際 — 分 ・ M9</div></div>
+<div class="lane"><div class="d"><b>11/8 18:00</b><span class="num">0/6</span></div><div class="track">
+<button type="button" class="tag k-build s-まだ" style="--w:30" aria-pressed="false" aria-label="103 付録（作る側の生産性。優先度は一番低い）" title="103 付録（作る側の生産性。優先度は一番低い）" data-id="103" data-work="付録（作る側の生産性。優先度は一番低い）" data-state="まだ" data-kind="作る" data-ms="M9" data-min="30" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:40" aria-pressed="false" aria-label="104 動画の編集 1" title="104 動画の編集 1" data-id="104" data-work="動画の編集 1" data-state="まだ" data-kind="動画" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-video s-まだ" style="--w:40" aria-pressed="false" aria-label="105 動画の編集 2" title="105 動画の編集 2" data-id="105" data-work="動画の編集 2" data-state="まだ" data-kind="動画" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-submit s-まだ" style="--w:40" aria-pressed="false" aria-label="106 README（英語）" title="106 README（英語）" data-id="106" data-work="README（英語）" data-state="まだ" data-kind="提出" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
+<button type="button" class="tag k-submit s-まだ" style="--w:35" aria-pressed="false" aria-label="107 README（日本語）と docs の仕上げ" title="107 README（日本語）と docs の仕上げ" data-id="107" data-work="README（日本語）と docs の仕上げ" data-state="まだ" data-kind="提出" data-ms="M9" data-min="35" data-act="" data-commit=""></button>
+<button type="button" class="tag k-submit s-まだ" style="--w:40" aria-pressed="false" aria-label="108 概要を書いて提出し、提出後を確かめる" title="108 概要を書いて提出し、提出後を確かめる" data-id="108" data-work="概要を書いて提出し、提出後を確かめる" data-state="まだ" data-kind="提出" data-ms="M9" data-min="40" data-act="" data-commit=""></button>
 </div></div>
-</section>
-<section class="sec"><header><h2>今日の残り（11/2）</h2><p class="num">今日の見込み 615 分</p></header><div class="left">
-<div class="box"><div class="big num"><div><small>残りのマス</small><b>0</b></div><div><small>残りの見込み</small><b>0<span class="u"> 分</span></b></div></div>
-<p class="none">今日の分は全部済んだ</p>
-</div></div></section></div></body></html>
+<div class="detail" id="detail" aria-live="polite"><span class="empty">札を押すと、ここにそのマスの中身が出ます</span></div></div></section>
+<section class="sec"><h2>日ごとの箱</h2><div class="days">
+<details class="day card today" open><summary><b>11/2</b><small class="num">18/18 マス ・ 見込み 615 分 ・ 実際 63 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 109</td><td class="w">進み具合の画面（作る過程を誰でも見られるように）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">40</td><td class="n">7</td><td class="n">cf14eee</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 000</td><td class="w">技術と置き場を決める</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">3</td><td class="n">aab0759</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 001</td><td class="w">Web アプリの骨組み（画面・サーバー・DB・テストの実行）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">35</td><td class="n">3</td><td class="n">6169e5e</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 002</td><td class="w">API を呼ぶ共通部品</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">2</td><td class="n">29718a1</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 002b</td><td class="w">費用の上限と再試行</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">2</td><td class="n">3e14a0c</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 003a</td><td class="w">取り出しの採点の仕組み</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">35</td><td class="n">2</td><td class="n">75c1a57</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 003b</td><td class="w">変更のたびに流すフック（20 項目）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">2</td><td class="n">77a5da8</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 004</td><td class="w">仮の取り出し（Opus・直書きの指示）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">35</td><td class="n">4</td><td class="n">f2d4c91</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 005</td><td class="w">仮の関節の角度（Sonnet）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">3</td><td class="n">2c3535d</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 006</td><td class="w">最小の仮の人形</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">35</td><td class="n">2</td><td class="n">1f833e2</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 006b</td><td class="w">SVG を PNG にし、確かめる AI に渡す画像を作る</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">2</td><td class="n">3af5985</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 007</td><td class="w">仮の確かめる AI（Opus の画像理解）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">35</td><td class="n">2</td><td class="n">168cf1e</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 008</td><td class="w">デモの 8 枚の費用の実測（作者の依頼で流す）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">40</td><td class="n">17</td><td class="n">ef6c30e</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 009</td><td class="w">テナントの土台（練習用・会社のテナント・架空の会社）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">40</td><td class="n">2</td><td class="n">7fe8c23</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 010</td><td class="w">Playwright の録画の土台</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">30</td><td class="n">2</td><td class="n">e04cfdf</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 011</td><td class="w">回答の記録アプリ 1: 保存と順番の乱数</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">40</td><td class="n">2</td><td class="n">689b15a</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 012</td><td class="w">回答の記録アプリ 2: 画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M1</td><td class="n">40</td><td class="n">4</td><td class="n">b68a11f</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n">013</td><td class="w">動画の素材 1 日目と制作記録</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">30</td><td class="n">2</td><td class="n">a285d8a</td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/3</b><small class="num">5/22 マス ・ 見込み 805 分 ・ 実際 31 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 014</td><td class="w">絵柄の決まりをテストにする</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">30</td><td class="n">4</td><td class="n">d1685dc</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 015</td><td class="w">人形の骨格の正式版</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">6</td><td class="n">4baddd8</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 016a</td><td class="w">主な姿勢 4 つと一覧のページ</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">6</td><td class="n">57c5a39</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 016b</td><td class="w">主な姿勢 4 つと視線・距離・強調</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">6</td><td class="n">60d66a0</td></tr>
+<tr class="s-済み"><td><span class="st s-済み">済み</span></td><td class="n"><span class="star-mark">★</span> 018a</td><td class="w">小物の部品 2（輪 6〜8 に要るもの）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">35</td><td class="n">9</td><td class="n">直近</td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 018b</td><td class="w">小物の部品 3（時計・手元・禁止・○×）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 017</td><td class="w">小物の部品 1（輪 1〜5 に要るもの・役のかぶり物・吹き出し）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 079a</td><td class="w">動きを再生してコマを切り出す部品</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 079b</td><td class="w">絵の作り方を 8 枚で比べる</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 019</td><td class="w">経路とカードのデータの形</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 020</td><td class="w">監査の記録（追記だけ・ハッシュの連鎖）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 021</td><td class="w">正式な取り出しのプロンプトをゼロから書く（Opus）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 022</td><td class="w">Managed Agents の試作（講座のあと）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 023</td><td class="w">夜間の走り手の土台</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 024</td><td class="w">仕分けの指示と照合スクリプト</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 025</td><td class="w">回答の記録アプリ 3: 採点と書き出し</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 025b</td><td class="w">「追記だけ」と「消す」の決まり</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 026</td><td class="w">同意書の下書きと確認の依頼</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 027</td><td class="w">読み手パネルの土台</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 028</td><td class="w">新入社員の閲覧画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 028b</td><td class="w">本番の置き場に出す</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M2</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">029</td><td class="w">動画の素材 2 日目と制作記録</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/4</b><small class="num">0/20 マス ・ 見込み 720 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 030</td><td class="w">データを最初の状態に戻すスクリプト</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 030b</td><td class="w">利用者と役割（監修者 2 名・教育担当・新入社員・作者）</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 031a</td><td class="w">会社のテナントの非公開の置き場</td><td><span class="kd k-submit"><i></i>提出</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 031b</td><td class="w">PDF → ページの画像 → 行番号付きの文字</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 032</td><td class="w">入れる画面（工程 1）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 033</td><td class="w">抜き出しの画面（工程 2〜3）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 034a</td><td class="w">正式な流れ: 割り付け → 動きか角度（079b で決めた作り方） → ピクトグラムのコマと経路（工程 4）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 034b</td><td class="w">手元の✓と直しのループ（工程 5）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 035</td><td class="w">「AI 下書き」の判定</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 036</td><td class="w">「言葉」の欄と用語表</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 037</td><td class="w">カードの画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 038</td><td class="w">輪 1・2 を正式な流れで作る（会社のテナント）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 039</td><td class="w">輪 3〜5（輪 4 は職長向けの文を作業員の側に言い換える。輪 5 は時間を比べる 1 つ目）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 041</td><td class="w">監査の記録の画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 042</td><td class="w">現場の確認の日の確定と段取り表</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 043</td><td class="w">夜間の仕分けを流す（夜）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 044a</td><td class="w">枠と指示の画面（工程 7）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 044b</td><td class="w">枠 → 部品 → その 1 枚だけ作り直す</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M3</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 045</td><td class="w">読み手パネル前半 1 回目（輪 1〜5）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">046</td><td class="w">動画の素材 3 日目と制作記録</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/5 日中</b><small class="num">0/15 マス ・ 見込み 520 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 047</td><td class="w">確かめる AI の正式版と確認待ちの関門</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 048</td><td class="w">帯・「危険」の印・いつも出しておく数字</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 050</td><td class="w">修正の差分の保存（監査の記録 ④）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 051a</td><td class="w">署名の記録（サーバー）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 051b</td><td class="w">署名の入力（工程 8）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 052</td><td class="w">サーバー側の関門（署名の上限と、裏から配らないこと）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 053</td><td class="w">経路の画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 076a</td><td class="w">紙芝居の切り替え（最小版・§3b）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 054</td><td class="w">輪 6・7（輪 6 は時間を比べる 2 つ目）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 055</td><td class="w">輪 8（元に理由が無い）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 056</td><td class="w">用語表の確認の依頼と、時間を比べる 2 項目の訳</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 057</td><td class="w">読み手パネル前半 2 回目（8 枚）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 058</td><td class="w">伝わらない絵を直して回し直し、絵の正解表を確定する</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M4</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 059</td><td class="w">記録アプリに 8 枚と 2 項目を載せ、教育担当の勘を集める</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">060</td><td class="w">監修者の○△×を取り込み、20 項目を確定版に差し替える（戻り次第。遅くとも 11/5）</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M7</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/5 夜。前夜</b><small class="num">0/6 マス ・ 見込み 200 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 061</td><td class="w">確認待ちの列と、仕分けの入れ替え</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M5</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 062</td><td class="w">夜間の下書きの走り手</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M5</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 063</td><td class="w">夜間の一括を流す（約 120 枚）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M5</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 064</td><td class="w">20 枚を乱数で選び、監修者の記入欄を作る</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M5</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 065a</td><td class="w">練習用テナントで通しの録画</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M5</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n"><span class="star-mark">★</span> 065b</td><td class="w">撮影の練習と片付け</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M5</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/6 現場の確認の日</b><small class="num">0/15 マス ・ 見込み 530 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">066</td><td class="w">当日の準備</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">067</td><td class="w">監修者 2 名が 8 枚を経路を見て直し、署名・発行する。8 枚の要点（やること・やらないこと・なぜ）も確定</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M6</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">068</td><td class="w">新入社員 ① 分かるまでの時間</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">069</td><td class="w">新入社員 ② 絵だけで 8 枚</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">070</td><td class="w">監修者 1 名が仕分けの一覧と 20 枚を見る（新入社員と並行）</td><td><span class="kd k-people"><i></i>人とのやりとり</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">071</td><td class="w">2 人が別々に採点し、`docs/answers.csv` を書き出す</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">072</td><td class="w">本物の正解表と集計</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">073</td><td class="w">20 枚の結果</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M6</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">074</td><td class="w">動画の素材 5 日目と制作記録</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">075</td><td class="w">読み手パネル後半</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">076b</td><td class="w">紙芝居の切り替えの凝った部分</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">077</td><td class="w">PNG・SVG の書き出し</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">078</td><td class="w">ライセンスの決定・利害の開示・出どころの文</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">080</td><td class="w">Skills（電気工事・労働条件）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">081</td><td class="w">折りたたみの画面と文字数のスクリプト</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/7</b><small class="num">0/19 マス ・ 見込み 710 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">082</td><td class="w">読み違えた絵を直す 1</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">083</td><td class="w">読み違えた絵を直す 2</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">084</td><td class="w">確かめる AI の指示を直す</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">085</td><td class="w">会社の言葉の保存（§5 L1 ③）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">086</td><td class="w">手本の渡し方（§5 L3）と Managed Agents のセッションの後片付け（L4）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">087</td><td class="w">「前回の修正を手本にしました」の表示</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">088</td><td class="w">発行と停止・見た人の一覧・回収の知らせ・毎週 2 枚の抜き取り</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">090</td><td class="w">30 項目を確定版の正解で、Opus と Fable の両方に解かせる</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">091</td><td class="w">絵の部品を 1 つずつ動かす</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">092</td><td class="w">MCP サーバー</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">093a</td><td class="w">架空の会社の元の文と 10 枚</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">093b</td><td class="w">公開デモの入口</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">094</td><td class="w">見る人が答える公開デモ</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M7</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">095</td><td class="w">時計 2 つの画面</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">096a</td><td class="w">動画冒頭の紙芝居: 物語を受け取り、足りない部品を足す</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">096b</td><td class="w">動画冒頭の紙芝居 6〜8 枚を描く</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">097</td><td class="w">数えるスクリプトと `docs/failures.md` の骨子</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M8</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">098</td><td class="w">動画の素材 6 日目と仮の 3 分版</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">098b</td><td class="w">台本と声</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/8 12:00</b><small class="num">0/4 マス ・ 見込み 140 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">099</td><td class="w">危ない読み違い 0 の確認と枚数の一致</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M8</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">100</td><td class="w">2 回目の実測</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M8</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">101</td><td class="w">最後の確認用 10 項目</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M8</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">102</td><td class="w">公開物を検査して固める</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M8</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+<details class="day card"><summary><b>11/8 18:00</b><small class="num">0/6 マス ・ 見込み 225 分 ・ 実際 0 分</small></summary><div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">103</td><td class="w">付録（作る側の生産性。優先度は一番低い）</td><td><span class="kd k-build"><i></i>作る</span></td><td class="n">M9</td><td class="n">30</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">104</td><td class="w">動画の編集 1</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">105</td><td class="w">動画の編集 2</td><td><span class="kd k-video"><i></i>動画</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">106</td><td class="w">README（英語）</td><td><span class="kd k-submit"><i></i>提出</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">107</td><td class="w">README（日本語）と docs の仕上げ</td><td><span class="kd k-submit"><i></i>提出</span></td><td class="n">M9</td><td class="n">35</td><td class="n">—</td><td class="n"></td></tr>
+<tr class="s-まだ"><td><span class="st s-まだ">まだ</span></td><td class="n">108</td><td class="w">概要を書いて提出し、提出後を確かめる</td><td><span class="kd k-submit"><i></i>提出</span></td><td class="n">M9</td><td class="n">40</td><td class="n">—</td><td class="n"></td></tr>
+</tbody></table></div></details>
+</div></section></div><script>
+(function(){
+  var panel=document.getElementById("detail");
+  var tags=document.querySelectorAll(".tag");
+  function show(t){
+    tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")});
+    var d=t.dataset;
+    panel.innerHTML="";
+    var h=document.createElement("div");h.className="h";
+    var b=document.createElement("b");b.textContent=d.id;h.appendChild(b);
+    var w=document.createElement("span");w.textContent=(d.star?"★ ":"")+d.work;h.appendChild(w);
+    var m=document.createElement("div");m.className="meta num";
+    m.textContent=d.state+" ・ "+d.kind+" ・ "+d.ms+" ・ 見込み "+d.min+" 分 ・ 実際 "+(d.act||"—")+" 分"+(d.commit?" ・ コミット "+d.commit:"");
+    panel.appendChild(h);panel.appendChild(m);
+  }
+  tags.forEach(function(t){t.addEventListener("click",function(){show(t)})});
+  var first=document.querySelector(".tag.now")||tags[0];
+  if(first)show(first);
+})();
+</script></body></html>

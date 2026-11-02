@@ -130,163 +130,257 @@ def render_md(d):
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
          '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap">')
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400;700;800&display=swap">')
 
-# 掲示板のような黒とグレーの面。済み＝黒の塗り、途中＝グレーの塗り、まだ＝枠だけ。赤は遅れの印にだけ使う
+# マスの種類。作業の名前の言葉で分ける（上から順に当てはめ、どれにも当たらなければ「作る」）
+KINDS = [
+    ("video", "動画", re.compile(r"動画")),
+    ("submit", "提出", re.compile(r"提出|README|凍結|応募|公開の")),
+    ("people", "人とのやりとり", re.compile(r"監修|同意|現場の確認|段取り|採点者|勘を集める|聞き取り")),
+    ("build", "作る", re.compile(r"")),
+]
+
+
+def kind_of(work):
+    for key, label, rx in KINDS:
+        if rx.search(work):
+            return key, label
+    return "build", "作る"
+
+
+# 生成りのグレーの台に白いカードを置く。黄色寄りのオレンジは「いま」と「今日」だけ。緑は済み、赤は遅れと見積もり超え
 CSS = """
+/* 並び: 題 → いまの箱 → 数字 4 枚 → 軸 5 つ → 目印の帯 → 日ごとの横棒（札） → 日ごとの箱 */
 :root{
---paper:#f4f4f2;--surface:#ffffff;--ink:#141414;--ink-soft:#5c5c5a;--mid:#b9b9b5;--line:#d9d9d5;--on-ink:#ffffff;--alert:#c8221d;--alert-soft:#fbe9e8;
---font:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
---t-xs:12px;--t-sm:13px;--t-md:15px;--t-lg:20px;--t-xl:30px;--t-xxl:44px;
---s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:40px;--s-7:64px;--r:6px}
+--paper:#efede8;--card:#ffffff;--ink:#2a2723;--muted:#77716a;--line:#e2ded6;--track:#e7e4dd;
+--now:#e39a12;--now-soft:#fcf0d6;--done:#2f8656;--done-soft:#e1f1e6;--late:#c4372c;--late-soft:#fbe5e2;
+--k-build:#3f6ea6;--k-video:#3f8a7a;--k-submit:#7657a3;--k-people:#9c7432;
+--body:"BIZ UDPGothic","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+--mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+--t-xs:12px;--t-sm:13px;--t-md:15px;--t-lg:19px;--t-xl:26px;--t-xxl:40px;
+--s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:36px;--s-7:56px;--r:10px;
+--shadow:0 1px 2px rgba(40,34,26,.06),0 2px 8px rgba(40,34,26,.05)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
---paper:#121212;--surface:#1b1b1b;--ink:#ededeb;--ink-soft:#a3a3a0;--mid:#5a5a58;--line:#2e2e2d;--on-ink:#121212;--alert:#ff6b61;--alert-soft:#3a1715;color-scheme:dark}}
+--paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
+--k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}}
 :root[data-theme="dark"]{
---paper:#121212;--surface:#1b1b1b;--ink:#ededeb;--ink-soft:#a3a3a0;--mid:#5a5a58;--line:#2e2e2d;--on-ink:#121212;--alert:#ff6b61;--alert-soft:#3a1715;color-scheme:dark}
+--paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
+--k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--paper);color:var(--ink);font:400 var(--t-md)/1.65 var(--font)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 var(--t-md)/1.7 var(--body)}
 .wrap{max-width:1120px;margin:0 auto;padding-block:var(--s-6) var(--s-7);
-padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:var(--s-6)}
+padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:var(--s-5)}
 h1,h2,h3{margin:0;text-wrap:balance}
-.num{font-variant-numeric:tabular-nums}
-.eyebrow{font-size:var(--t-xs);font-weight:700;letter-spacing:.12em;color:var(--ink-soft)}
-.sec{display:flex;flex-direction:column;gap:var(--s-4)}
-.sec>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-2) var(--s-4);border-bottom:3px solid var(--ink);padding-bottom:var(--s-2)}
-.sec>header h2{font-size:var(--t-lg);font-weight:900}
-.sec>header p{margin:0;font-size:var(--t-sm);color:var(--ink-soft)}
-/* 上の見出し */
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-5);align-items:end}
-.top h1{font-size:var(--t-xl);font-weight:900;line-height:1.25}
-.top .src{margin:var(--s-2) 0 0;font-size:var(--t-sm);color:var(--ink-soft);max-width:60ch}
-.total{display:flex;gap:var(--s-5);align-items:end}
-.total div{display:flex;flex-direction:column}
-.total b{font-size:var(--t-xxl);font-weight:900;line-height:1}
-.total small{font-size:var(--t-sm);color:var(--ink-soft)}
-.total span.u{font-size:var(--t-md);font-weight:700;margin-left:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line)}
+.label{font-size:var(--t-xs);font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.sec{display:flex;flex-direction:column;gap:var(--s-3)}
+.sec>h2{font-size:var(--t-md);font-weight:700;display:flex;align-items:baseline;gap:var(--s-3);flex-wrap:wrap}
+.sec>h2 small{font-weight:400;font-size:var(--t-sm);color:var(--muted)}
+/* 題 */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--s-2) var(--s-4)}
+.top h1{font-size:var(--t-xl);font-weight:700;line-height:1.3}
+.top p{margin:0;font-size:var(--t-sm);color:var(--muted)}
+/* いま */
+.now{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-4) var(--s-6);align-items:center;padding:var(--s-5);border-left:8px solid var(--now)}
+.now .label{color:var(--now)}
+.now h2{font-size:var(--t-lg);font-weight:700;line-height:1.45;margin-top:var(--s-1)}
+.now h2 .id{font-family:var(--mono);font-weight:800;margin-right:var(--s-2)}
+.now .next{margin:var(--s-2) 0 0;font-size:var(--t-sm);color:var(--muted)}
+.now .next b{color:var(--ink);font-weight:700}
+.now .rest{text-align:right}
+.now .rest b{display:block;font-family:var(--mono);font-size:var(--t-xxl);font-weight:800;line-height:1.05}
+.now .rest b span{font-size:var(--t-md);font-weight:700;margin-left:2px}
+.now.over{border-left-color:var(--late)}
+.now.over .rest b{color:var(--late)}
+/* 数字 4 枚 */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-3)}
+.stat{padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.stat b{font-family:var(--mono);font-size:var(--t-xl);font-weight:800;line-height:1.15}
+.stat b span{font-size:var(--t-sm);font-weight:700;color:var(--muted);margin-left:3px}
+.stat .bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:var(--s-1)}
+.stat .bar i{display:block;height:100%;background:var(--done)}
+.stat.over b{color:var(--late)}
 /* 軸 */
-.axis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-3)}
-.ax{background:var(--surface);border:1px solid var(--line);border-top:6px solid var(--ink);border-radius:0 0 var(--r) var(--r);padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-2);min-width:0}
-.ax h3{font-size:var(--t-md);font-weight:900}
-.ax p{margin:0;font-size:var(--t-sm);color:var(--ink-soft);line-height:1.6}
+.axis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-2)}
+.ax{padding:var(--s-3);display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.ax h3{font-size:var(--t-sm);font-weight:700}
+.ax p{margin:0;font-size:var(--t-xs);line-height:1.6;color:var(--muted)}
 /* 目印の帯 */
-.band{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:var(--s-1)}
-.seg{display:flex;flex-direction:column;gap:var(--s-2);min-width:0}
-.seg .meter{position:relative;height:22px;border:2px solid var(--ink);background:var(--surface);overflow:hidden}
-.seg .meter i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
-.seg .lab .mid{font-size:var(--t-md);font-weight:900;color:var(--ink)}
-.seg.late .lab .mid{color:var(--alert)}
-.seg .lab{display:flex;flex-direction:column;font-size:var(--t-xs);color:var(--ink-soft);line-height:1.45}
-.seg .lab b{font-size:var(--t-sm);color:var(--ink)}
-.seg.late .meter{border-color:var(--alert)}
-.seg.late .lab b{color:var(--alert)}
-.seg.done .meter{background:var(--ink)}
-/* 日ごとのマス */
-.legend{display:flex;flex-wrap:wrap;gap:var(--s-2) var(--s-4);font-size:var(--t-sm);color:var(--ink-soft);margin:0;padding:0;list-style:none}
-.legend li{display:flex;align-items:center;gap:var(--s-2)}
-.sw{display:inline-block;width:18px;height:18px;border-radius:3px;border:2px solid var(--ink)}
-.sw.s-済み{background:var(--ink)}.sw.s-途中{background:var(--mid);border-color:var(--mid)}.sw.s-まだ{background:var(--surface);border:1px solid var(--line)}
-.day{display:flex;flex-direction:column;gap:var(--s-3)}
-.day>h3{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-2) var(--s-3);font-size:var(--t-md);font-weight:900}
-.day>h3 small{font-weight:400;font-size:var(--t-sm);color:var(--ink-soft)}
-.day.today>h3::before{content:"今日";font-size:var(--t-xs);font-weight:700;letter-spacing:.12em;background:var(--ink);color:var(--on-ink);padding:1px var(--s-2);border-radius:3px}
-.tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s-2)}
-.t{display:flex;flex-direction:column;gap:var(--s-1);padding:var(--s-3);border-radius:var(--r);border:1px solid var(--line);background:var(--surface);min-width:0;font-size:var(--t-sm)}
-.t .h{display:flex;align-items:center;gap:var(--s-2)}
-.t .id{font-weight:900;font-size:var(--t-md)}
-.t .st{margin-left:auto;font-size:var(--t-xs);font-weight:700;letter-spacing:.06em;padding:0 var(--s-2);border-radius:3px;border:1px solid currentColor}
-.t .w{line-height:1.5;overflow-wrap:anywhere}
-.t .m{font-size:var(--t-xs);color:var(--ink-soft)}
-.t.s-済み{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
-.t.s-済み .m{color:var(--on-ink);opacity:.72}
-.t.s-途中{background:var(--mid);border-color:var(--mid)}
-.t.s-途中 .m{color:var(--ink)}
-.t.s-まだ{color:var(--ink-soft)}
-.t.s-まだ .id,.t.s-まだ .w{color:var(--ink)}
-.t.star{border-width:3px;border-color:var(--ink)}
-.t.star.s-まだ{box-shadow:inset 0 0 0 1px var(--ink)}
-.t .sm{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:var(--t-sm);font-weight:900;background:var(--ink);color:var(--on-ink)}
-.t.s-済み .sm{background:var(--on-ink);color:var(--ink)}
-/* 今日の残り */
-.left{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--s-3)}
-.box{background:var(--surface);border:2px solid var(--ink);border-radius:var(--r);padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-3);min-width:0}
-.box.over{border-color:var(--alert);background:var(--alert-soft)}
-.box .big{display:flex;gap:var(--s-5);align-items:end;flex-wrap:wrap}
-.box .big b{font-size:var(--t-xl);font-weight:900;line-height:1}
-.box .big small{display:block;font-size:var(--t-xs);color:var(--ink-soft)}
-.box .warn{margin:0;font-weight:700;color:var(--alert);font-size:var(--t-sm)}
-.box ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s-1);font-size:var(--t-sm)}
-.box li{display:flex;gap:var(--s-2)}
-.box li .id{font-weight:900;min-width:3.2em}
-.box .none{margin:0;color:var(--ink-soft);font-size:var(--t-sm)}
-@media (max-width:900px){.axis{grid-template-columns:repeat(2,minmax(0,1fr))}.band{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:var(--s-3)}}
-@media (max-width:560px){.top{grid-template-columns:1fr}.axis{grid-template-columns:1fr}.total b{font-size:var(--t-xl)}}
-@media (prefers-reduced-motion:no-preference){.seg .meter i{transition:width .3s ease}}
+.band{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:var(--s-2)}
+.seg{padding:var(--s-2) var(--s-3);display:flex;flex-direction:column;gap:var(--s-1);min-width:0;position:relative;overflow:hidden}
+.seg .fill{position:absolute;inset:auto 0 0 0;height:4px;background:var(--track)}
+.seg .fill i{display:block;height:100%;background:var(--done)}
+.seg b{font-family:var(--mono);font-weight:800;font-size:var(--t-md)}
+.seg small{font-size:var(--t-xs);color:var(--muted);line-height:1.4}
+.seg.today{border:2px solid var(--now);background:var(--now-soft)}
+.seg.late{border:2px solid var(--late);background:var(--late-soft)}
+.seg.late b{color:var(--late)}
+.seg.full b{color:var(--done)}
+/* 日ごとの横棒 */
+.legend{display:flex;flex-wrap:wrap;gap:var(--s-1) var(--s-4);margin:0;padding:0;list-style:none;font-size:var(--t-xs);color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:3px}
+.lanes{padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-2)}
+.lane{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:var(--s-3);align-items:center}
+.lane .d{font-size:var(--t-xs);line-height:1.35;color:var(--muted);min-width:0}
+.lane .d b{display:block;font-size:var(--t-sm);color:var(--ink)}
+.lane.today .d b{color:var(--now)}
+.lane.today .track{outline:2px solid var(--now);outline-offset:3px}
+.track{display:flex;gap:2px;min-width:0;border-radius:4px}
+.tag{flex:var(--w) 1 0;min-width:5px;height:26px;border:0;border-radius:4px;padding:0;cursor:pointer;background:var(--kc);position:relative}
+.tag.s-済み{opacity:.32}
+.tag.s-途中{background:repeating-linear-gradient(135deg,var(--kc) 0 5px,var(--card) 5px 8px)}
+.tag.star{box-shadow:inset 0 0 0 2px var(--ink)}
+.tag.now{box-shadow:inset 0 0 0 3px var(--now),0 0 0 2px var(--now)}
+.tag[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px;z-index:1}
+.tag:focus-visible{outline:3px solid var(--now);outline-offset:2px}
+.k-build{--kc:var(--k-build)}.k-video{--kc:var(--k-video)}.k-submit{--kc:var(--k-submit)}.k-people{--kc:var(--k-people)}
+.detail{margin-top:var(--s-2);padding:var(--s-3) var(--s-4);border-radius:8px;background:var(--paper);display:flex;flex-direction:column;gap:var(--s-1);font-size:var(--t-sm);min-height:3.4em}
+.detail .h{display:flex;flex-wrap:wrap;gap:var(--s-2) var(--s-3);align-items:baseline}
+.detail .h b{font-family:var(--mono);font-weight:800}
+.detail .meta{color:var(--muted);font-size:var(--t-xs)}
+.detail .empty{color:var(--muted)}
+/* 日ごとの箱 */
+.days{display:flex;flex-direction:column;gap:var(--s-2)}
+details.day{overflow:hidden}
+details.day>summary{list-style:none;cursor:pointer;padding:var(--s-3) var(--s-4);display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-1) var(--s-3)}
+details.day>summary::-webkit-details-marker{display:none}
+details.day>summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);align-self:center;margin-right:var(--s-1)}
+details.day[open]>summary::before{transform:rotate(45deg)}
+details.day>summary b{font-size:var(--t-md)}
+details.day>summary small{font-size:var(--t-xs);color:var(--muted)}
+details.day.today{border-color:var(--now)}
+details.day.today>summary b::after{content:"今日";margin-left:var(--s-2);font-size:var(--t-xs);font-weight:700;padding:1px 6px;border-radius:4px;background:var(--now);color:var(--card)}
+.tbl{overflow-x:auto;border-top:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:var(--t-sm)}
+th,td{text-align:left;padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:var(--t-xs);font-weight:700;color:var(--muted);white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.w{min-width:16em}
+tr.s-済み td{color:var(--muted)}
+.st{display:inline-block;font-size:var(--t-xs);font-weight:700;padding:0 6px;border-radius:4px;white-space:nowrap}
+.st.s-済み{background:var(--done-soft);color:var(--done)}.st.s-途中{background:var(--now-soft);color:var(--now)}.st.s-まだ{border:1px solid var(--line);color:var(--muted)}
+.kd{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:var(--t-xs)}
+.kd i{width:8px;height:8px;border-radius:2px;background:var(--kc)}
+.star-mark{font-weight:700}
+@media (max-width:860px){.axis{grid-template-columns:repeat(5,minmax(150px,1fr));overflow-x:auto;padding-bottom:var(--s-1);scroll-snap-type:x mandatory}.ax{scroll-snap-align:start}
+.band{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.now{grid-template-columns:1fr}.now .rest{text-align:left}
+.band{grid-template-columns:repeat(3,minmax(0,1fr))}.lane{grid-template-columns:4.6em minmax(0,1fr)}}
+@media (prefers-reduced-motion:no-preference){.tag{transition:transform .15s ease,opacity .15s ease}.tag:hover{transform:translateY(-2px)}}
+"""
+
+SCRIPT = """
+(function(){
+  var panel=document.getElementById("detail");
+  var tags=document.querySelectorAll(".tag");
+  function show(t){
+    tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")});
+    var d=t.dataset;
+    panel.innerHTML="";
+    var h=document.createElement("div");h.className="h";
+    var b=document.createElement("b");b.textContent=d.id;h.appendChild(b);
+    var w=document.createElement("span");w.textContent=(d.star?"★ ":"")+d.work;h.appendChild(w);
+    var m=document.createElement("div");m.className="meta num";
+    m.textContent=d.state+" ・ "+d.kind+" ・ "+d.ms+" ・ 見込み "+d.min+" 分 ・ 実際 "+(d.act||"—")+" 分"+(d.commit?" ・ コミット "+d.commit:"");
+    panel.appendChild(h);panel.appendChild(m);
+  }
+  tags.forEach(function(t){t.addEventListener("click",function(){show(t)})});
+  var first=document.querySelector(".tag.now")||tags[0];
+  if(first)show(first);
+})();
 """
 
 
 def render_html(d):
     e = html.escape
     t = d["total"]
+    today_md = (d["today"].month, d["today"].day)
     today_label = f'{d["today"].month}/{d["today"].day}'
-    P = ['<!doctype html><html lang="ja"><head><meta charset="utf-8">',
-         '<meta name="viewport" content="width=device-width,initial-scale=1">',
-         f"<title>現場の紙芝居 進み具合</title>{FONTS}<style>{CSS}</style></head><body><div class=\"wrap\">",
-         '<header class="top"><div><p class="eyebrow">進み具合</p><h1>現場の紙芝居</h1>',
-         f'<p class="src">plan.md と compass.md から tools/progress.py が作る（手で書かない）。作った日: {d["today"]:%Y-%m-%d}（日本時間）</p></div>',
-         f'<div class="total num"><div><small>済んだマス</small><b>{t["done"]}<span class="u">/ {t["n"]}</span></b></div>'
-         f'<div><small>見込みの分で</small><b>{pct(t["done_min"], t["min"])}</b></div>'
-         f'<div><small>実際の分</small><b>{t["actual"]}<span class="u">分</span></b></div></div></header>']
-    # 軸
-    P.append('<section class="sec"><header><h2>軸</h2><p>何から何へ変えるか</p></header><div class="axis">')
-    for title, items in d["compass"]:
-        P.append(f'<article class="ax"><h3>{e(title)}</h3>' + "".join(f"<p>{e(i)}</p>" for i in items) + "</article>")
-    P.append("</div></section>")
-    # 目印の帯
-    late = [m for m in d["ms"] if m["late"]]
-    note = f'遅れている目印 {len(late)} つ' if late else "遅れている目印なし"
-    P.append(f'<section class="sec"><header><h2>目印の進み具合</h2><p class="num">{t["done_min"]} / {t["min"]} 分 ・ {note}</p></header><div class="band">')
-    for m in d["ms"]:
-        w = round(100 * m["done_min"] / m["min"]) if m["min"] else 0
-        cls = "seg" + (" late" if m["late"] else "") + (" done" if m["n"] and m["done"] == m["n"] else "")
-        P.append(f'<div class="{cls}" title="{e(m["goal"])}"><div class="lab num"><span class="mid">{m["id"]}</span></div><div class="meter"><i style="width:{w}%"></i></div>'
-                 f'<div class="lab num"><b>{e(m["day"])}{"・遅れ" if m["late"] else ""}</b><span>{m["done"]} / {m["n"]} マス</span><span>{m["done_min"]} / {m["min"]} 分</span></div></div>')
-    P.append("</div></section>")
-    # 日ごとのマス
-    P.append('<section class="sec"><header><h2>日ごとのマス</h2><p>★ は一番遅れてはいけない筋</p></header>'
-             '<ul class="legend"><li><span class="sw s-済み"></span>済み</li><li><span class="sw s-途中"></span>途中</li>'
-             '<li><span class="sw s-まだ"></span>まだ</li><li><span class="sw"></span>太い枠と ★ は遅れてはいけない筋</li></ul>')
-    for day in d["days"]:
-        ts = [x for x in d["tasks"] if x["day"] == day]
-        is_today = day_key(day) == (d["today"].month, d["today"].day)
-        act = sum(x["actual"] or 0 for x in ts)
-        P.append(f'<div class="day{" today" if is_today else ""}"><h3>{e(day)}<small class="num">{sum(x["state"] == "済み" for x in ts)} / {len(ts)} マス ・ '
-                 f'見込み {sum(x["minutes"] for x in ts)} 分 ・ 実際 {act} 分</small></h3><div class="tasks">')
-        for x in ts:
-            star = '<span class="sm" aria-label="遅れてはいけない筋">★</span>' if x["star"] else ""
-            a = x["actual"] if x["actual"] is not None else "—"
-            com = f" ・ {e(x['commit'])}" if x["commit"] else ""
-            P.append(f'<div class="t s-{x["state"]}{" star" if x["star"] else ""}"><div class="h">{star}<span class="id num">{x["id"]}</span>'
-                     f'<span class="st">{x["state"]}</span></div><div class="w">{e(x["work"])}</div>'
-                     f'<div class="m num">見込み {x["minutes"]} 分 ・ 実際 {a} 分 ・ {x["milestone"]}{com}</div></div>')
-        P.append("</div></div>")
-    P.append("</section>")
-    # 今日の残り
+    tasks = d["tasks"]
+    pending = [x for x in tasks if x["state"] != "済み"]
+    cur = next((x for x in tasks if x["state"] == "途中"), pending[0] if pending else None)
+    nxt = next((x for x in pending if x is not cur), None)
     left = d["left_before"] + d["left_today"]
     left_min = sum(x["minutes"] for x in left)
     over = left_min > d["today_plan_min"]
-    P.append(f'<section class="sec"><header><h2>今日の残り（{today_label}）</h2><p class="num">今日の見込み {d["today_plan_min"]} 分</p></header><div class="left">')
-    P.append(f'<div class="box{" over" if over else ""}"><div class="big num"><div><small>残りのマス</small><b>{len(left)}</b></div>'
-             f'<div><small>残りの見込み</small><b>{left_min}<span class="u"> 分</span></b></div></div>')
-    if over:
-        P.append(f'<p class="warn">残りが今日の見込みを {left_min - d["today_plan_min"]} 分超えている（前の日からの残り {len(d["left_before"])} マス）</p>')
-    if left:
-        P.append("<ul>" + "".join(f'<li class="num"><span class="id">{x["id"]}</span><span>{"★ " if x["star"] else ""}{e(x["work"])}'
-                                  f'（{e(x["day"]) if x in d["left_before"] else x["state"]}・{x["minutes"]} 分）</span></li>' for x in left) + "</ul>")
+    P = ['<!doctype html><html lang="ja"><head><meta charset="utf-8">',
+         '<meta name="viewport" content="width=device-width,initial-scale=1">',
+         f"<title>現場の紙芝居 進み具合</title>{FONTS}<style>{CSS}</style></head><body><div class=\"wrap\">",
+         f'<header class="top"><h1>現場の紙芝居　進み具合</h1><p>plan.md から自動で作成 ・ <span class="num" data-generated>{d["now"]:%Y-%m-%d %H:%M}</span>（日本時間）</p></header>']
+    # いま
+    P.append(f'<section class="now card{" over" if over else ""}"><div>')
+    if cur:
+        P.append(f'<div class="label">いま</div><h2><span class="id">{cur["id"]}</span>{e(cur["work"])}</h2>')
+        if nxt:
+            P.append(f'<p class="next">次: <b class="num">{nxt["id"]}</b> {e(nxt["work"])}</p>')
     else:
-        P.append('<p class="none">今日の分は全部済んだ</p>')
-    P.append("</div></div></section></div></body></html>")
+        P.append('<div class="label">いま</div><h2>全部のマスが済んだ</h2>')
+    P.append(f'</div><div class="rest"><div class="label">今日の残り（{today_label}）</div><b>{left_min}<span>分</span></b></div></section>')
+    # 数字 4 枚
+    w = round(100 * t["done_min"] / t["min"]) if t["min"] else 0
+    P.append('<section class="stats">'
+             f'<div class="stat card"><span class="label">済んだマス／全部</span><b>{t["done"]}<span>/ {t["n"]}</span></b></div>'
+             f'<div class="stat card"><span class="label">見積もりの分での進み</span><b>{pct(t["done_min"], t["min"])}</b><div class="bar"><i style="width:{w}%"></i></div></div>'
+             f'<div class="stat card"><span class="label">実際の分</span><b>{t["actual"]}<span>分</span></b></div>'
+             f'<div class="stat card{" over" if over else ""}"><span class="label">今日の残り</span><b>{len(left)}<span>マス</span> {left_min}<span>分</span></b></div></section>')
+    # 軸
+    P.append('<section class="sec"><h2>軸<small>何から何へ変えるか</small></h2><div class="axis">')
+    for title, items in d["compass"]:
+        P.append(f'<article class="ax card"><h3>{e(title)}</h3>' + "".join(f"<p>{e(i)}</p>" for i in items) + "</article>")
+    P.append("</div></section>")
+    # 目印の帯
+    late = [m for m in d["ms"] if m["late"]]
+    P.append(f'<section class="sec"><h2>目印<small class="num">{t["done_min"]} / {t["min"]} 分 ・ {"遅れている目印 " + str(len(late)) + " つ" if late else "遅れなし"}</small></h2><div class="band">')
+    for m in d["ms"]:
+        mw = round(100 * m["done_min"] / m["min"]) if m["min"] else 0
+        cls = "seg card" + (" late" if m["late"] else " today" if day_key(m["day"]) == today_md else "") + (" full" if m["n"] and m["done"] == m["n"] else "")
+        P.append(f'<div class="{cls}" title="{e(m["goal"])}"><b>{m["id"]}</b><small>{e(m["day"])}</small>'
+                 f'<small class="num">{m["done"]}/{m["n"]} ・ {mw}%</small><div class="fill"><i style="width:{mw}%"></i></div></div>')
+    P.append("</div></section>")
+    # 日ごとの横棒
+    P.append('<section class="sec"><h2>日ごとのマス<small>札の長さは見込みの分。押すと中身が出る</small></h2><ul class="legend">'
+             + "".join(f'<li><i class="k-{k}" style="background:var(--kc)"></i>{lab}</li>' for k, lab, _ in KINDS)
+             + '<li>薄い札＝済み</li><li>太い枠＝★ 遅れてはいけない筋</li></ul><div class="lanes card">')
+    for day in d["days"]:
+        ts = [x for x in tasks if x["day"] == day]
+        is_today = day_key(day) == today_md
+        P.append(f'<div class="lane{" today" if is_today else ""}"><div class="d"><b>{e(day)}</b><span class="num">{sum(x["state"] == "済み" for x in ts)}/{len(ts)}</span></div><div class="track">')
+        for x in ts:
+            k, lab = kind_of(x["work"])
+            cls = f'tag k-{k} s-{x["state"]}' + (" star" if x["star"] else "") + (" now" if x is cur else "")
+            act = "" if x["actual"] is None else str(x["actual"])
+            P.append(f'<button type="button" class="{cls}" style="--w:{x["minutes"]}" aria-pressed="false" aria-label="{x["id"]} {e(x["work"])}" title="{x["id"]} {e(x["work"])}"'
+                     f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{lab}" data-ms="{x["milestone"]}"'
+                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}"{" data-star=\"1\"" if x["star"] else ""}></button>')
+        P.append("</div></div>")
+    P.append('<div class="detail" id="detail" aria-live="polite"><span class="empty">札を押すと、ここにそのマスの中身が出ます</span></div></div></section>')
+    # 日ごとの箱
+    P.append('<section class="sec"><h2>日ごとの箱</h2><div class="days">')
+    for day in d["days"]:
+        ts = [x for x in tasks if x["day"] == day]
+        is_today = day_key(day) == today_md
+        P.append(f'<details class="day card{" today" if is_today else ""}"{" open" if is_today else ""}><summary><b>{e(day)}</b>'
+                 f'<small class="num">{sum(x["state"] == "済み" for x in ts)}/{len(ts)} マス ・ 見込み {sum(x["minutes"] for x in ts)} 分 ・ 実際 {sum(x["actual"] or 0 for x in ts)} 分</small></summary>'
+                 '<div class="tbl"><table><thead><tr><th>状態</th><th>ID</th><th>作業</th><th>種類</th><th>目印</th><th>見込み</th><th>実際</th><th>コミット</th></tr></thead><tbody>')
+        for x in ts:
+            k, lab = kind_of(x["work"])
+            P.append(f'<tr class="s-{x["state"]}"><td><span class="st s-{x["state"]}">{x["state"]}</span></td>'
+                     f'<td class="n">{"<span class=\"star-mark\">★</span> " if x["star"] else ""}{x["id"]}</td><td class="w">{e(x["work"])}</td>'
+                     f'<td><span class="kd k-{k}"><i></i>{lab}</span></td><td class="n">{x["milestone"]}</td><td class="n">{x["minutes"]}</td>'
+                     f'<td class="n">{x["actual"] if x["actual"] is not None else "—"}</td><td class="n">{e(x["commit"])}</td></tr>')
+        P.append("</tbody></table></div></details>")
+    P.append(f"</div></section></div><script>{SCRIPT}</script></body></html>")
     return "\n".join(P) + "\n"
+
+
+def mask_generated(s):
+    """作った時刻は毎回変わるので、ずれの検査では見ない"""
+    return re.sub(r"(<span class=\"num\" data-generated>)[^<]*", r"\1", s)
 
 
 def mark_done(task_id, minutes):
@@ -314,13 +408,14 @@ def main(argv):
         i = argv.index("--done")
         mark_done(argv[i + 1], int(argv[i + 2]))
         argv = [a for a in argv if a != "--check"]
-    today =datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
-    d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), today)
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), now.date())
+    d["now"] = now
     outputs = {DOCS / "progress.md": render_md(d), DOCS / "dashboard.html": render_html(d)}
     if "--check" in argv:
         # Windows では git が改行を CRLF にすることがあるので、改行の違いは見ない
         stale = [p.name for p, s in outputs.items()
-                 if not p.exists() or p.read_text(encoding="utf-8").replace("\r\n", "\n") != s]
+                 if not p.exists() or mask_generated(p.read_text(encoding="utf-8").replace("\r\n", "\n")) != mask_generated(s)]
         if stale:
             print("進み具合が plan.md とずれています: " + "・".join(stale) + "。python tools/progress.py で作り直してください")
             return 1
