@@ -144,7 +144,7 @@ function drawFigure(fig: Figure): { svg: string; p: Joints; d: 1 | -1 } {
   svg += circle(p.head, r, BLACK);
   // 視線: 頭の前に短い線（0 で向いている側、正で上）
   const g = (clamp(fig.gaze, -90, 90) * Math.PI) / 180;
-  const eye: Pt = [p.head[0] + d * r * 1.25, p.head[1]];
+  const eye: Pt = [p.head[0] + d * r * 1.1, p.head[1] - r * 0.45];
   svg += line(eye, [eye[0] + d * Math.cos(g) * r * 0.9, eye[1] - Math.sin(g) * r * 0.9], 3, GRAY);
   if (fig.mouth_open) svg += d > 0 ? arc([p.head[0] + r * 1.2, p.head[1]], r * 0.6, -40, 40, 3) : arc([p.head[0] - r * 1.2, p.head[1]], r * 0.6, 140, 220, 3);
   if (fig.pointing) {
