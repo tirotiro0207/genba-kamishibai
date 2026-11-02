@@ -1,0 +1,23 @@
+/* 入れる画面と抜き出しの画面（032・033） */
+.make { display: flex; flex-direction: column; gap: 14px; max-width: 960px; margin: 0 auto; }
+.make h1 { font-size: 24px; margin: 0; }
+.make-tabs { display: flex; gap: 8px; }
+.make-big { min-height: 240px; font-size: 20px; line-height: 1.6; }
+.make-doc { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.make-nav { display: flex; gap: 12px; }
+.make-nav .big { flex: 1; }
+.make-lines { margin: 0; padding: 12px 12px 12px 48px; border: 1px solid var(--line); border-radius: 8px; max-height: 50vh; overflow: auto; font-size: 17px; line-height: 1.6; }
+.make-lines li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.make-lines li.lit { background: color-mix(in srgb, var(--fg) 14%, transparent); outline: 2px solid var(--fg); border-radius: 4px; }
+.make-review { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.make-rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.make-rule { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.make-rule.on { border-color: var(--fg); border-width: 2px; }
+.make-ok { flex-direction: row; align-items: baseline; gap: 8px; color: var(--fg); font-size: 18px; cursor: pointer; }
+.make-ok input { width: 22px; height: 22px; }
+.make-kind { font-size: 13px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.make-from { all: unset; cursor: pointer; font-size: 14px; color: var(--muted); text-decoration: underline dotted; }
+.make-from.why { padding-left: 12px; }
+.make-tags { margin: 0; display: flex; gap: 6px; font-size: 13px; }
+.make-tags span { border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+@media (max-width: 760px) { .make-review, .make-doc { grid-template-columns: 1fr; } .make-lines.src { order: -1; max-height: 30vh; } }

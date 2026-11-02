@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./app.css";
+import { MakeScreen } from "./make/MakeScreen";
 import { PoseGallery } from "./picto/PoseGallery";
 import { ReadScreen } from "./read/ReadScreen";
 import { AnswerScreen } from "./trial/AnswerScreen";
@@ -30,6 +31,8 @@ export function App() {
   }
   // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
+  // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
+  if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   return <main data-testid="app">{body}</main>;
 }
