@@ -13,6 +13,7 @@ import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
 import { claudeClient } from "./claude-client";
 import type { PeopleVars } from "./people";
+import { createRecall, readReason } from "./recall";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -286,8 +287,11 @@ cards.post("/:id/redo", async (c) => {
 cards.post("/:id/status", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  const b = await c.req.json<{ to?: CardStatus; actor?: string }>().catch(() => ({}) as { to?: CardStatus; actor?: string });
+  const b = await c.req.json<{ to?: CardStatus; actor?: string; reason?: string }>().catch(() => ({}) as { to?: CardStatus; actor?: string; reason?: string });
   const to = b.to;
+  // 停止の理由（088）。署名済みを止めると回収の知らせに載る。書くなら 200 字まで
+  const reason = readReason(b.reason);
+  if (reason === null) return c.json({ error: "reason は文字" }, 400);
   if (!STATUSES.includes(to as CardStatus)) return c.json({ error: "to が状態の名前ではない" }, 400);
   if (to === "signed") return c.json({ error: "署名は署名の記録からだけ" }, 403);
   if (!canMove(r.status, to!)) return c.json({ error: `${r.status} から ${to} へは移れない` }, 409);
@@ -300,6 +304,8 @@ cards.post("/:id/status", async (c) => {
   }
   const res = await c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status).run();
   if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "status", actor: actorOf(b, "system"), payload: { version: r.version, from: r.status, to } });
+  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "status", actor: actorOf(b, "system"), payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } });
+  // 署名済みを止めたら、印刷したカードを回収できるよう、版と署名の日付つきの知らせを教育担当に出す（088）
+  if (r.status === "signed" && to === "stopped") await createRecall(c.env.DB, c.var.tenant.id, r, personActor((c.var as PeopleVars).person), reason);
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 });

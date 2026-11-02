@@ -1,0 +1,24 @@
+/* 発行の画面（088）。赤は止める操作と未読の印だけに使う */
+.issue, .issue-pick { display: flex; flex-direction: column; gap: 14px; max-width: 820px; margin: 0 auto; }
+.issue h1 { font-size: 22px; margin: 4px 0; }
+.issue-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.issue-box h2 { font-size: 17px; margin: 0 0 8px; display: flex; gap: 10px; align-items: center; }
+.issue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+ol.issue-list { counter-reset: pick; }
+.issue-list > li { display: flex; flex-direction: column; gap: 4px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.issue-list > li:first-child { border-top: 0; padding-top: 0; }
+.issue-meta { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.issue-review { font-weight: 700; }
+.issue-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.issue-actions .pick { font-size: 15px; padding: 6px 12px; }
+.issue-views { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
+.issue-stop { display: flex; flex-direction: column; gap: 8px; border-left: 4px solid var(--err); padding-left: 10px; }
+.issue-badge { background: var(--err); color: #fff; font-size: 13px; padding: 2px 8px; border-radius: 10px; }
+.issue-recall { border-left: 4px solid var(--err); padding-left: 10px; }
+.issue-list > li.issue-recall { border-top: 0; }
+.issue-recall.read { border-left-color: var(--line); opacity: 0.75; }
+.issue-recall-key { font-weight: 700; font-variant-numeric: tabular-nums; }
+@media print {
+  .issue-noprint, .issue-noprint-box, .issue-pick { display: none !important; }
+  .issue-box { border: 0; padding: 0; }
+}

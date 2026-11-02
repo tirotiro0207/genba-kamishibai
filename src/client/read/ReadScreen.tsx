@@ -52,6 +52,21 @@ export function ReadScreen({ tenant }: { tenant: string }) {
       .catch((e: Error) => setErr(e.message));
   }, [tenant]);
 
+  // 1 枚が画面に出たら、見た印を送る（発行の画面の「見た人」になる）。送れなくても閲覧は止めない
+  const shown = cards && cards.length ? cards[Math.min(i, cards.length - 1)].id : null;
+  useEffect(() => {
+    if (!shown) return;
+    const headers: Record<string, string> = {};
+    try {
+      // 役割で入っていれば、そのしるしで記録する（無ければ役割なしの閲覧として残る）
+      const role = sessionStorage.getItem(`role:${tenant}`);
+      if (role) headers["x-role"] = role;
+    } catch {
+      // 保存が使えない端末では、しるし無しで送る
+    }
+    fetch(`/api/t/${encodeURIComponent(tenant)}/read/cards/${encodeURIComponent(shown)}/seen`, { method: "POST", headers }).catch(() => undefined);
+  }, [tenant, shown]);
+
   if (err) return <p className="err">{err}</p>;
   if (!cards) return <p>読み込み中…</p>;
   if (cards.length === 0) return <p className="done" data-testid="read-empty">まだカードがありません</p>;

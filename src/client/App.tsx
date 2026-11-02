@@ -4,6 +4,7 @@ import { AuditScreen } from "./audit/AuditScreen";
 import { CardScreen } from "./card/CardScreen";
 import { FixScreen } from "./fix/FixScreen";
 import { FoldScreen } from "./fold/FoldScreen";
+import { IssueScreen } from "./issue/IssueScreen";
 import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
@@ -54,6 +55,8 @@ export function App() {
   if (r[0] === "t" && r[2] === "sign" && r[3]) body = <SignScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
+  // #/t/<テナント>/issue ・ 発行の画面（監修者・教育担当。署名済みの一覧・止める・見た人・回収の知らせ・週の抜き取り）
+  if (r[0] === "t" && r[2] === "issue") body = <IssueScreen tenant={r[1]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
   if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
