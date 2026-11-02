@@ -1,5 +1,5 @@
 // カードの保存と状態（019）。形と経路は src/shared/card.ts で確かめ、経路の無い部品があれば保存を断る。
-// どの読み書きもテナントで絞る。署名は署名の記録（051a）からだけ行い、ここの状態の変更では受け付けない。
+// どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { Hono } from "hono";
 import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
@@ -10,6 +10,8 @@ import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal"
 import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
 import { claudeClient } from "./claude-client";
+import type { PeopleVars } from "./people";
+import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
 
@@ -115,6 +117,26 @@ cards.get("/:id", async (c) => {
 const PNG_MAX = 3_000_000;
 const isPng = (b: Uint8Array) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
 const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+// 署名の記録（051a）: 開いた時刻を残す・署名する・署名と今の中身が合うかを見る
+cards.post("/:id/open", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const person = (c.var as PeopleVars).person;
+  return c.json({ version: r.version, opened_at: await recordOpen(c.env.DB, c.var.tenant.id, r, personActor(person)) });
+});
+
+cards.post("/:id/sign", async (c) => {
+  const b = await c.req.json<{ version?: unknown }>().catch(() => ({}) as { version?: unknown });
+  const res = await signCard(c.env.DB, c.var.tenant.id, c.req.param("id"), (c.var as PeopleVars).person, b.version);
+  if (!res.ok) return c.json({ error: res.error }, res.status);
+  return c.json({ signed: true, ...res.payload });
+});
+
+cards.get("/:id/signature", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  return r ? c.json(await signatureOf(c.env.DB, c.var.tenant.id, r)) : c.json({ error: "カードが無い" }, 404);
+});
 
 // 確かめる AI の正式版（047）: コマの PNG（描く側が JSON から作ったもの）を順に受け取り、サーバーから確かめる AI を呼び、
 // 証拠を監査の記録 ③ に残す。証拠は画面やスクリプトから書き込めない（ここでしか作らない）。PNG はハッシュを残す
