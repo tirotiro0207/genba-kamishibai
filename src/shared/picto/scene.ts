@@ -1,10 +1,18 @@
-// 1 コマの絵（015〜）。白い背景・地面の線・人形を重ね、視線・距離・強調・手元のアップを数字で決める。
-// 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。小物と吹き出しは 017・018 で足す。
-import { type PropSpec, propsSvg, validateProps } from "./props";
+// 1 コマの絵（015〜）。枠・左の薄いグレーの壁・床の線・人形を重ね、視線・距離・強調・手元のアップを数字で決める。
+// 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。役はかぶり物で見分ける（新人は白いヘルメット、上の人は黒い帽子、ほかの作業の人はグレーのヘルメット）。
+// 重ねる順: 壁と床 → 壁や床に置く小物 → 人形とかぶり物 → 人に付ける小物 → 吹き出し。
+import { BUBBLES, type PropKind, type PropSpec, propsSvg, validateProps } from "./props";
 import { type FigureSpec, figureSvg, type Joint, type Posed, posePoints, type Pt } from "./skeleton";
 
 export const SIZE = 768;
-export const GROUND = 0.86;
+export const GROUND = 0.88;
+/** 天井の線の高さと、壁（盤や道具がある場所）の右の端 */
+export const CEILING = 0.06;
+export const WALL = 0.36;
+
+export const ROLES = ["new", "lead", "worker"] as const;
+export type Role = (typeof ROLES)[number];
+const HEADWEAR: Record<Role, PropKind> = { new: "helmet_new", lead: "cap_lead", worker: "helmet" };
 
 export interface Gaze {
   /** 視線の向き（度）。0 で向いている側へまっすぐ、正で上、負で下 */
@@ -16,6 +24,8 @@ export interface Gaze {
 export type Emphasis = "thick" | "large" | "dark" | "frame";
 
 export interface FrameFigure extends FigureSpec {
+  /** 役。new: 新人 / lead: 上の人 / worker: ほかの作業の人。かぶり物が自動で付く */
+  role?: Role;
   gaze?: Gaze;
   /** この人を目立たせる。thick: 棒を太く / large: 大きく / dark: ほかの人を薄いグレーに / frame: 枠で囲む */
   emphasis?: Emphasis[];
@@ -36,8 +46,6 @@ export interface Rendered {
   view: [number, number, number];
 }
 
-const LIGHT = "#a8a8a8";
-const LIGHT_FAR = "#c4c4c4";
 const n = (v: number) => {
   const r = Math.round(v * 10) / 10;
   return Object.is(r, -0) ? "0" : String(r);
@@ -54,6 +62,7 @@ export function validateFrame(f: Frame): string[] {
   if (!Array.isArray(f.figures) || f.figures.length > 3) errs.push("人物は 0〜3 人");
   f.figures.forEach((fig, i) => {
     if (fig.gaze && (Math.abs(fig.gaze.angle) > 90 || fig.gaze.length < 0.1 || fig.gaze.length > 1.5)) errs.push(`figures[${i}].gaze が範囲の外`);
+    if (fig.role !== undefined && !ROLES.includes(fig.role)) errs.push(`figures[${i}].role: ${fig.role}`);
     for (const e of fig.emphasis ?? []) if (!["thick", "large", "dark", "frame"].includes(e)) errs.push(`figures[${i}].emphasis: ${e}`);
   });
   errs.push(...validateProps(f.props ?? [], f.figures.length));
@@ -81,6 +90,19 @@ function frameBox(p: Posed): string {
   return `<g data-part="emphasis-frame"><rect x="${n(x0)}" y="${n(y0)}" width="${n(x1 - x0)}" height="${n(y1 - y0)}" rx="${n(pad * 0.5)}" fill="none" stroke="#000" stroke-width="${n(w)}"/></g>`;
 }
 
+/** 背景: 白い地・左の壁・天井と床の線・全体の枠 */
+function backdrop(size: number, g: number): string {
+  const lw = Math.round(size * 0.007);
+  const top = CEILING * size;
+  const wx = WALL * size;
+  return `<g data-part="bg"><rect width="${size}" height="${size}" fill="#fff"/></g>` +
+    `<g data-part="wall"><rect x="0" y="${n(top)}" width="${n(wx)}" height="${n(g - top)}" fill="#ececec"/>` +
+    `<line x1="${n(wx)}" y1="${n(top)}" x2="${n(wx)}" y2="${n(g)}" stroke="#000" stroke-width="${lw}"/>` +
+    `<line x1="0" y1="${n(top)}" x2="${size}" y2="${n(top)}" stroke="#000" stroke-width="${lw}"/></g>` +
+    `<g data-part="ground"><line x1="0" y1="${n(g)}" x2="${size}" y2="${n(g)}" stroke="#000" stroke-width="${lw}"/>` +
+    `<line x1="0" y1="${n(g + size * 0.045)}" x2="${size}" y2="${n(g + size * 0.045)}" stroke="#000" stroke-width="${n(lw * 0.8)}"/></g>`;
+}
+
 export function renderFrame(frame: Frame, size = SIZE): Rendered {
   const errs = validateFrame(frame);
   if (errs.length) throw new Error(`コマの数字が範囲の外: ${errs.join(" / ")}`);
@@ -88,18 +110,22 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
   const figs = frame.figures.map((f) => (f.emphasis?.includes("large") ? { ...f, height: Math.min(0.75, f.height * 1.2) } : f));
   const posed = figs.map((f) => posePoints(f, size, g));
   const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
-  const body = [
-    `<g data-part="bg"><rect width="${size}" height="${size}" fill="#fff"/></g>`,
-    `<g data-part="ground"><line x1="0" y1="${g}" x2="${size}" y2="${g}" stroke="#000" stroke-width="${Math.round(size * 0.008)}"/></g>`,
-  ];
+  const props = frame.props ?? [];
+  const onCanvas = props.filter((p) => !("figure" in p.at) && !BUBBLES.has(p.kind));
+  const onFigure = props.filter((p) => "figure" in p.at && !BUBBLES.has(p.kind));
+  const bubbles = props.filter((p) => BUBBLES.has(p.kind));
+  const body = [backdrop(size, g)];
+  if (onCanvas.length) body.push(propsSvg(onCanvas, posed, size));
   posed.forEach((p, i) => {
     const f = frame.figures[i];
     const faded = darkIdx >= 0 && darkIdx !== i;
-    body.push(figureSvg(p, { color: faded ? LIGHT : undefined, far: faded ? LIGHT_FAR : undefined, width: f.emphasis?.includes("thick") ? 1.35 : 1 }));
+    body.push(figureSvg(p, { faded, width: f.emphasis?.includes("thick") ? 1.3 : 1 }));
+    if (f.role) body.push(propsSvg([{ kind: HEADWEAR[f.role], at: { figure: i, joint: "head" }, size: 0.1 }], posed, size));
     if (f.gaze) body.push(gazeSvg(p, f.gaze));
     if (f.emphasis?.includes("frame")) body.push(frameBox(p));
   });
-  if (frame.props?.length) body.push(propsSvg(frame.props, posed, size));
+  if (onFigure.length) body.push(propsSvg(onFigure, posed, size));
+  if (bubbles.length) body.push(propsSvg(bubbles, posed, size));
   let view: [number, number, number] = [0, 0, size];
   if (frame.zoom) {
     const c = posed[frame.zoom.figure].joints[frame.zoom.joint];
@@ -107,5 +133,8 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
     view = [Math.max(0, Math.min(size - w, c[0] - w / 2)), Math.max(0, Math.min(size - w, c[1] - w / 2)), w];
   }
   const vb = view.map(n);
+  // 全体の枠（切り取ったときも、見える範囲の縁に描く）
+  const bw = Math.max(2, view[2] * 0.012);
+  body.push(`<g data-part="border"><rect x="${n(view[0] + bw / 2)}" y="${n(view[1] + bw / 2)}" width="${n(view[2] - bw)}" height="${n(view[2] - bw)}" fill="none" stroke="#000" stroke-width="${n(bw)}"/></g>`);
   return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${vb[0]} ${vb[1]} ${vb[2]} ${vb[2]}">${body.join("")}</svg>`, posed, view };
 }

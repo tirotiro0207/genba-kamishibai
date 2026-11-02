@@ -112,3 +112,41 @@ describe("小物の部品 1（017）", () => {
     expect(r).not.toBe(l);
   });
 });
+
+describe("作者のスケッチに合わせた見た目（11/2）", () => {
+  const P = (kind: (typeof PROP_KINDS)[number], at: PropSpec["at"], size = 0.25, inner?: PropSpec["inner"]): PropSpec => ({ kind, at, size, ...(inner ? { inner } : {}) });
+
+  it("枠・左の壁・床の線があり、人は丸い頭に目と口、ベスト、丸い手で描く", () => {
+    const svg = renderFrame({ figures: [F()] }).svg;
+    for (const part of ["border", "wall", "ground", "figure"]) expect(svg, part).toContain(`data-part="${part}"`);
+    const fig = svg.slice(svg.indexOf('data-part="figure"'));
+    expect((fig.match(/<circle /g) ?? []).length).toBeGreaterThanOrEqual(4); // 頭・目・手 2 つ
+    expect(checkStyle(svg)).toEqual([]);
+  });
+
+  it("役を決めるとかぶり物が自動で付く（新人は白、上の人は黒、ほかの作業の人はグレー）", () => {
+    const svg = (role: "new" | "lead" | "worker") => renderFrame({ figures: [{ ...F(), role }] }).svg;
+    expect(svg("new")).toContain('data-part="helmet-new"');
+    expect(svg("lead")).not.toContain('data-part="helmet-new"');
+    expect(svg("lead")).not.toBe(svg("worker"));
+    expect(() => renderFrame({ figures: [{ ...F(), role: "boss" as never }] })).toThrow(/role/);
+  });
+
+  it("考える吹き出しは点線と小さい丸、話す吹き出しはしっぽ。中に道具と「？」か「✓」", () => {
+    const think = renderFrame({ figures: [F()], props: [P("think_question", { figure: 0, joint: "head", dy: -0.4 }, 0.27, "panel")] }).svg;
+    const say = renderFrame({ figures: [F()], props: [P("bubble_check", { figure: 0, joint: "head", dy: -0.4 }, 0.27, "outlet")] }).svg;
+    expect(think).toContain("stroke-dasharray");
+    expect(say).toContain("<polygon");
+    expect(say).not.toContain("stroke-dasharray");
+    for (const s of [think, say]) expect(checkStyle(s)).toEqual([]);
+    // 吹き出しでない小物に中身は付けられない
+    expect(() => renderFrame({ figures: [F()], props: [P("lock", { x: 0.5, y: 0.5 }, 0.1, "panel")] })).toThrow(/inner/);
+  });
+
+  it("盤・コンセント・道具箱・✓ の丸がそろい、絵柄のテストが通る", () => {
+    for (const kind of ["panel", "outlet", "toolbox", "check_mark", "tester"] as const) {
+      const svg = renderFrame({ figures: [F()], props: [P(kind, { x: 0.2, y: 0.5 }, 0.15)] }).svg;
+      expect(checkStyle(svg), kind).toEqual([]);
+    }
+  });
+});

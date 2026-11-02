@@ -5,19 +5,20 @@ import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import { cutFrames, FRAME_JSON_SCHEMA, type FrameJson, keyToFrame, MARKS_MAX, MARKS_MIN, MAX_DURATION, MOTION_JSON_SCHEMA, type MotionJson, validateFrameJson, validateMotion } from "./motion";
 import { POSES } from "./poses";
 import { DEFAULT_JOINT, PROP_KINDS } from "./props";
-import type { Frame } from "./scene";
+import { type Frame, GROUND, WALL } from "./scene";
 import { BONE_RANGE, BONES } from "./skeleton";
 
 export type DrawMode = "angles" | "motion";
 
 const ranges = BONES.map((b) => `${b}: ${BONE_RANGE[b][0]}〜${BONE_RANGE[b][1]}`).join(" / ");
 const poses = Object.entries(POSES).map(([k, a]) => `${k}: ${JSON.stringify(a)}`).join("\n");
-const props = PROP_KINDS.map((k) => `${k}${DEFAULT_JOINT[k] ? `（ふつうは ${DEFAULT_JOINT[k]} に付ける）` : ""}`).join(", ");
+const props = PROP_KINDS.filter((k) => !["helmet", "helmet_new", "cap_lead"].includes(k)).map((k) => `${k}${DEFAULT_JOINT[k] ? `（ふつうは ${DEFAULT_JOINT[k]} に付ける）` : ""}`).join(", ");
 
 const COMMON = `あなたは、安全の決まりをピクトグラムの絵にするため、人形の姿勢と小物を数字で決める係です。
 絵の面に文字は置けない。色は黒とグレー。赤は小物 prohibit（禁止の赤い円と斜線）だけ。○と× は circle_mark・cross_mark。
-キャンバスは正方形。地面は下から 14% の高さの線。人物は 1〜3 人。
-人物: x は腰の横の位置（0〜1）、height は背の高さ（0.3〜0.75）、facing は向き（left / right）。
+キャンバスは正方形で、全体を枠で囲む。左の x 0〜${WALL} は薄いグレーの壁（盤・コンセントなど壁の道具を置く場所。高さは y 0.35〜0.6 あたり）。床の線は y ${GROUND}。人物は 1〜3 人。
+人物: role は役（new＝新人・白いヘルメット / lead＝上の人・黒い帽子 / worker＝ほかの作業の人・グレーのヘルメット）。かぶり物は役から自動で付くので、小物に helmet・helmet_new・cap_lead を入れない。
+x は腰の横の位置（0〜1）、height は背の高さ（基本は 0.48〜0.56。枠の高さの 6 割くらいを人が占める）、facing は向き（left / right）。人と道具は大きく描き、枠の中を空けすぎない。
 角度は度。torso は胴の前への傾き、neck は頭の前への傾き（正でうつむく）。腕と脚の upper は真下を 0 として前へ回すと正、lower は upper に対する曲げ。
 角度の範囲: ${ranges}
 姿勢の手本（角度）:
@@ -25,8 +26,11 @@ ${poses}
 小物 kind: ${props}
 小物の置き場: figure に人物の番号（0 から）と joint と、背の高さに対するずれ dx・dy（-1〜1。dx は向いている側が正）。
 キャンバスに置くときは figure を -1 にし、x・y（0〜1、左上が 0,0）を使う。使わない値は 0。size はキャンバスの幅に対する大きさ（0.04〜0.5）。
-新人は helmet_new（白いヘルメット）、上の人は cap_lead（黒い帽子）、ほかの作業の人は helmet。
-「守ること」が文字なしで一目で伝わる構図にする。小物は要るものだけ。`;
+show が false の小物はそのコマに描かない（吹き出しをコマごとに出し入れする）。inner は吹き出しの中に描く道具で、吹き出しでなければ "none"。
+吹き出し: 迷う・考えるは think_question / think_check（点線の吹き出しと小さい丸）、話すは bubble_question / bubble_check（しっぽ）。
+人に付けるときは joint を head、dy を -0.4 前後、size を 0.24〜0.3 にする。中に何について迷う・確かめたかの道具を inner で入れ、「？」か「✓」と並べる。
+check_mark は確かめた印（黒い丸に ✓）。panel・outlet は壁に置く道具、toolbox は床に置く道具箱。
+「守ること」が文字なしで一目で伝わる構図にする。迷う・聞く・確かめた、は吹き出しで見せる。小物は要るものだけ。`;
 
 const SYSTEM: Record<DrawMode, string> = {
   angles: `${COMMON}\n1 枚の絵の数字を決めてください。`,

@@ -1,4 +1,5 @@
 // 絵の作り方を 8 枚で比べる（079b）。守ることは git の外の台本のフォルダ（out/card<n>.json）から読む。
+// 11/2 の見た目の直しのあとは、PICTO_WAYS=motion PICTO_TAG=sketch で「動きから切り出し」だけを流し直す。
 // 3 つの作り方: Sonnet の角度 / Opus 5.5 の角度 / Opus 5.5 の動きから切り出し。
 // どれも作り直しはせず、確かめる AI（仮版）に絵だけを見せて点を出す。並べた PNG はリポジトリの外（RECORD_DIR/picto）。
 //
@@ -19,14 +20,16 @@ import { isRed, type Match, matchParams, type Reading, readerParams } from "../.
 
 const dir = process.argv[2] ?? join(import.meta.dirname, "..", "..", "scratch", "measure8");
 const RECORD_DIR = process.env.RECORD_DIR || join(tmpdir(), "genba-kamishibai-rec");
-const out = join(RECORD_DIR, "picto", "compare079b");
+const TAG = process.env.PICTO_TAG || "079b";
+const out = join(RECORD_DIR, "picto", `compare${TAG}`);
 mkdirSync(out, { recursive: true });
 
-const WAYS: { key: string; label: string; model: string; mode: DrawMode }[] = [
+const ALL_WAYS: { key: string; label: string; model: string; mode: DrawMode }[] = [
   { key: "sonnet", label: "Sonnet の角度", model: "claude-sonnet-5-5", mode: "angles" },
   { key: "opus", label: "Opus 5.5 の角度", model: "claude-opus-5-5", mode: "angles" },
   { key: "motion", label: "Opus 5.5 の動きから切り出し", model: "claude-opus-5-5", mode: "motion" },
 ];
+const WAYS = process.env.PICTO_WAYS ? ALL_WAYS.filter((w) => process.env.PICTO_WAYS?.split(",").includes(w.key)) : ALL_WAYS;
 
 const cards = [1, 2, 3, 4, 5, 6, 7, 8].map((id) => {
   const c = JSON.parse(readFileSync(join(dir, "out", `card${id}.json`), "utf-8"));
@@ -73,7 +76,7 @@ async function one(card: (typeof cards)[number], way: (typeof WAYS)[number]) {
 
 const T0 = Date.now();
 const results = await Promise.all(cards.flatMap((c) => WAYS.map((w) => one(c, w))));
-writeFileSync(join(dir, "out_picto079b.json"), JSON.stringify(results, null, 1), "utf-8");
+writeFileSync(join(dir, `out_picto${TAG}.json`), JSON.stringify(results, null, 1), "utf-8");
 
 // 3 つを並べた PNG（行が 1 枚、列が作り方。動きはコマを縮めて並べる）
 const cell = 300;

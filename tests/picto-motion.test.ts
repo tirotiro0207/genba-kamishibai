@@ -5,8 +5,8 @@ import { POSES } from "../src/shared/picto/poses";
 import { renderFrame } from "../src/shared/picto/scene";
 import { checkStyle } from "../src/shared/picto/style";
 
-const fig = (x: number, angles = POSES.stand) => ({ x, height: 0.55, facing: "right" as const, angles });
-const prop = (dx = 0) => ({ kind: "tester" as const, figure: 0, joint: "hand_near" as const, dx, dy: 0, x: 0, y: 0, size: 0.12 });
+const fig = (x: number, angles = POSES.stand) => ({ role: "new" as const, x, height: 0.55, facing: "right" as const, angles });
+const prop = (dx = 0) => ({ kind: "tester" as const, show: true, figure: 0, joint: "hand_near" as const, dx, dy: 0, x: 0, y: 0, size: 0.12, inner: "none" as const });
 // 歩いて近づき、しゃがんで、検電器を当てる
 const M: MotionJson = {
   keyframes: [
@@ -36,6 +36,7 @@ describe("動きを再生してコマを切り出す（079a）", () => {
     expect(bad((m) => m.keyframes[1].figures.push(fig(0.8)))).toMatch(/人数/);
     expect(bad((m) => (m.keyframes[1].figures[0].angles.torso = 170))).toMatch(/torso/);
     expect(bad((m) => (m.keyframes[1].props[0].kind = "lock"))).toMatch(/小物の並び/);
+    expect(bad((m) => (m.keyframes[1].figures[0].role = "lead"))).toMatch(/役/);
     expect(bad((m) => (m.keyframes[3].t = 99))).toMatch(/範囲の外/);
     expect(() => cutPngs({ keyframes: [M.keyframes[0]] })).toThrow(/2 つ以上/);
   });
@@ -60,5 +61,19 @@ describe("動きを再生してコマを切り出す（079a）", () => {
     expect(p1).toHaveLength(3);
     p1.forEach((x, i) => expect(Buffer.from(x.png).equals(Buffer.from(p2[i].png))).toBe(true));
     expect(Buffer.from(p1[0].png).equals(Buffer.from(p1[1].png))).toBe(false);
+  });
+});
+
+describe("作者のスケッチの 3 コマを部品で描く（11/2）", () => {
+  it("「迷ったら上の人に聞く」の手本が範囲の中で、吹き出しを出し入れして 3 コマになる", async () => {
+    const { MAYOTTARA } = await import("../scripts/picto-sketch");
+    expect(validateMotion(MAYOTTARA)).toEqual([]);
+    const cuts = cutFrames(MAYOTTARA);
+    expect(cuts).toHaveLength(3);
+    const kinds = cuts.map((c) => c.frame.props?.map((p) => p.kind));
+    expect(kinds[0]).toContain("think_question");
+    expect(kinds[1]).toContain("bubble_question");
+    expect(kinds[2]).toContain("bubble_check");
+    for (const c of cuts) expect(checkStyle(renderFrame(c.frame).svg)).toEqual([]);
   });
 });

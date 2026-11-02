@@ -1,8 +1,8 @@
 // 動きを再生してコマを切り出す部品（079a）。
 // AI が書くのはキーフレームの JSON（時刻ごとの関節・小物の値と、意味の変わる時刻の印）だけ。
 // 間は描く側が線形に補って動かし、印の付いた 3〜4 か所をコマとして切り出す。同じ JSON なら同じコマになる。
-import { type PropKind, PROP_KINDS, type PropSpec } from "./props";
-import { type Frame, type FrameFigure, renderFrame, validateFrame } from "./scene";
+import { INNER_KINDS, type InnerKind, type PropKind, PROP_KINDS, type PropSpec } from "./props";
+import { type Frame, type FrameFigure, renderFrame, type Role, ROLES, validateFrame } from "./scene";
 import { BONES, type Bone, type Joint, validateFigure } from "./skeleton";
 
 export const MARKS_MIN = 3;
@@ -15,8 +15,9 @@ export interface MotionJson {
   keyframes: {
     t: number;
     mark: boolean;
-    figures: { x: number; height: number; facing: "left" | "right"; angles: Record<Bone, number> }[];
-    props: { kind: PropKind; figure: number; joint: Joint; dx: number; dy: number; x: number; y: number; size: number }[];
+    figures: { role: Role; x: number; height: number; facing: "left" | "right"; angles: Record<Bone, number> }[];
+    /** inner は吹き出しの中の道具（無ければ "none"）。show が false のコマでは描かない（吹き出しを出し入れする） */
+    props: { kind: PropKind; show: boolean; figure: number; joint: Joint; dx: number; dy: number; x: number; y: number; size: number; inner: InnerKind | "none" }[];
   }[];
 }
 
@@ -41,8 +42,9 @@ export const MOTION_JSON_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["x", "height", "facing", "angles"],
+              required: ["role", "x", "height", "facing", "angles"],
               properties: {
+                role: { type: "string", enum: [...ROLES] },
                 x: num, height: num,
                 facing: { type: "string", enum: ["left", "right"] },
                 angles: { type: "object", additionalProperties: false, required: [...BONES], properties: Object.fromEntries(BONES.map((b) => [b, num])) },
@@ -54,12 +56,14 @@ export const MOTION_JSON_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["kind", "figure", "joint", "dx", "dy", "x", "y", "size"],
+              required: ["kind", "show", "figure", "joint", "dx", "dy", "x", "y", "size", "inner"],
               properties: {
                 kind: { type: "string", enum: [...PROP_KINDS] },
+                show: { type: "boolean" },
                 figure: { type: "integer" },
                 joint: { type: "string", enum: JOINTS },
                 dx: num, dy: num, x: num, y: num, size: num,
+                inner: { type: "string", enum: ["none", ...INNER_KINDS] },
               },
             },
           },
@@ -83,11 +87,12 @@ export const FRAME_JSON_SCHEMA = {
 
 export function keyToFrame(k: FrameJson): Frame {
   return {
-    figures: k.figures.map((f) => ({ x: f.x, height: f.height, facing: f.facing, angles: { ...f.angles } })),
-    props: k.props.map((p): PropSpec => ({
+    figures: k.figures.map((f) => ({ role: f.role, x: f.x, height: f.height, facing: f.facing, angles: { ...f.angles } })),
+    props: k.props.filter((p) => p.show !== false).map((p): PropSpec => ({
       kind: p.kind,
       size: p.size,
       at: p.figure < 0 ? { x: p.x, y: p.y } : { figure: p.figure, joint: p.joint, dx: p.dx, dy: p.dy },
+      ...(p.inner && p.inner !== "none" ? { inner: p.inner } : {}),
     })),
   };
 }
@@ -111,6 +116,7 @@ export function validateMotion(m: MotionJson): string[] {
     if (!(typeof k.t === "number" && k.t >= 0 && k.t <= MAX_DURATION)) errs.push(`keyframes[${i}].t が範囲の外（0〜${MAX_DURATION} 秒）`);
     if (i > 0 && !(k.t > ks[i - 1].t)) errs.push(`keyframes[${i}].t が前より後ではない`);
     if (k.figures.length !== ks[0].figures.length) errs.push(`keyframes[${i}] の人数が最初と違う`);
+    else if (k.figures.some((f, j) => f.role !== ks[0].figures[j].role)) errs.push(`keyframes[${i}] の役が最初と違う`);
     if (k.props.length !== ks[0].props.length || k.props.some((p, j) => p.kind !== ks[0].props[j].kind || p.figure < 0 !== ks[0].props[j].figure < 0))
       errs.push(`keyframes[${i}] の小物の並びが最初と違う`);
     for (const e of validateFrameJson(k)) errs.push(`keyframes[${i}].${e}`);
@@ -134,6 +140,7 @@ export function frameAt(m: MotionJson, t: number): Frame {
   const figures: FrameFigure[] = a.figures.map((f, j) => {
     const g = b.figures[j];
     return {
+      role: f.role,
       x: lerp(f.x, g.x, u),
       height: lerp(f.height, g.height, u),
       facing: f.facing,
