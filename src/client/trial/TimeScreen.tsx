@@ -33,9 +33,10 @@ function Lane({ lane, tenant, trial, rows, reload }: { lane: number; tenant: str
     cancelAnimationFrame(timer.current);
     const ms = Math.round(performance.now() - start);
     setStart(null);
-    setLast(ms);
     try {
       await postResponse(tenant, trial.id, { participant: pid, item: "A", ms });
+      // 「保存した」は保存の返事が来てから出す
+      setLast(ms);
       reload();
     } catch (e) {
       setErr((e as Error).message);
