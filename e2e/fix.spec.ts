@@ -96,3 +96,30 @@ test("スマホの幅で、指でなぞって枠を描ける", async ({ page, re
   await expect(page.getByTestId("fix-quote")).toHaveText("人をもう少し大きく");
   await page.screenshot({ path: test.info().outputPath("fix-phone.png"), fullPage: true });
 });
+
+test("送ったあと「この 1 枚を作り直す」で、作り直した絵と残りの回数が出る", async ({ page, request }) => {
+  const { id } = (await (await request.post("/api/t/practice/cards", { data: { card: sampleCard() } })).json()) as { id: string };
+  // 作り直し係の呼び出しは差し替える（枠に入った部品だけを取り込むのと 5 回までは Worker のテストで確かめる）
+  const redone = sampleCard();
+  if (redone.motion.kind === "keyframes") redone.motion.json.keyframes[0].props[1].x = 0.6;
+  let asked: unknown = null;
+  await page.route(`**/api/t/practice/cards/${id}/redo`, async (route) => {
+    asked = route.request().postDataJSON();
+    await route.fulfill({ json: { id, status: "draft", version: 2, body: redone, redo: { parts: ["p3"], figures: [], props: [1], count: 1, left: 4 } } });
+  });
+  await page.goto(`/#/t/practice/fix/${id}`);
+  const face = page.getByTestId("fix-face");
+  await drawMouse(page, face, [0.66, 0.52], [0.84, 0.68]);
+  await page.getByTestId("fix-text").fill("盤をもう少し左に");
+  await page.getByTestId("fix-to-confirm").click();
+  await page.getByTestId("fix-send").click();
+  const before = await page.getByTestId("fix-sent").innerHTML();
+  await page.getByTestId("fix-redo").click();
+  await expect(page.getByTestId("fix-redone")).toHaveAttribute("data-version", "2");
+  await expect(page.getByTestId("fix-sent")).toContainText("1 回目・あと 4 回");
+  expect((asked as { n: number }).n).toBeGreaterThan(0);
+  expect(await page.getByTestId("fix-redone").innerHTML()).not.toBe(before);
+  await expect(page.getByTestId("fix-to-card")).toHaveAttribute("href", `#/t/practice/card/${id}`);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: test.info().outputPath("fix-redone.png"), fullPage: true });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { partBoxes } from "../src/client/route/boxes";
+import { partBoxes } from "../src/shared/boxes";
 import { sampleCard } from "./fixtures/card";
 
 // 経路の画面の部品の箱（053）

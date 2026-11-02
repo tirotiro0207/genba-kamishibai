@@ -6,7 +6,7 @@ import { type CardBody, type CardPart, routeOf, type SourceRef } from "../../sha
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
-import { partBoxes } from "./boxes";
+import { partBoxes } from "../../shared/boxes";
 import "./route.css";
 
 interface CardView {

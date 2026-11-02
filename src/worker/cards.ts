@@ -6,6 +6,7 @@ import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from 
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
+import { REDO_MAX, RedoError, redoCard } from "../shared/redo";
 import { summarize } from "../shared/stats";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
@@ -218,6 +219,47 @@ cards.post("/:id/fix", async (c) => {
   const req = { frame: b!.frame!, t: body.frames[b!.frame!].t, box: b!.box!, text: b!.text!.trim() };
   const e = await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "edit", actor: actorOf(b as Payload, "supervisor"), payload: { request: "redo", version: r.version, ...req } });
   return c.json({ n: e.n, version: r.version, ...req }, 202);
+});
+
+// その 1 枚だけ作り直す（044b）: ④ の依頼（044a）を読み、枠に入った部品だけを作り直して版を 1 つ上げる。
+// 経路（部品 → 文 → 元の文）は変えない。1 枚につき 5 回まで（6 回目は断る）。新しい版は確かめ直すまで確認待ち
+cards.post("/:id/redo", async (c) => {
+  const db = c.env.DB;
+  const tid = c.var.tenant.id;
+  const r = await getCard(db, tid, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードは作り直さない" }, 409);
+  const b = await c.req.json<{ n?: number }>().catch(() => ({}) as { n?: number });
+  const row = Number.isInteger(b.n) ? await db.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND n = ? AND kind = 'edit'").bind(tid, r.id, b.n).first<{ payload: string }>() : null;
+  const ask = row ? (JSON.parse(row.payload) as { request?: string; version?: number } & FixRequest) : null;
+  if (!ask || ask.request !== "redo") return c.json({ error: "直しの依頼（④ の行の番号）が無い" }, 400);
+  if (ask.version !== r.version) return c.json({ error: `依頼は版 ${ask.version} への。今は版 ${r.version} なので、枠を描き直して送る` }, 409);
+  const done = await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'edit' AND json_extract(payload, '$.request') = 'redone'").bind(tid, r.id).first<{ n: number }>();
+  if ((done?.n ?? 0) >= REDO_MAX) return c.json({ error: `作り直しは 1 枚 ${REDO_MAX} 回まで。文から作り直すか、監修者が手で直す`, count: done!.n }, 429);
+  const client = claudeClient(c.env);
+  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
+  const before = JSON.parse(r.body) as CardBody;
+  let out;
+  try {
+    out = await redoCard({ client, log: new D1CallLog(db) }, "app", before, ask.frame, ask.box, ask.text);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, e instanceof RedoError ? e.status : 502);
+  }
+  const errs = validateCard(out.body);
+  if (errs.length) return c.json({ error: "作り直したカードの形か経路が足りない", errors: errs }, 502);
+  const res = await db.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?")
+    .bind(JSON.stringify(out.body), aiDraftReasons(out.body).length ? "ai_draft" : "draft", r.id, tid, r.version)
+    .run();
+  if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
+  const count = (done?.n ?? 0) + 1;
+  const key = (body: CardBody) => (body.motion.kind === "keyframes" ? body.motion.json.keyframes[out.keyIndex] : null);
+  await appendAudit(db, tid, {
+    card_id: r.id,
+    kind: "edit",
+    actor: "maker",
+    payload: { request: "redone", from_n: b.n, from_version: r.version, to_version: r.version + 1, frame: ask.frame, parts: out.targets.parts, figures: out.targets.figures, props: out.targets.props, before: key(before), after: key(out.body), count },
+  });
+  return c.json({ ...cardView((await getCard(db, tid, r.id))!), redo: { ...out.targets, count, left: REDO_MAX - count } });
 });
 
 cards.post("/:id/status", async (c) => {

@@ -1,10 +1,10 @@
-// 経路の画面（053）で、絵の部品をタップする範囲。描く側の位置の決め方（関節の位置と小物の持つところ）から、
+// 経路の画面（053）で絵の部品をタップする範囲と、枠に入った部品を選ぶとき（044b）に使う。描く側の位置の決め方（関節の位置と小物の持つところ）から、
 // 部品ごとの箱を絵の見える範囲に対する割合（0〜1）で出す。描いた SVG の中は変えない。
-import type { CardPart } from "../../shared/card";
-import { frameAt, type MotionJson } from "../../shared/picto/motion";
-import { anchorPoint } from "../../shared/picto/props";
-import { renderFrame, SIZE } from "../../shared/picto/scene";
-import { PROPORTION } from "../../shared/picto/skeleton";
+import type { CardPart } from "./card";
+import { frameAt, type MotionJson } from "./picto/motion";
+import { anchorPoint } from "./picto/props";
+import { renderFrame, SIZE } from "./picto/scene";
+import { PROPORTION } from "./picto/skeleton";
 
 export interface Box {
   part: string;

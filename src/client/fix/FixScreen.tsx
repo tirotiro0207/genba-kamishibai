@@ -1,6 +1,6 @@
 // 枠と指示の画面（044a・工程 7）。監修者が直したいコマを選び、指かマウスで直したい部分を枠で囲む。
 // 「ここをこうしたい」は大きな欄に書くか、端末の音声入力（キーボードのマイク）で話す。送る前に、枠と文字を並べて確かめてから送る。
-// 送った依頼は監査の記録 ④ に残る。その 1 枚の作り直しは 044b でつなぐ。
+// 送った依頼は監査の記録 ④ に残る。続けて「この 1 枚を作り直す」で、枠に入った部品だけを作り直す（044b。1 枚 5 回まで）。
 import { useEffect, useRef, useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { boxFrom, FIX_BOX_MIN, type FixBox } from "../../shared/fix";
@@ -71,6 +71,7 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
   const [step, setStep] = useState<"draw" | "confirm" | "sent">("draw");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<{ n: number; version: number } | null>(null);
+  const [redone, setRedone] = useState<{ version: number; redo: { parts: string[]; count: number; left: number } } | null>(null);
   useEffect(() => {
     req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)
       .then(setCard)
@@ -91,6 +92,20 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
     try {
       setSent(await req<{ n: number; version: number }>(tenant, `/cards/${encodeURIComponent(cardId)}/fix`, { method: "POST", body: JSON.stringify({ frame: at, box, text: text.trim() }) }));
       setStep("sent");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function redo() {
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await req<CardView & { redo: { parts: string[]; count: number; left: number } }>(tenant, `/cards/${encodeURIComponent(cardId)}/redo`, { method: "POST", body: JSON.stringify({ n: sent!.n }) });
+      setCard(out);
+      setRedone(out);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -168,6 +183,23 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
             <p>
               版 {sent.version} の {at + 1} コマ目への依頼を、監査の記録 ④ 人の直し（{sent.n} 行目）に残しました。
             </p>
+            {redone ? (
+              <>
+                <div className="fix-face still fix-redone" data-testid="fix-redone" data-version={redone.version}>
+                  <span dangerouslySetInnerHTML={{ __html: svg }} />
+                </div>
+                <p>
+                  枠に入った部品だけを作り直し、版 {redone.version} にしました（{redone.redo.count} 回目・あと {redone.redo.left} 回）。確かめる AI に見せ直すまで確認待ちです。
+                </p>
+                <a className="big go" href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(card.id)}`} data-testid="fix-to-card">
+                  カードを見る
+                </a>
+              </>
+            ) : (
+              <button className="big go" disabled={busy} onClick={redo} data-testid="fix-redo">
+                {busy ? "作り直しています…" : "この 1 枚を作り直す"}
+              </button>
+            )}
             <a className="big" href={`#/t/${encodeURIComponent(tenant)}/audit/${encodeURIComponent(card.id)}`} data-testid="fix-audit">
               記録を見る
             </a>

@@ -16,3 +16,4 @@
 .fix-quote { margin: 0; padding: 12px 16px; border-left: 4px solid var(--fg); font-size: 20px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fix-step a.big { display: inline-block; text-decoration: none; text-align: center; }
 @media (max-width: 760px) { .fix-main { grid-template-columns: 1fr; } }
+.fix-redone { max-width: 420px; }
