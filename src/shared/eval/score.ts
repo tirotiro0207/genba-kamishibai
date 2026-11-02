@@ -49,23 +49,82 @@ export function validateJudgement(goldCount: number, predCount: number, j: Judge
   }
 }
 
+export type Pair = Judgement["pairs"][number];
+
+/** 直した理由: 番号が範囲の外 / 同じものを 2 回 / 危ない取り出しすぎの番号が正しくない（範囲の外か、もう組になっている答え） */
+export type RepairReason = "out_of_range" | "duplicate" | "bad_dangerous_extra";
+
+/** 直し 1 件。before は落とした組（危ない取り出しすぎなら答えの番号）、after は残した組（落としただけなら null） */
+export interface Repair {
+  reason: RepairReason;
+  before: Pair | { dangerousExtra: number };
+  after: Pair | null;
+}
+
 /**
  * AI の判定の崩れを直す。範囲の外の番号と、2 回目以降に同じものを組にした組を落とす（最初の組を残す）。
- * 落とした数を返し、採点の記録に残す。
+ * 落とした数と、1 件ずつの中身（何を・なぜ・何が残ったか）を返し、採点の記録に残す。
  */
-export function repairJudgement(goldCount: number, predCount: number, j: Judgement): { judgement: Judgement; dropped: number } {
-  const g = new Set<number>();
-  const p = new Set<number>();
+export function repairJudgement(goldCount: number, predCount: number, j: Judgement): { judgement: Judgement; dropped: number; repairs: Repair[] } {
+  const byGold = new Map<number, Pair>();
+  const byPred = new Map<number, Pair>();
+  const repairs: Repair[] = [];
   const pairs = j.pairs.filter((pair) => {
-    const ok = pair.gold >= 0 && pair.gold < goldCount && pair.pred >= 0 && pair.pred < predCount && !g.has(pair.gold) && !p.has(pair.pred);
-    if (ok) {
-      g.add(pair.gold);
-      p.add(pair.pred);
+    if (!(pair.gold >= 0 && pair.gold < goldCount && pair.pred >= 0 && pair.pred < predCount)) {
+      repairs.push({ reason: "out_of_range", before: pair, after: null });
+      return false;
     }
-    return ok;
+    const kept = byGold.get(pair.gold) ?? byPred.get(pair.pred);
+    if (kept) {
+      repairs.push({ reason: "duplicate", before: pair, after: kept });
+      return false;
+    }
+    byGold.set(pair.gold, pair);
+    byPred.set(pair.pred, pair);
+    return true;
   });
-  const extras = [...new Set(j.dangerousExtras)].filter((e) => e >= 0 && e < predCount && !p.has(e));
-  return { judgement: { pairs, dangerousExtras: extras }, dropped: j.pairs.length - pairs.length + (j.dangerousExtras.length - extras.length) };
+  const seen = new Set<number>();
+  const extras = j.dangerousExtras.filter((e) => {
+    const bad = !(e >= 0 && e < predCount) || byPred.has(e) || seen.has(e);
+    if (bad) repairs.push({ reason: seen.has(e) ? "duplicate" : "bad_dangerous_extra", before: { dangerousExtra: e }, after: byPred.get(e) ?? null });
+    seen.add(e);
+    return !bad;
+  });
+  return { judgement: { pairs, dangerousExtras: extras }, dropped: repairs.length, repairs };
+}
+
+/**
+ * 直す前の判定のままなら、この数（採点は止めない）。組は 2 回目の組も数える。漏れと取り出しすぎは、組に 1 回でも出た正解・答えを除いて数える。
+ * 番号が範囲の外の組と危ない取り出しすぎは、どの正解・答えか分からないので数えられない（uncountable）
+ */
+export interface ScoreBefore {
+  matched: number;
+  missed: number;
+  extra: number;
+  dangerous: number;
+  uncountable: number;
+}
+
+export function scoreBefore(goldCount: number, predCount: number, j: Judgement): ScoreBefore {
+  const ok = j.pairs.filter((x) => x.gold >= 0 && x.gold < goldCount && x.pred >= 0 && x.pred < predCount);
+  const extrasOk = j.dangerousExtras.filter((e) => e >= 0 && e < predCount);
+  return {
+    matched: ok.length,
+    missed: goldCount - new Set(ok.map((x) => x.gold)).size,
+    extra: predCount - new Set(ok.map((x) => x.pred)).size,
+    dangerous: ok.filter((x) => x.verdict === "dangerous").length + extrasOk.length,
+    uncountable: j.pairs.length - ok.length + (j.dangerousExtras.length - extrasOk.length),
+  };
+}
+
+export function sumBefore(xs: ScoreBefore[]): ScoreBefore {
+  return xs.reduce((a, x) => ({ matched: a.matched + x.matched, missed: a.missed + x.missed, extra: a.extra + x.extra, dangerous: a.dangerous + x.dangerous, uncountable: a.uncountable + x.uncountable }), {
+    matched: 0,
+    missed: 0,
+    extra: 0,
+    dangerous: 0,
+    uncountable: 0,
+  });
 }
 
 export function score(gold: Claim[], pred: Claim[], j: Judgement): Score {

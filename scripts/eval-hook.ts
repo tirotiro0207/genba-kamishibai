@@ -4,9 +4,22 @@
 //   npx tsx scripts/eval-hook.ts          # 見張るファイルが前回から変わっていれば流す
 //   npx tsx scripts/eval-hook.ts --force  # 変わっていなくても流す
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { type Claim, claimsFromItem, type Judgement, repairJudgement, type Score, score, sumScores } from "../src/shared/eval/score";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { privatePath } from "../src/node/private-dir";
+import {
+  type Claim,
+  claimsFromItem,
+  type Judgement,
+  type Repair,
+  repairJudgement,
+  type Score,
+  type ScoreBefore,
+  score,
+  scoreBefore,
+  sumBefore,
+  sumScores,
+} from "../src/shared/eval/score";
 
 export const ROOT = join(import.meta.dirname, "..");
 /** 見張るもの: 取り出しのプロンプトとコード、採点の判定 */
@@ -16,7 +29,11 @@ const STATE_FILE = "eval/hook-state.json";
 const NUMBERS = "docs/numbers.md";
 const HEADING = "## 変更のたびの 20 項目（調整用）";
 const TABLE_HEAD =
-  "| 日時（日本時間） | 見張るファイルのハッシュ | 項目 | 正解 | 答え | 組 | 言い方の違い | 漏れ | 取り出しすぎ | 危ない読み違い | 判定の直し | 費用（USD） | 時間（秒） |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|";
+  "| 日時（日本時間） | 見張るファイルのハッシュ | 項目 | 正解 | 答え | 組 | 言い方の違い | 漏れ | 取り出しすぎ | 危ない読み違い | 判定の直し | 費用（USD） | 時間（秒） | 直す前の数 | 直しの記録 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|";
+const REPAIR_LOG_NAME = "judge-repairs.jsonl";
+
+/** 判定の直しの記録の置き場。環境変数 JUDGE_REPAIR_LOG。無ければ private/logs（git に入らない） */
+export const repairLogPath = () => process.env.JUDGE_REPAIR_LOG ?? privatePath("logs", REPAIR_LOG_NAME);
 
 export interface TuneItem {
   no: number;
@@ -51,22 +68,41 @@ export function loadTuneItems(root = ROOT): TuneItem[] {
   return JSON.parse(readFileSync(join(root, TUNE_FILE), "utf-8")) as TuneItem[];
 }
 
-/** 20 項目を流す。dropped は、判定の崩れを直したときに落とした組の数 */
-export async function runEval(items: TuneItem[], extract: Extractor, judge: JudgeFn): Promise<{ score: Score; dropped: number }> {
+export type ItemRepair = Repair & { no: number };
+
+/** 20 項目を流す。dropped は判定の崩れを直したときに落とした数、repairs はその 1 件ずつ（項目の番号つき）、before は直す前の判定のままの数 */
+export async function runEval(
+  items: TuneItem[],
+  extract: Extractor,
+  judge: JudgeFn,
+): Promise<{ score: Score; dropped: number; repairs: ItemRepair[]; before: ScoreBefore }> {
   const results = await Promise.all(
     items.map(async (it) => {
       const gold = claimsFromItem(it);
       const pred = await extract(it.text);
-      const { judgement, dropped } = repairJudgement(gold.length, pred.length, await judge(gold, pred));
-      return { s: score(gold, pred, judgement), dropped };
+      const raw = await judge(gold, pred);
+      const { judgement, repairs } = repairJudgement(gold.length, pred.length, raw);
+      return { s: score(gold, pred, judgement), b: scoreBefore(gold.length, pred.length, raw), repairs: repairs.map((r) => ({ no: it.no, ...r })) };
     }),
   );
-  return { score: sumScores(results.map((r) => r.s)), dropped: results.reduce((n, r) => n + r.dropped, 0) };
+  const repairs = results.flatMap((r) => r.repairs);
+  return { score: sumScores(results.map((r) => r.s)), dropped: repairs.length, repairs, before: sumBefore(results.map((r) => r.b)) };
 }
 
-export function historyRow(at: Date, hash: string, n: number, s: Score, dropped: number, usd: number, sec: number): string {
-  const jst = new Date(at.getTime() + 9 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
-  return `| ${jst} | ${hash} | ${n} | ${s.gold} | ${s.pred} | ${s.matched} | ${s.wording} | ${s.missed} | ${s.extra} | ${s.dangerous} | ${dropped} | ${usd.toFixed(4)} | ${sec.toFixed(0)} |`;
+const jstText = (at: Date) => new Date(at.getTime() + 9 * 3600_000).toISOString().slice(0, 19).replace("T", " ");
+
+/** 直しの記録に 1 件 1 行で足す。run はその回の日時（日本時間・秒まで）で、履歴の行の「直しの記録」から引ける */
+export function appendRepairs(path: string, at: Date, hash: string, repairs: ItemRepair[]): void {
+  if (repairs.length === 0) return;
+  mkdirSync(dirname(path), { recursive: true });
+  const run = jstText(at);
+  appendFileSync(path, repairs.map((r) => JSON.stringify({ run, hash, no: r.no, reason: r.reason, before: r.before, after: r.after }) + "\n").join(""), "utf-8");
+}
+
+export function historyRow(at: Date, hash: string, n: number, s: Score, dropped: number, usd: number, sec: number, before: ScoreBefore): string {
+  const b = `組 ${before.matched}・漏れ ${before.missed}・取り出しすぎ ${before.extra}・危ない ${before.dangerous}・数えられない ${before.uncountable}`;
+  const ref = dropped > 0 ? `${REPAIR_LOG_NAME} の run「${jstText(at)}」` : "—";
+  return `| ${jstText(at).slice(0, 16)} | ${hash} | ${n} | ${s.gold} | ${s.pred} | ${s.matched} | ${s.wording} | ${s.missed} | ${s.extra} | ${s.dangerous} | ${dropped} | ${usd.toFixed(4)} | ${sec.toFixed(0)} | ${b} | ${ref} |`;
 }
 
 /** numbers.md の履歴の表に 1 行足す。節が無ければ末尾に作る */
@@ -104,9 +140,11 @@ async function main() {
   const runner = await makeHookRunner();
   const items = loadTuneItems();
   const t0 = Date.now();
-  const { score: s, dropped } = await runEval(items, runner.extract, runner.judge);
+  const { score: s, dropped, repairs, before } = await runEval(items, runner.extract, runner.judge);
   const sec = (Date.now() - t0) / 1000;
-  const row = historyRow(new Date(), hash, items.length, s, dropped, await runner.usdSince(t0), sec);
+  const at = new Date();
+  appendRepairs(repairLogPath(), at, hash, repairs);
+  const row = historyRow(at, hash, items.length, s, dropped, await runner.usdSince(t0), sec, before);
   writeFileSync(join(ROOT, NUMBERS), appendHistory(readFileSync(join(ROOT, NUMBERS), "utf-8"), row), "utf-8");
   writeFileSync(join(ROOT, STATE_FILE), JSON.stringify({ hash }, null, 2) + "\n", "utf-8");
   console.log(row);
