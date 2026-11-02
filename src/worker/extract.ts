@@ -3,7 +3,7 @@
 import { Hono } from "hono";
 import { guardedCall } from "../shared/claude";
 import { parseRules, rulesParams } from "../shared/extract/rules";
-import { type Locate, makeCard, type OkRule } from "../shared/make/maker";
+import { type Locate, makeCard, type OkRule, SCENE_TEXT, type Scene } from "../shared/make/maker";
 import { makeWords } from "../shared/make/words";
 import { D1CallLog } from "./api-log";
 import { addTerms, cardView, createCard } from "./cards";
@@ -89,13 +89,15 @@ extract.post("/:id/ok", async (c) => {
 extract.post("/:id/make", async (c) => {
   const x = await getExtraction(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!x) return c.json({ error: "無い" }, 404);
-  const { item } = await c.req.json<{ item?: unknown }>().catch(() => ({}) as { item?: unknown });
+  const { item, scene } = await c.req.json<{ item?: unknown; scene?: unknown }>().catch(() => ({}) as { item?: unknown; scene?: unknown });
   if (!Number.isInteger(item) || !x.ok.includes(item as number)) return c.json({ error: "OK した項目の番号ではない" }, 400);
+  // ○× の組の片側として作るとき（093a）。good か bad のほかは断る
+  if (scene !== undefined && !(typeof scene === "string" && scene in SCENE_TEXT)) return c.json({ error: "scene は good か bad" }, 400);
   const client = claudeClient(c.env);
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const rule = x.rules[item as number] as OkRule;
   const deps = { client, log: new D1CallLog(c.env.DB) };
-  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source));
+  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined);
   // 言葉の欄（036）: やさしい日本語とベトナム語。出てきた現場の言葉は用語表に積む
   const words = await makeWords(deps, "app", made.card);
   const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words }, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)]);

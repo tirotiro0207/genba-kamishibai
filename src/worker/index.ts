@@ -4,6 +4,7 @@ import { audit } from "./audit";
 import { cards } from "./cards";
 import { extract } from "./extract";
 import { files } from "./files";
+import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
@@ -42,5 +43,7 @@ app.route("/api/t/:tenant/reset", reset);
 app.route("/api/t/:tenant/files", files);
 app.route("/api/t/:tenant/extract", extract);
 app.route("/api/t/:tenant/trials", trials);
+// ○× の組（093a）
+app.route("/api/t/:tenant/pairs", pairs);
 
 export default app;
