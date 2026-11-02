@@ -2,6 +2,7 @@
 
     python tools/progress.py          # docs/progress.md と docs/dashboard.html を作り直す
     python tools/progress.py --check  # 作り直した中身とファイルがずれていたら 1 で終わる
+    python tools/progress.py --done 000 10  # マス 000 を済み・実際 10 分にし、前の「直近」を HEAD の番号に書き換えてから作り直す
 
 標準ライブラリだけで動く。「今日」は日本時間の日付。
 """
@@ -186,8 +187,32 @@ def render_html(d):
     return "\n".join(P) + "\n"
 
 
+def mark_done(task_id, minutes):
+    """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、いまの HEAD のコミットの番号に書き換える。"""
+    import subprocess
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    path = DOCS / "plan.md"
+    out, found = [], False
+    for line in path.read_text(encoding="utf-8").split("\n"):
+        c = cells(line) if line.startswith("|") else []
+        if len(c) == 11 and re.match(r"^\d{3}[ab]?$", c[0]):
+            if c[10] == "直近":
+                c[10] = head
+            if c[0] == task_id:
+                c[8], c[9], c[10], found = "済み", str(minutes), "直近", True
+            line = "| " + " | ".join(c) + " |"
+        out.append(line)
+    if not found:
+        raise SystemExit(f"plan.md に {task_id} が無い")
+    path.write_text("\n".join(out), encoding="utf-8", newline="\n")
+
+
 def main(argv):
-    today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
+    if "--done" in argv:
+        i = argv.index("--done")
+        mark_done(argv[i + 1], int(argv[i + 2]))
+        argv = [a for a in argv if a != "--check"]
+    today =datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
     d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), today)
     outputs = {DOCS / "progress.md": render_md(d), DOCS / "dashboard.html": render_html(d)}
     if "--check" in argv:

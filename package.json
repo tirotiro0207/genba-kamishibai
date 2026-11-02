@@ -1,0 +1,13 @@
+{
+  "name": "genba-kamishibai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "progress": "python -X utf8 tools/progress.py"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}
