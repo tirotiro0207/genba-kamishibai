@@ -583,17 +583,28 @@ def mask_generated(s):
     return re.sub(r"(<span class=\"num\" data-generated>)[^<]*", r"\1", s)
 
 
-def mark_done(task_id, minutes):
-    """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、いまの HEAD のコミットの番号に書き換える。"""
+def own_commit(task_id):
+    """件名の頭がそのマスの番号（「037:」「002・002b:」「109 の直し:」）の、いちばん新しいコミット。無ければ HEAD。
+    HEAD をそのまま使うと、間に別のコミットが挟まったときに次のコミットの番号が入る（11/2 に 12 行ずれた）"""
     import subprocess
-    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    log = subprocess.run(["git", "log", "--format=%h %s"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True).stdout
+    for line in log.splitlines():
+        h, _, subject = line.partition(" ")
+        head = re.match(r"^(\d{3}[ab]?(?:・\d{3}[ab]?)*)[: ]", subject)
+        if head and task_id in head.group(1).split("・"):
+            return h
+    return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def mark_done(task_id, minutes):
+    """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、そのマスの番号が件名の頭にあるコミットの番号に書き換える。"""
     path = DOCS / "plan.md"
     out, found = [], False
     for line in path.read_text(encoding="utf-8").split("\n"):
         c = cells(line) if line.startswith("|") else []
         if len(c) == 12 and re.match(r"^\d{3}[ab]?$", c[0]):
             if c[11] == "直近":
-                c[11] = head
+                c[11] = own_commit(c[0])
             if c[0] == task_id:
                 c[9], c[10], c[11], found = "済み", str(minutes), "直近", True
             line = "| " + " | ".join(c) + " |"
