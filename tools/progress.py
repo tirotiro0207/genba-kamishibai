@@ -17,6 +17,11 @@ DOCS = ROOT / "docs"
 COMPASS_TITLES = ["始点", "終点", "終点の先", "変化の質", "変化の量"]
 STATES = ["済み", "途中", "まだ"]
 MARK = {"済み": "🟩", "途中": "🟨", "まだ": "⬜"}
+# 進路図の筋（plan.md の「筋」の列の値 → 図の名前と色の名前）。上から質を上げる 3 本、その下に 2 本
+LANES = {"ピクト": ("文字 → ピクトグラム", "pict"), "安全網": ("安全網", "safe"), "直し": ("直しと人の確認", "fix"),
+         "折りたたみ": ("折りたたみ（情報量を保つ）", "fold"), "土台": ("土台と見せ方", "base")}
+START_LABEL = "11/2 12:30"  # 会期の始まり（最初のコミットの時刻の下限と同じ）
+GOAL_LABEL = "11/8 20:00"  # 提出の締め切り
 
 
 def cells(line):
@@ -52,13 +57,15 @@ def read_plan(text):
         c = cells(line)
         if in_ms and len(c) == 3 and re.match(r"^M\d$", c[0]):
             milestones.append({"id": c[0], "day": c[1], "goal": c[2]})
-        elif len(c) == 11 and re.match(r"^\d{3}[ab]?$", c[0]):
-            if c[8] not in STATES:
-                raise SystemExit(f"plan.md: {c[0]} の状態「{c[8]}」は 済み・途中・まだ のどれでもない")
+        elif len(c) == 12 and re.match(r"^\d{3}[ab]?$", c[0]):
+            if c[9] not in STATES:
+                raise SystemExit(f"plan.md: {c[0]} の状態「{c[9]}」は 済み・途中・まだ のどれでもない")
+            if c[8] not in LANES:
+                raise SystemExit(f"plan.md: {c[0]} の筋「{c[8]}」は {'・'.join(LANES)} のどれでもない")
             tasks.append({"id": c[0], "work": c[1], "milestone": c[4], "minutes": int(c[6]),
-                          "star": c[7] == "★", "state": c[8],
-                          "actual": int(c[9]) if c[9].isdigit() else None,
-                          "commit": c[10], "day": section_day})
+                          "star": c[7] == "★", "lane": c[8], "state": c[9],
+                          "actual": int(c[10]) if c[10].isdigit() else None,
+                          "commit": c[11], "day": section_day})
     return milestones, tasks
 
 
@@ -161,11 +168,11 @@ CSS = """
 --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:36px;--s-7:56px;--r:10px;
 --shadow:0 1px 2px rgba(40,34,26,.06),0 2px 8px rgba(40,34,26,.05)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
---paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--paper:#0d0d0e;--card:#1b1b1d;--ink:#ececee;--muted:#9d9da3;--line:#2f2f33;--track:#2a2a2e;
 --now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
 --k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}}
 :root[data-theme="dark"]{
---paper:#181715;--card:#22201d;--ink:#ece8e1;--muted:#a49e94;--line:#34312c;--track:#2c2a26;
+--paper:#0d0d0e;--card:#1b1b1d;--ink:#ececee;--muted:#9d9da3;--line:#2f2f33;--track:#2a2a2e;
 --now:#f2b23c;--now-soft:#3a2d12;--done:#5cc08a;--done-soft:#1a3224;--late:#ff7d70;--late-soft:#3d1c18;
 --k-build:#7ea6d8;--k-video:#73c0ad;--k-submit:#ab92d6;--k-people:#d0a764;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
@@ -184,6 +191,8 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--s-2) var(--s-4)}
 .top h1{font-size:var(--t-xl);font-weight:700;line-height:1.3}
 .top p{margin:0;font-size:var(--t-sm);color:var(--muted)}
+.theme{font:inherit;font-size:var(--t-xs);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
+.theme:hover{border-color:var(--muted)}.theme:focus-visible{outline:2px solid var(--now);outline-offset:2px}
 /* いま */
 .now{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-4) var(--s-6);align-items:center;padding:var(--s-5);border-left:8px solid var(--now)}
 .now .label{color:var(--now)}
@@ -276,23 +285,199 @@ tr.s-済み td{color:var(--muted)}
 
 SCRIPT = """
 (function(){
-  var panel=document.getElementById("detail");
-  var tags=document.querySelectorAll(".tag");
-  function show(t){
-    tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")});
-    var d=t.dataset;
-    panel.innerHTML="";
-    var h=document.createElement("div");h.className="h";
-    var b=document.createElement("b");b.textContent=d.id;h.appendChild(b);
-    var w=document.createElement("span");w.textContent=(d.star?"★ ":"")+d.work;h.appendChild(w);
-    var m=document.createElement("div");m.className="meta num";
-    m.textContent=d.state+" ・ "+d.kind+" ・ "+d.ms+" ・ 見込み "+d.min+" 分 ・ 実際 "+(d.act||"—")+" 分"+(d.commit?" ・ コミット "+d.commit:"");
-    panel.appendChild(h);panel.appendChild(m);
+  function bind(sel,id,first){
+    var panel=document.getElementById(id);
+    var tags=document.querySelectorAll(sel);
+    if(!panel||!tags.length)return;
+    function show(t){
+      tags.forEach(function(x){x.setAttribute("aria-pressed",x===t?"true":"false")});
+      var d=t.dataset;
+      panel.innerHTML="";
+      var h=document.createElement("div");h.className="h";
+      var b=document.createElement("b");b.textContent=d.id;h.appendChild(b);
+      var w=document.createElement("span");w.textContent=(d.star?"★ ":"")+d.work;h.appendChild(w);
+      var m=document.createElement("div");m.className="meta num";
+      m.textContent=d.state+" ・ "+d.kind+" ・ "+d.ms+" ・ 見込み "+d.min+" 分 ・ 実際 "+(d.act||"—")+" 分"+(d.commit?" ・ コミット "+d.commit:"");
+      panel.appendChild(h);panel.appendChild(m);
+    }
+    tags.forEach(function(t){
+      t.addEventListener("click",function(){show(t)});
+      t.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();show(t)}});
+    });
+    var f=document.querySelector(first)||tags[0];
+    if(f)show(f);
   }
-  tags.forEach(function(t){t.addEventListener("click",function(){show(t)})});
-  var first=document.querySelector(".tag.now")||tags[0];
-  if(first)show(first);
+  var tb=document.getElementById("theme"),root=document.documentElement;
+  function label(){tb.textContent=root.dataset.theme==="dark"?"明るくする":"暗くする"}
+  if(tb){label();tb.addEventListener("click",function(){root.dataset.theme=root.dataset.theme==="dark"?"light":"dark";try{localStorage.setItem("theme",root.dataset.theme)}catch(e){}label()})}
+  bind(".tag","detail",".tag.now");
+  bind(".bx","route-detail",".bx.now");
+  var sc=document.querySelector(".route-scroll"),nw=document.querySelector(".bx.now");
+  if(sc&&nw&&sc.scrollWidth>sc.clientWidth){var r=nw.getBoundingClientRect(),q=sc.getBoundingClientRect();sc.scrollLeft=Math.max(0,r.left-q.left-sc.clientWidth/2)}
 })();
+"""
+
+
+def future_label(compass):
+    """終点の先の箇条書きから「業界 3+・言葉 2」のような数を作る（・で区切った数。「など」があれば +）"""
+    items = dict(compass).get("終点の先", [])
+    parts = []
+    for it in items:
+        if ":" not in it:
+            continue
+        name, body = it.split(":", 1)
+        seg = re.search(r"(?:から|始めて、)(.+)", body)
+        text = seg.group(1) if seg else body
+        n = text.count("・") + 1
+        parts.append(f"{name.strip()} {n}{'+' if 'など' in text else ''}")
+    return "・".join(parts)
+
+
+def route_svg(d, cur):
+    """始点から終点への進路図。縦が質、横が情報量。マスを筋の上に小さな箱で並べる"""
+    e = html.escape
+    W, H = 1000, 570
+    O = (90, 500)  # 始点
+    G = (800, 150)  # 終点
+    dx, dy = G[0] - O[0], G[1] - O[1]
+    L = (dx * dx + dy * dy) ** 0.5
+    ux, uy = dx / L, dy / L  # 進む向き
+    nx, ny = uy, -ux  # 左上へ向く法線
+    offsets = {"pict": 112, "safe": 76, "fix": 40, "fold": -44, "base": -80}
+    f = lambda v: f"{v:.1f}".rstrip("0").rstrip(".")
+    P = [f'<svg class="route-svg" viewBox="0 0 {W} {H}" role="img" aria-label="始点から終点への進路図">',
+         '<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+         '<path d="M0 0L10 5L0 10z" class="r-ink-fill"/></marker><marker id="ahb" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L10 5L0 10z" class="r-ink-fill"/></marker>'
+         '<marker id="ahm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+         '<path d="M0 0L10 5L0 10z" class="r-mut-fill"/></marker></defs>']
+    # 軸
+    P.append(f'<line x1="{O[0]}" y1="{O[1]}" x2="{O[0]}" y2="40" class="r-axis" marker-end="url(#ahm)"/>')
+    P.append(f'<line x1="{O[0]}" y1="{O[1]}" x2="{G[0] + 70}" y2="{O[1]}" class="r-axis" marker-end="url(#ahm)"/>')
+    P.append(f'<text x="{O[0] - 14}" y="52" class="r-axl" text-anchor="end">質</text>')
+    P.append(f'<text x="{G[0] + 80}" y="{O[1] + 5}" class="r-axl">情報量</text>')
+    P.append(f'<line x1="{G[0]}" y1="{O[1] - 6}" x2="{G[0]}" y2="{O[1] + 6}" class="r-tick"/>')
+    P.append(f'<text x="{G[0]}" y="{O[1] + 28}" class="r-sm" text-anchor="middle">≈ 元の文</text>')
+    P.append(f'<line x1="{G[0]}" y1="{G[1] + 16}" x2="{G[0]}" y2="{O[1] - 8}" class="r-guide"/>')
+    # 終点の先
+    fut = future_label(d["compass"])
+    P.append(f'<line x1="{G[0] + 8}" y1="{G[1] - 14}" x2="{G[0] + 8}" y2="46" class="r-future" marker-end="url(#ahm)"/>')
+    P.append(f'<text x="{G[0] + 20}" y="58" class="r-sm">質をもっと</text>')
+    P.append(f'<line x1="{G[0] + 16}" y1="{G[1] + 4}" x2="{W - 30}" y2="{G[1] + 4}" class="r-future" marker-end="url(#ahm)"/>')
+    P.append(f'<text x="{W - 30}" y="{G[1] - 26}" class="r-sm" text-anchor="end">ほかの場へ</text>')
+    if fut:
+        P.append(f'<text x="{W - 30}" y="{G[1] - 9}" class="r-xs" text-anchor="end">{e(fut)}</text>')
+    # 筋と箱
+    tasks = d["tasks"]
+    for key, (label, cls) in LANES.items():
+        off = offsets[cls]
+        # 筋は軸の内側だけに引き、終点の手前で止める
+        a0 = (O[0] + nx * off, O[1] + ny * off)
+        t0 = max(30, (O[0] + 22 - a0[0]) / ux, (a0[1] - O[1] + 14) / -uy)
+        t1 = min(L - 70, (G[0] + (40 if off < 0 else -8) - a0[0]) / ux, (a0[1] - 70) / -uy)
+        a = (a0[0] + ux * t0, a0[1] + uy * t0)
+        b = (a0[0] + ux * t1, a0[1] + uy * t1)
+        P.append(f'<line x1="{f(a[0])}" y1="{f(a[1])}" x2="{f(b[0])}" y2="{f(b[1])}" class="r-lane l-{cls}"/>')
+        ts = [x for x in tasks if x["lane"] == key]
+        n = len(ts)
+        seg = ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+        step = seg / max(n, 1)
+        size = max(9, min(16, step * 0.72))
+        for i, x in enumerate(ts):
+            t = (i + 0.5) * step
+            cx, cy = a[0] + ux * t, a[1] + uy * t
+            h = size / 2
+            k, kl = kind_of(x["work"])
+            act = "" if x["actual"] is None else str(x["actual"])
+            attrs = (f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{e(label)}" data-ms="{x["milestone"]}"'
+                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}"{" data-star=\"1\"" if x["star"] else ""}')
+            P.append(f'<g class="bx pick l-{cls} s-{x["state"]}{" now" if x is cur else ""}" tabindex="0" role="button" aria-label="{x["id"]} {e(x["work"])}"{attrs}>'
+                     f'<title>{x["id"]} {e(x["work"])}</title>'
+                     f'<rect x="{f(cx - h)}" y="{f(cy - h)}" width="{f(size)}" height="{f(size)}" rx="2.5"/>')
+            if x["state"] == "済み":
+                P.append(f'<path d="M{f(cx - h * 0.5)} {f(cy)}L{f(cx - h * 0.1)} {f(cy + h * 0.4)}L{f(cx + h * 0.55)} {f(cy - h * 0.45)}" class="r-check"/>')
+            P.append("</g>")
+            if x is cur:
+                P.append(f'<circle cx="{f(cx)}" cy="{f(cy)}" r="{f(size * 0.95)}" class="r-now"/>')
+                lx, ly = cx - nx * 0, cy - 26
+                P.append(f'<g class="r-here"><line x1="{f(cx)}" y1="{f(cy - size)}" x2="{f(cx)}" y2="{f(ly + 6)}"/>'
+                         f'<text x="{f(lx)}" y="{f(ly)}" text-anchor="middle">いまここ</text></g>')
+    # 始点から終点への太い矢印（筋の上に重ねず、筋の間を通る）
+    P.append(f'<line x1="{O[0] + 8}" y1="{O[1] - 8}" x2="{G[0] - 12}" y2="{G[1] + 10}" class="r-main" marker-end="url(#ahb)"/>')
+    P.append(f'<circle cx="{O[0]}" cy="{O[1]}" r="9" class="r-pt"/><circle cx="{O[0]}" cy="{O[1]}" r="3.5" class="r-pt-in"/>')
+    P.append(f'<circle cx="{G[0]}" cy="{G[1]}" r="9" class="r-pt"/><circle cx="{G[0]}" cy="{G[1]}" r="3.5" class="r-pt-in"/>')
+    P.append(f'<text x="{O[0]}" y="{O[1] + 30}" class="r-lbl" text-anchor="middle">始点</text>'
+             f'<text x="{O[0]}" y="{O[1] + 48}" class="r-xs num" text-anchor="middle">{START_LABEL}</text>')
+    P.append(f'<text x="{G[0] + 16}" y="{G[1] + 34}" class="r-lbl">終点</text>'
+             f'<text x="{G[0] + 16}" y="{G[1] + 52}" class="r-xs num">{GOAL_LABEL}</text>')
+    P.append("</svg>")
+    return "".join(P)
+
+
+def route_section(d, cur):
+    e = html.escape
+    tasks = d["tasks"]
+    P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が情報量。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱を押すと中身が出る。</p><div class="card route-card">',
+         '<ul class="legend route-legend">'
+         + "".join(f'<li><i class="l-{c}"></i>{e(lab)}</li>' for lab, c in LANES.values())
+         + '<li><i class="lg-done"></i>済み</li><li><i class="lg-todo"></i>まだ</li></ul>',
+         '<p class="route-hint">図は横に動かせます</p>',
+         f'<div class="route-scroll">{route_svg(d, cur)}</div>',
+         '<div class="detail" id="route-detail" aria-live="polite"><span class="empty">箱を押すと、ここにそのマスの中身が出ます</span></div>',
+         '<dl class="route-key"><div><dt>縦（質）</dt><dd>伝わるか。3 本の筋で上げる: 文字 → ピクトグラム・安全網・直しと人の確認。</dd></div>'
+         '<div><dt>横（情報量）</dt><dd>元の文から、経路つきでカードに持ってこられた量。終点は「カード ≈ 元の文」。ピクトグラムにしても情報は減らず、折りたたんでいるだけで、部品を開けば元の条文に戻れる。これを進めるのが「折りたたみ」の筋。</dd></div></dl>',
+         '<div class="lane-bars">']
+    for key, (label, cls) in LANES.items():
+        ts = [x for x in tasks if x["lane"] == key]
+        done = sum(x["state"] == "済み" for x in ts)
+        w = round(100 * done / len(ts)) if ts else 0
+        P.append(f'<div class="lb"><span class="lb-name"><i class="l-{cls}"></i>{e(label)}</span><span class="num lb-n">{done} / {len(ts)}</span>'
+                 f'<div class="lb-bar"><i class="l-{cls}" style="width:{w}%"></i></div></div>')
+    P.append("</div></div></section>")
+    return "".join(P)
+
+
+ROUTE_CSS = """
+:root{--l-pict:#3f6ea6;--l-safe:#2f8a80;--l-fix:#7657a3;--l-fold:#9c7432;--l-base:#837e76}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--l-pict:#7ea6d8;--l-safe:#6cc4b8;--l-fix:#ab92d6;--l-fold:#d0a764;--l-base:#a9a9af}}
+:root[data-theme="dark"]{--l-pict:#7ea6d8;--l-safe:#6cc4b8;--l-fix:#ab92d6;--l-fold:#d0a764;--l-base:#a9a9af}
+.l-pict{--lc:var(--l-pict)}.l-safe{--lc:var(--l-safe)}.l-fix{--lc:var(--l-fix)}.l-fold{--lc:var(--l-fold)}.l-base{--lc:var(--l-base)}
+.route-lead{margin:calc(-1 * var(--s-2)) 0 0;font-size:var(--t-sm);color:var(--muted);max-width:60em}
+.route-card{padding:var(--s-4);display:flex;flex-direction:column;gap:var(--s-3)}
+.route-legend i{background:var(--lc)}
+.route-legend .lg-done{background:var(--ink)}.route-legend .lg-todo{background:transparent;border:1.5px solid var(--ink)}
+.route-scroll{overflow-x:auto}.route-hint{display:none;margin:0;font-size:var(--t-xs);color:var(--muted)}
+.route-svg{display:block;width:100%;height:auto}
+.route-svg text{font-family:var(--body);fill:var(--ink)}
+.r-axis{stroke:var(--muted);stroke-width:2}.r-tick{stroke:var(--muted);stroke-width:2}
+.r-guide{stroke:var(--line);stroke-width:1.5;stroke-dasharray:3 5}
+.r-future{stroke:var(--muted);stroke-width:2;stroke-dasharray:6 6;fill:none}
+.r-ink-fill{fill:var(--ink)}.r-mut-fill{fill:var(--muted)}
+.r-axl{font-size:17px;font-weight:700}.r-lbl{font-size:16px;font-weight:700}.r-sm{font-size:14px}
+.route-svg .r-xs{font-size:12px;fill:var(--muted)}
+.r-main{stroke:var(--ink);stroke-width:7;stroke-linecap:round;opacity:.9}
+.r-pt{fill:var(--card);stroke:var(--ink);stroke-width:3}.r-pt-in{fill:var(--ink)}
+.r-lane{stroke:var(--lc);stroke-width:2;stroke-dasharray:2 5;opacity:.7}
+.bx{cursor:pointer;outline:none}
+.bx rect{fill:var(--card);stroke:var(--lc);stroke-width:2}
+.bx.s-済み rect{fill:var(--lc)}
+.bx.s-途中 rect{fill:var(--now-soft);stroke:var(--now)}
+.bx[data-star] rect{stroke-width:3}
+.r-check{fill:none;stroke:var(--card);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.bx[aria-pressed="true"] rect,.bx:focus-visible rect{stroke:var(--ink);stroke-width:3.5}
+.r-now{fill:none;stroke:var(--now);stroke-width:3;pointer-events:none}
+.r-here line{stroke:var(--now);stroke-width:2}.r-here text{font-size:13px;font-weight:700;fill:var(--now)}
+.route-key{margin:0;display:grid;gap:var(--s-1);font-size:var(--t-sm)}
+.route-key div{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:var(--s-2)}
+.route-key dt{font-weight:700}.route-key dd{margin:0;color:var(--muted)}
+.lane-bars{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--s-3)}
+.lb{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s-1) var(--s-2);align-items:baseline;min-width:0}
+.lb-name{font-size:var(--t-xs);display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-name i{flex:none;width:10px;height:10px;border-radius:2px;background:var(--lc)}
+.lb-n{font-size:var(--t-xs);color:var(--muted)}
+.lb-bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
+.lb-bar i{display:block;height:100%;background:var(--lc)}
+@media (max-width:560px){.route-key div{grid-template-columns:1fr}.route-svg{min-width:720px}.route-hint{display:block}}
+@media (prefers-reduced-motion:no-preference){.bx rect{transition:stroke-width .12s ease}}
 """
 
 
@@ -308,10 +493,11 @@ def render_html(d):
     left = d["left_before"] + d["left_today"]
     left_min = sum(x["minutes"] for x in left)
     over = left_min > d["today_plan_min"]
-    P = ['<!doctype html><html lang="ja"><head><meta charset="utf-8">',
+    P = ['<!doctype html><html lang="ja" data-theme="dark"><head><meta charset="utf-8">',
+         '<script>try{var m=localStorage.getItem("theme");if(m==="light"||m==="dark")document.documentElement.dataset.theme=m}catch(e){}</script>',
          '<meta name="viewport" content="width=device-width,initial-scale=1">',
-         f"<title>現場の紙芝居 進み具合</title>{FONTS}<style>{CSS}</style></head><body><div class=\"wrap\">",
-         f'<header class="top"><h1>現場の紙芝居　進み具合</h1><p>plan.md から自動で作成 ・ <span class="num" data-generated>{d["now"]:%Y-%m-%d %H:%M}</span>（日本時間）</p></header>']
+         f"<title>現場の紙芝居 進み具合</title>{FONTS}<style>{CSS}{ROUTE_CSS}</style></head><body><div class=\"wrap\">",
+         f'<header class="top"><h1>現場の紙芝居　進み具合</h1><p>plan.md から自動で作成 ・ <span class="num" data-generated>{d["now"]:%Y-%m-%d %H:%M}</span>（日本時間）</p><button type="button" class="theme" id="theme" aria-label="明るい画面と暗い画面を切り替える">明るくする</button></header>']
     # いま
     P.append(f'<section class="now card{" over" if over else ""}"><div>')
     if cur:
@@ -321,6 +507,7 @@ def render_html(d):
     else:
         P.append('<div class="label">いま</div><h2>全部のマスが済んだ</h2>')
     P.append(f'</div><div class="rest"><div class="label">今日の残り（{today_label}）</div><b>{left_min}<span>分</span></b></div></section>')
+    P.append(route_section(d, cur))
     # 数字 4 枚
     w = round(100 * t["done_min"] / t["min"]) if t["min"] else 0
     P.append('<section class="stats">'
@@ -391,11 +578,11 @@ def mark_done(task_id, minutes):
     out, found = [], False
     for line in path.read_text(encoding="utf-8").split("\n"):
         c = cells(line) if line.startswith("|") else []
-        if len(c) == 11 and re.match(r"^\d{3}[ab]?$", c[0]):
-            if c[10] == "直近":
-                c[10] = head
+        if len(c) == 12 and re.match(r"^\d{3}[ab]?$", c[0]):
+            if c[11] == "直近":
+                c[11] = head
             if c[0] == task_id:
-                c[8], c[9], c[10], found = "済み", str(minutes), "直近", True
+                c[9], c[10], c[11], found = "済み", str(minutes), "直近", True
             line = "| " + " | ".join(c) + " |"
         out.append(line)
     if not found:
