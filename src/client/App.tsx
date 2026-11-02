@@ -3,6 +3,7 @@ import "./app.css";
 import { AuditScreen } from "./audit/AuditScreen";
 import { CardScreen } from "./card/CardScreen";
 import { FixScreen } from "./fix/FixScreen";
+import { FoldScreen } from "./fold/FoldScreen";
 import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
@@ -42,6 +43,8 @@ export function App() {
   if (r[0] === "t" && r[2] === "route" && r[3]) body = <RouteScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/fix/<カード> ・ 枠と指示（監修者。直したい部分を枠で囲んで送る）
   if (r[0] === "t" && r[2] === "fix" && r[3]) body = <FixScreen tenant={r[1]} cardId={r[3]} />;
+  // #/t/<テナント>/fold/<カード> ・ 折りたたみ（元のページが積み重なり、1 枚・0 字にたたまれる）
+  if (r[0] === "t" && r[2] === "fold" && r[3]) body = <FoldScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
