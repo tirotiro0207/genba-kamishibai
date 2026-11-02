@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Claim, claimsFromItem, type Judgement, type Score, score, sumScores } from "../src/shared/eval/score";
+import { type Claim, claimsFromItem, type Judgement, repairJudgement, type Score, score, sumScores } from "../src/shared/eval/score";
 
 export const ROOT = join(import.meta.dirname, "..");
 /** 見張るもの: 取り出しのプロンプトとコード、採点の判定 */
@@ -16,7 +16,7 @@ const STATE_FILE = "eval/hook-state.json";
 const NUMBERS = "docs/numbers.md";
 const HEADING = "## 変更のたびの 20 項目（調整用）";
 const TABLE_HEAD =
-  "| 日時（日本時間） | 見張るファイルのハッシュ | 項目 | 正解 | 答え | 組 | 言い方の違い | 漏れ | 取り出しすぎ | 危ない読み違い | 費用（USD） | 時間（秒） |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
+  "| 日時（日本時間） | 見張るファイルのハッシュ | 項目 | 正解 | 答え | 組 | 言い方の違い | 漏れ | 取り出しすぎ | 危ない読み違い | 判定の直し | 費用（USD） | 時間（秒） |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|";
 
 export interface TuneItem {
   no: number;
@@ -51,20 +51,22 @@ export function loadTuneItems(root = ROOT): TuneItem[] {
   return JSON.parse(readFileSync(join(root, TUNE_FILE), "utf-8")) as TuneItem[];
 }
 
-export async function runEval(items: TuneItem[], extract: Extractor, judge: JudgeFn): Promise<Score> {
-  const scores = await Promise.all(
+/** 20 項目を流す。dropped は、判定の崩れを直したときに落とした組の数 */
+export async function runEval(items: TuneItem[], extract: Extractor, judge: JudgeFn): Promise<{ score: Score; dropped: number }> {
+  const results = await Promise.all(
     items.map(async (it) => {
       const gold = claimsFromItem(it);
       const pred = await extract(it.text);
-      return score(gold, pred, await judge(gold, pred));
+      const { judgement, dropped } = repairJudgement(gold.length, pred.length, await judge(gold, pred));
+      return { s: score(gold, pred, judgement), dropped };
     }),
   );
-  return sumScores(scores);
+  return { score: sumScores(results.map((r) => r.s)), dropped: results.reduce((n, r) => n + r.dropped, 0) };
 }
 
-export function historyRow(at: Date, hash: string, n: number, s: Score, usd: number, sec: number): string {
+export function historyRow(at: Date, hash: string, n: number, s: Score, dropped: number, usd: number, sec: number): string {
   const jst = new Date(at.getTime() + 9 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
-  return `| ${jst} | ${hash} | ${n} | ${s.gold} | ${s.pred} | ${s.matched} | ${s.wording} | ${s.missed} | ${s.extra} | ${s.dangerous} | ${usd.toFixed(4)} | ${sec.toFixed(0)} |`;
+  return `| ${jst} | ${hash} | ${n} | ${s.gold} | ${s.pred} | ${s.matched} | ${s.wording} | ${s.missed} | ${s.extra} | ${s.dangerous} | ${dropped} | ${usd.toFixed(4)} | ${sec.toFixed(0)} |`;
 }
 
 /** numbers.md の履歴の表に 1 行足す。節が無ければ末尾に作る */
@@ -102,9 +104,9 @@ async function main() {
   const runner = await makeHookRunner();
   const items = loadTuneItems();
   const t0 = Date.now();
-  const s = await runEval(items, runner.extract, runner.judge);
+  const { score: s, dropped } = await runEval(items, runner.extract, runner.judge);
   const sec = (Date.now() - t0) / 1000;
-  const row = historyRow(new Date(), hash, items.length, s, await runner.usdSince(t0), sec);
+  const row = historyRow(new Date(), hash, items.length, s, dropped, await runner.usdSince(t0), sec);
   writeFileSync(join(ROOT, NUMBERS), appendHistory(readFileSync(join(ROOT, NUMBERS), "utf-8"), row), "utf-8");
   writeFileSync(join(ROOT, STATE_FILE), JSON.stringify({ hash }, null, 2) + "\n", "utf-8");
   console.log(row);

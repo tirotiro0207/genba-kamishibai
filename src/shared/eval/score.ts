@@ -49,6 +49,25 @@ export function validateJudgement(goldCount: number, predCount: number, j: Judge
   }
 }
 
+/**
+ * AI の判定の崩れを直す。範囲の外の番号と、2 回目以降に同じものを組にした組を落とす（最初の組を残す）。
+ * 落とした数を返し、採点の記録に残す。
+ */
+export function repairJudgement(goldCount: number, predCount: number, j: Judgement): { judgement: Judgement; dropped: number } {
+  const g = new Set<number>();
+  const p = new Set<number>();
+  const pairs = j.pairs.filter((pair) => {
+    const ok = pair.gold >= 0 && pair.gold < goldCount && pair.pred >= 0 && pair.pred < predCount && !g.has(pair.gold) && !p.has(pair.pred);
+    if (ok) {
+      g.add(pair.gold);
+      p.add(pair.pred);
+    }
+    return ok;
+  });
+  const extras = [...new Set(j.dangerousExtras)].filter((e) => e >= 0 && e < predCount && !p.has(e));
+  return { judgement: { pairs, dangerousExtras: extras }, dropped: j.pairs.length - pairs.length + (j.dangerousExtras.length - extras.length) };
+}
+
 export function score(gold: Claim[], pred: Claim[], j: Judgement): Score {
   validateJudgement(gold.length, pred.length, j);
   const count = (v: Verdict) => j.pairs.filter((p) => p.verdict === v).length;
