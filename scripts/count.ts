@@ -24,13 +24,13 @@ export function taskIds(subject: string): string[] {
   return m ? m[1].split("・") : [];
 }
 
-/** 作業の表から、済みのマスの番号 → 「コミット」の欄（ハッシュでなければ空） */
+/** 作業の表から、済みのマスの番号 → 「コミット」の欄の最初のコミット（古い順に「, 」で並ぶ。ハッシュでなければ空） */
 export function doneTasks(plan: string): Map<string, string> {
   const done = new Map<string, string>();
   for (const line of plan.split(/\r?\n/)) {
     const c = line.split("|").map((x) => x.trim());
     if (!/^\d{3}[a-z]?$/.test(c[1] ?? "") || !c.includes("済み")) continue;
-    const commit = c[c.length - 2] ?? "";
+    const commit = (c[c.length - 2] ?? "").split(/[,、\s]+/)[0];
     done.set(c[1], /^[0-9a-f]{7,40}$/.test(commit) ? commit : "");
   }
   return done;
