@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { audit } from "./audit";
 import { cards } from "./cards";
+import { files } from "./files";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
@@ -36,6 +37,7 @@ app.route("/api/t/:tenant/read", read);
 app.route("/api/t/:tenant/cards", cards);
 app.route("/api/t/:tenant/audit", audit);
 app.route("/api/t/:tenant/reset", reset);
+app.route("/api/t/:tenant/files", files);
 app.route("/api/t/:tenant/trials", trials);
 
 export default app;
