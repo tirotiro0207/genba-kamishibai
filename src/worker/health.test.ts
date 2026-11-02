@@ -10,6 +10,6 @@ describe("骨組み（001）", () => {
   it("/api/health が DB を読んで答える", async () => {
     const res = await exports.default.fetch("http://local/api/health");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, tenants: 0 });
+    expect(await res.json()).toEqual({ ok: true, tenants: 2 });
   });
 });
