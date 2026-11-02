@@ -24,6 +24,8 @@ MARK = {"済み": "🟩", "途中": "🟨", "まだ": "⬜"}
 # 進路図の筋（plan.md の「筋」の列の値 → 図の名前と色の名前）。上から質を上げる 3 本、その下に 2 本
 LANES = {"ピクト": ("文字 → ピクトグラム", "pict"), "安全網": ("安全網", "safe"), "直し": ("直しと人の確認", "fix"),
          "折りたたみ": ("折りたたみ（情報量を保つ）", "fold"), "土台": ("土台と見せ方", "base")}
+EXTRA = "後から足した"  # 作業の欄にこの言葉があるマスは、最初の表に無かったマス
+RETAKE = "※取り直し"  # 確かめ方の欄にこの印があるマスは、絵が決まったら録画を取り直す
 START_LABEL = "11/2 12:30"  # 会期の始まり（最初のコミットの時刻の下限と同じ）
 GOAL_LABEL = "11/8 20:00"  # 提出の締め切り
 
@@ -70,7 +72,11 @@ def read_plan(text):
                           "star": c[7] == "★", "lane": c[8], "state": c[9],
                           "actual": int(re.match(r"\d+", c[10]).group()) if re.match(r"^\d+(（目安）)?$", c[10]) else None,
                           "approx": c[10].endswith("（目安）"),
-                          "commit": c[11], "day": section_day})
+                          "commit": c[11], "day": section_day,
+                          # 最初の表に無く、直しや新しい観点から後で生まれたマス。進路図では右下にまとめる
+                          "extra": EXTRA in c[1],
+                          # 録画に絵が映るマス。ピクトグラムが決まったら録画を取り直す（11/3 作者）
+                          "retake": RETAKE in c[3]})
     return milestones, tasks
 
 
@@ -129,7 +135,7 @@ def render_md(d):
           "| 目印 | 日 | 済んだマス / 全部 | 済んだ分 / 見込みの分 | 進み |", "|---|---|---|---|---|"]
     for m in d["ms"]:
         L.append(f"| {m['id']} | {m['day']} | {m['done']} / {m['n']} | {m['done_min']} / {m['min']} | {pct(m['done_min'], m['min'])} |")
-    L += ["", "## 日ごとの全マス", "", "🟩 済み　🟨 途中　⬜ まだ　**★** 一番遅れてはいけない筋", ""]
+    L += ["", "## 日ごとの全マス", "", "🟩 済み　🟨 途中　⬜ まだ　**★** 一番遅れてはいけない筋　※ 絵が決まったら録画を取り直す", ""]
     for day in d["days"]:
         ts = [x for x in d["tasks"] if x["day"] == day]
         L += [f"### {day}（{sum(x['state'] == '済み' for x in ts)} / {len(ts)} マス）", "",
@@ -137,7 +143,7 @@ def render_md(d):
         for x in ts:
             star = "**★**" if x["star"] else ""
             work = f"**{x['work']}**" if x["star"] else x["work"]
-            L.append(f"| {MARK[x['state']]} {x['state']} | {star} | {x['id']} | {work} | {x['milestone']} | {x['minutes']} | "
+            L.append(f"| {MARK[x['state']]} {x['state']} | {star} | {x['id']}{' ※' if x['retake'] else ''} | {work} | {x['milestone']} | {x['minutes']} | "
                      f"{act_label(x)} | {x['commit']} |")
         L.append("")
     L += [f"## 今日の残り（{d['today'].month}/{d['today'].day}）", ""]
@@ -147,6 +153,14 @@ def render_md(d):
         L.append("")
     L.append(f"今日のもの: {len(d['left_today'])} マス、{sum(x['minutes'] for x in d['left_today'])} 分")
     L += [f"- {MARK[x['state']]} {'★ ' if x['star'] else ''}{x['id']} {x['work']}（{x['minutes']} 分）" for x in d["left_today"]]
+    rt = [x for x in d["tasks"] if x["retake"]]
+    L += ["", "## ※ 録画の取り直し（ピクトグラムが決まったら）", "",
+          f"録画に絵が映るマス: {len(rt)}（済み {sum(x['state'] == '済み' for x in rt)}）。いまの録画は「直す前」の素材として残し、絵が決まったら撮り直す。これから録画するマスにも付ける", ""]
+    L += [f"- {MARK[x['state']]} {x['id']} {x['work']}" for x in rt]
+    extra = [x for x in d["tasks"] if x["extra"]]
+    L += ["", "## 後から生まれたマス", "",
+          f"最初の表に無く、直しや新しい観点から足したマス: {len(extra)}（進路図では右下にまとめる）", ""]
+    L += [f"- {MARK[x['state']]} {x['id']} {x['work']}（{LANES[x['lane']][0]}）" for x in extra]
     return "\n".join(L) + "\n"
 
 
@@ -260,6 +274,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .tag.s-途中{background:repeating-linear-gradient(135deg,var(--kc) 0 5px,var(--card) 5px 8px)}
 .tag.star{box-shadow:inset 0 0 0 2px var(--ink)}
 .tag.now{box-shadow:inset 0 0 0 3px var(--now),0 0 0 2px var(--now)}
+.tag.retake::after{content:"※";position:absolute;top:1px;right:2px;font-size:10px;font-weight:700;line-height:1;color:var(--card);pointer-events:none}
 .tag[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px;z-index:1}
 .tag:focus-visible{outline:3px solid var(--now);outline-offset:2px}
 .k-build{--kc:var(--k-build)}.k-video{--kc:var(--k-video)}.k-submit{--kc:var(--k-submit)}.k-people{--kc:var(--k-people)}
@@ -396,6 +411,28 @@ def route_svg(d, cur):
         P.append(f'<text x="{W - 30}" y="{G[1] - 9}" class="r-xs" text-anchor="end">{e(fut)}</text>')
     # 筋と箱
     tasks = d["tasks"]
+
+    def box(x, cx, cy, size, label, cls):
+        h = size / 2
+        act = act_label(x)
+        attrs = (f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{e(label)}" data-ms="{x["milestone"]}"'
+                 f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}')
+        P.append(f'<g class="bx pick l-{cls} s-{x["state"]}{" now" if x is cur else ""}" tabindex="0" role="button" aria-label="{x["id"]} {e(x["work"])}"{attrs}>'
+                 f'<title>{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}</title>'
+                 f'<rect x="{f(cx - h)}" y="{f(cy - h)}" width="{f(size)}" height="{f(size)}" rx="2.5"/>')
+        if x["state"] == "済み":
+            P.append(f'<path d="M{f(cx - h * 0.5)} {f(cy)}L{f(cx - h * 0.1)} {f(cy + h * 0.4)}L{f(cx + h * 0.55)} {f(cy - h * 0.45)}" class="r-check"/>')
+        P.append("</g>")
+        if x["retake"]:
+            P.append(f'<text x="{f(cx + h + 0.5)}" y="{f(cy - h + 3)}" class="r-retake">※</text>')
+        if x is cur:
+            P.append(f'<circle cx="{f(cx)}" cy="{f(cy)}" r="{f(size * 0.95)}" class="r-now"/>')
+            ly = cy - 26
+            # 文字の後ろに薄い黄色の札を敷き、下の箱と重なっても読めるようにする
+            P.append(f'<g class="r-here"><line x1="{f(cx)}" y1="{f(cy - size)}" x2="{f(cx)}" y2="{f(ly + 6)}"/>'
+                     f'<rect x="{f(cx - 34)}" y="{f(ly - 15)}" width="68" height="21" rx="5"/>'
+                     f'<text x="{f(cx)}" y="{f(ly)}" text-anchor="middle">いまここ</text></g>')
+
     for key, (label, cls) in LANES.items():
         off = offsets[cls]
         # 筋は軸の内側だけに引き、終点の手前で止める
@@ -405,32 +442,30 @@ def route_svg(d, cur):
         a = (a0[0] + ux * t0, a0[1] + uy * t0)
         b = (a0[0] + ux * t1, a0[1] + uy * t1)
         P.append(f'<line x1="{f(a[0])}" y1="{f(a[1])}" x2="{f(b[0])}" y2="{f(b[1])}" class="r-lane l-{cls}"/>')
-        ts = [x for x in tasks if x["lane"] == key]
+        # 後から生まれたマスは筋の上に並べず、右下にまとめる
+        ts = [x for x in tasks if x["lane"] == key and not x["extra"]]
         n = len(ts)
         seg = ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
         step = seg / max(n, 1)
         size = max(9, min(16, step * 0.72))
         for i, x in enumerate(ts):
             t = (i + 0.5) * step
-            cx, cy = a[0] + ux * t, a[1] + uy * t
-            h = size / 2
-            k, kl = kind_of(x["work"])
-            act = act_label(x)
-            attrs = (f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{e(label)}" data-ms="{x["milestone"]}"'
-                     f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}')
-            P.append(f'<g class="bx pick l-{cls} s-{x["state"]}{" now" if x is cur else ""}" tabindex="0" role="button" aria-label="{x["id"]} {e(x["work"])}"{attrs}>'
-                     f'<title>{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}</title>'
-                     f'<rect x="{f(cx - h)}" y="{f(cy - h)}" width="{f(size)}" height="{f(size)}" rx="2.5"/>')
-            if x["state"] == "済み":
-                P.append(f'<path d="M{f(cx - h * 0.5)} {f(cy)}L{f(cx - h * 0.1)} {f(cy + h * 0.4)}L{f(cx + h * 0.55)} {f(cy - h * 0.45)}" class="r-check"/>')
-            P.append("</g>")
-            if x is cur:
-                P.append(f'<circle cx="{f(cx)}" cy="{f(cy)}" r="{f(size * 0.95)}" class="r-now"/>')
-                lx, ly = cx - nx * 0, cy - 26
-                # 文字の後ろに薄い黄色の札を敷き、下の箱と重なっても読めるようにする
-                P.append(f'<g class="r-here"><line x1="{f(cx)}" y1="{f(cy - size)}" x2="{f(cx)}" y2="{f(ly + 6)}"/>'
-                         f'<rect x="{f(lx - 34)}" y="{f(ly - 15)}" width="68" height="21" rx="5"/>'
-                         f'<text x="{f(lx)}" y="{f(ly)}" text-anchor="middle">いまここ</text></g>')
+            box(x, a[0] + ux * t, a[1] + uy * t, size, label, cls)
+    # 後から生まれたマス（最初の表に無く、直しや新しい観点から足したもの）。色は筋の色、置き場は右下の隅
+    extra = [x for x in tasks if x["extra"]]
+    if extra:
+        per, sz, gap = 14, 16, 8
+        rows = -(-len(extra) // per)
+        bw, bh = per * (sz + gap) + gap + 6, 34 + rows * (sz + gap)
+        bx0, by0 = W - 14 - bw, O[1] - 10 - bh
+        P.append(f'<g class="r-extra"><rect x="{bx0}" y="{by0}" width="{bw}" height="{bh}" rx="8"/>'
+                 f'<text x="{bx0 + 10}" y="{by0 + 19}" class="r-sm">後から生まれたマス</text>'
+                 f'<text x="{bx0 + bw - 10}" y="{by0 + 19}" class="r-xs" text-anchor="end">直しや新しい観点から足した {len(extra)}</text></g>')
+        for i, x in enumerate(extra):
+            label, cls = LANES[x["lane"]]
+            cx = bx0 + gap + 3 + (i % per) * (sz + gap) + sz / 2
+            cy = by0 + 34 + (i // per) * (sz + gap) + sz / 2
+            box(x, cx, cy, sz, label, cls)
     # 始点から終点への太い矢印（筋の上に重ねず、筋の間を通る）
     P.append(f'<line x1="{O[0] + 8}" y1="{O[1] - 8}" x2="{G[0] - 12}" y2="{G[1] + 10}" class="r-main" marker-end="url(#ahb)"/>')
     P.append(f'<circle cx="{O[0]}" cy="{O[1]}" r="9" class="r-pt"/><circle cx="{O[0]}" cy="{O[1]}" r="3.5" class="r-pt-in"/>')
@@ -449,7 +484,8 @@ def route_section(d, cur):
     P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が情報量。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱に指を置くか押すと中身が出る。</p><div class="card route-card">',
          '<ul class="legend route-legend">'
          + "".join(f'<li><i class="l-{c}"></i>{e(lab)}</li>' for lab, c in LANES.values())
-         + '<li><i class="lg-done"></i>済み</li><li><i class="lg-todo"></i>まだ</li></ul>',
+         + '<li><i class="lg-done"></i>済み</li><li><i class="lg-todo"></i>まだ</li>'
+         '<li><i class="lg-extra"></i>右下の枠＝後から生まれたマス（色は筋）</li><li><b class="lg-rt">※</b>絵が決まったら録画を取り直す</li></ul>',
          '<p class="route-hint">図は横に動かせます</p>',
          f'<div class="route-scroll">{route_svg(d, cur)}</div>',
          '<div class="detail" id="route-detail" aria-live="polite"><span class="empty">箱に指を置くか押すと、ここにそのマスの中身が出ます</span></div>',
@@ -462,7 +498,12 @@ def route_section(d, cur):
         w = round(100 * done / len(ts)) if ts else 0
         P.append(f'<div class="lb"><span class="lb-name"><i class="l-{cls}"></i>{e(label)}</span><span class="num lb-n">{done} / {len(ts)}</span>'
                  f'<div class="lb-bar"><i class="l-{cls}" style="width:{w}%"></i></div></div>')
-    P.append("</div></div></section>")
+    P.append("</div>")
+    rt = [x for x in tasks if x["retake"]]
+    if rt:
+        P.append(f'<p class="route-retake"><b>※ 録画の取り直し</b>（ピクトグラムが決まったら）: {len(rt)} マス・済み {sum(x["state"] == "済み" for x in rt)}。'
+                 'いまの録画は「直す前」の素材として残す。<span class="num">' + "・".join(x["id"] for x in rt) + "</span></p>")
+    P.append("</div></section>")
     return "".join(P)
 
 
@@ -506,6 +547,11 @@ ROUTE_CSS = """
 .lb-n{font-size:var(--t-xs);color:var(--muted)}
 .lb-bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
 .lb-bar i{display:block;height:100%;background:var(--lc)}
+.r-extra rect{fill:var(--card);stroke:var(--muted);stroke-width:1.5;stroke-dasharray:5 4}
+.route-svg .r-retake{font-size:11px;font-weight:700;fill:var(--ink);pointer-events:none}
+.route-legend .lg-extra{background:transparent;border:1.5px dashed var(--muted)}
+.lg-rt{font-weight:700;color:var(--ink)}
+.route-retake{margin:0;font-size:var(--t-xs);color:var(--muted);line-height:1.7}.route-retake b{color:var(--ink)}
 @media (max-width:560px){.route-key div{grid-template-columns:1fr}.route-svg{min-width:720px}.route-hint{display:block}}
 @media (prefers-reduced-motion:no-preference){.bx rect{transition:stroke-width .12s ease}}
 """
@@ -562,14 +608,14 @@ def render_html(d):
     # 日ごとの横棒
     P.append('<section class="sec"><h2>日ごとのマス<small>札の長さは見込みの分。指を置くか押すと中身が出る</small></h2><ul class="legend">'
              + "".join(f'<li><i class="k-{k}" style="background:var(--kc)"></i>{lab}</li>' for k, lab, _ in KINDS)
-             + '<li>薄い札＝済み</li><li>太い枠＝★ 遅れてはいけない筋</li></ul><div class="lanes card">')
+             + '<li>薄い札＝済み</li><li>太い枠＝★ 遅れてはいけない筋</li><li>※＝絵が決まったら録画を取り直す</li></ul><div class="lanes card">')
     for day in d["days"]:
         ts = [x for x in tasks if x["day"] == day]
         is_today = day_key(day) == today_md
         P.append(f'<div class="lane{" today" if is_today else ""}"><div class="d"><b>{e(day)}</b><span class="num">{sum(x["state"] == "済み" for x in ts)}/{len(ts)}</span></div><div class="track">')
         for x in ts:
             k, lab = kind_of(x["work"])
-            cls = f'tag k-{k} s-{x["state"]}' + (" star" if x["star"] else "") + (" now" if x is cur else "")
+            cls = f'tag k-{k} s-{x["state"]}' + (" star" if x["star"] else "") + (" now" if x is cur else "") + (" retake" if x["retake"] else "")
             act = act_label(x)
             P.append(f'<button type="button" class="{cls}" style="--w:{x["minutes"]}" aria-pressed="false" aria-label="{x["id"]} {e(x["work"])}" title="{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}"'
                      f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{lab}" data-ms="{x["milestone"]}"'
@@ -587,7 +633,7 @@ def render_html(d):
         for x in ts:
             k, lab = kind_of(x["work"])
             P.append(f'<tr class="s-{x["state"]}"><td><span class="st s-{x["state"]}">{x["state"]}</span></td>'
-                     f'<td class="n">{"<span class=\"star-mark\">★</span> " if x["star"] else ""}{x["id"]}</td><td class="w">{e(x["work"])}</td>'
+                     f'<td class="n">{"<span class=\"star-mark\">★</span> " if x["star"] else ""}{x["id"]}{" ※" if x["retake"] else ""}</td><td class="w">{e(x["work"])}</td>'
                      f'<td><span class="kd k-{k}"><i></i>{lab}</span></td><td class="n">{x["milestone"]}</td><td class="n">{x["minutes"]}</td>'
                      f'<td class="n">{act_label(x) or "—"}</td><td class="n">{e(x["commit"])}</td></tr>')
         P.append("</tbody></table></div></details>")
