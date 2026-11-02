@@ -19,5 +19,8 @@ test("監修者の役で入り、1 枚の記録を順に追う", async ({ page, 
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   await page.getByTestId("audit-as-trainer-1").click();
-  await expect(page.getByTestId("audit-chain")).toBeVisible();
+  await expect(page.getByTestId("audit-chain")).toContainText("書き換え・消した跡は無い");
+  for (const s of [1, 2, 3, 4, 5]) await expect(page.getByTestId(`audit-step-${s}`)).toBeVisible();
+  await expect(page.locator(".audit-row").first()).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("audit-trainer.png"), fullPage: true });
 });
