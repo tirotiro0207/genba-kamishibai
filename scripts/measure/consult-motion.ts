@@ -5,7 +5,10 @@
 // 5 秒の CSS の動きを 1/30 秒ずつ止めて撮り、ffmpeg で動画にし、返させた時刻のコマを動画から切り出す。
 // 出力はリポジトリの private/picto/consult-motion（git に入れない）。
 //
+// 2 回目の直し（CONSULT_ROUND=3）は、1 回目の結果を下絵にして、残った 3 点（近すぎる・ヘルメットの傾き・何も指さない手）も直させる。
+//
 //   npx tsx scripts/measure/consult-motion.ts
+//   CONSULT_ROUND=3 npx tsx scripts/measure/consult-motion.ts
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,8 +20,9 @@ import { privatePath } from "../../src/node/private-dir";
 import { costUsd, guardedCall } from "../../src/shared/claude";
 import { checkStyle } from "../../src/shared/picto/style";
 
-const base = privatePath("picto", "free-motion");
-const out = privatePath("picto", "consult-motion");
+const ROUND = Number(process.env.CONSULT_ROUND || "2");
+const base = privatePath("picto", ROUND === 2 ? "free-motion" : "consult-motion");
+const out = privatePath("picto", ROUND === 2 ? "consult-motion" : `consult-motion-r${ROUND}`);
 mkdirSync(out, { recursive: true });
 const W = 1000;
 const H = 750;
@@ -37,7 +41,10 @@ transform を動かす要素には transform-box: fill-box と transform-origin 
 1. かぶり物の向き: ヘルメットにも帽子にも、つば（ひさし）を顔の向いている側にだけ出す。新人が振り向いたら、つばも一緒に向きを変える（かぶり物を、向きを反転させる g の中に入れる）。ヘルメットは左右対称の半円にしない
 2. 重ねない: 腕・手・持ち物を、自分や相手の顔の前に通さない。2 人の体と体は、いちばん近づいたときも胴 1 つ分（60px）以上あける。吹き出しは人の頭と体にかぶせない
 3. 施工管理（上の人・黒い帽子）は、片手に管理表（クリップの付いた板に、横線と四角のチェック欄が数行）をずっと持つ。答えるときは、管理表を見てから、もう片方の手を軽く上げる（相手の顔の方へ伸ばさない）
-
+${ROUND >= 3 ? `4. 近すぎない: 聞くときも答えるときも、2 人の胴と胴の間を 120px 以上あける。管理表も相手の体に触れない
+5. うなずきは頭を少し下げるだけにする。かぶり物は頭にぴったり乗せたまま、頭と一緒に動かし、傾けて浮かせない
+6. 答えるとき、施工管理の空いた手は、管理表の 1 行を指で指す。何も無い空中へ手を上げない
+` : ""}
 ## 絵柄
 - 色は黒と灰色（R=G=B）だけ。白は、背景・吹き出しの中・新人のヘルメット・管理表の紙だけ。赤は使わない
 - 文字・数字は一切置かない（<text> を使わない。「？」「✓」も path で描く）
