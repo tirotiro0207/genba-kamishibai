@@ -110,12 +110,16 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, icon = false)
     `<rect x="${n(x)}" y="${n(y)}" width="${n(ww)}" height="${n(hh)}" rx="${n(r)}" fill="${fill}" stroke="${stroke}" stroke-width="${n(sw)}"/>`;
   const poly = (pts: Pt[], fill: string) => `<polygon points="${pts.map(([x, y]) => `${n(x)},${n(y)}`).join(" ")}" fill="${fill}"/>`;
   // かぶり物: 頭の上の半分より少し上をおおう丸い形と、向いている側へ出るつば（目と口は出したまま）
+  // つばは頭の前の横へだけ出す（頭の全体を横切る帯にしない）。丸い形は頭の上に乗せ、目と口を隠さない
   const dome = (fill: string, brim: number) => {
-    const r = h * 0.88;
-    const base = cy - h * 0.22;
-    const top = `<path d="M${n(cx - r)} ${n(base)}A${n(r)} ${n(r * 0.95)} 0 0 1 ${n(cx + r)} ${n(base)}Z" fill="${fill}" stroke="${INK}" stroke-width="${n(w)}" stroke-linejoin="round"/>`;
-    const bx0 = d > 0 ? cx - r * 1.02 : cx - r * brim;
-    return top + rect(bx0, base - h * 0.06, r * (1.02 + brim), h * 0.16, fill, h * 0.08, INK, w);
+    const r = h * 0.86;
+    const base = cy - h * 0.3;
+    const top = `<path d="M${n(cx - r)} ${n(base)}A${n(r)} ${n(r * 0.85)} 0 0 1 ${n(cx + r)} ${n(base)}Z" fill="${fill}" stroke="${INK}" stroke-width="${n(w)}" stroke-linejoin="round"/>`;
+    const vx0 = cx + d * r * 0.55;
+    const vx1 = cx + d * r * (1 + brim);
+    const vh = h * 0.13;
+    const visor = `<path d="M${n(vx0)} ${n(base - vh * 0.5)}L${n(vx1 - d * vh * 0.5)} ${n(base - vh * 0.2)}Q${n(vx1)} ${n(base)} ${n(vx1 - d * vh * 0.5)} ${n(base + vh * 0.5)}L${n(vx0)} ${n(base + vh * 0.5)}Z" fill="${fill}" stroke="${INK}" stroke-width="${n(w)}" stroke-linejoin="round"/>`;
+    return visor + top;
   };
   // 表示の丸 2 つ（左は抜き、右は塗り）を入れた暗い窓。盤と検電器の印
   const display = (x: number, y: number, ww: number, hh: number) =>
@@ -125,13 +129,13 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, icon = false)
   switch (kind) {
     case "helmet":
       // ほかの作業の人のグレーのヘルメット
-      return dome("#9a9a9a", 0.45);
+      return dome("#9a9a9a", 0.3);
     case "helmet_new":
       // 新人の白いヘルメット（白は data-part="helmet-new" の中だけ）
-      return `<g data-part="helmet-new">${dome("#fff", 0.45)}</g>`;
+      return `<g data-part="helmet-new">${dome("#fff", 0.3)}</g>`;
     case "cap_lead":
       // 上の人の黒い帽子: 長いつば
-      return dome(INK, 0.85);
+      return dome(INK, 0.6);
     case "harness": {
       // 安全帯: 腰のベルトと、背中側から出る縄と、先のフック
       const bk = cx - d * h * 0.9;

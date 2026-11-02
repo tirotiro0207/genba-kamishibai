@@ -33,7 +33,7 @@ export const PROPORTION = {
   lowerArm: 0.14,
   thigh: 0.22,
   shin: 0.22,
-  limbWidth: 0.11, // 足の太さ
+  limbWidth: 0.085, // 足の太さ
   armWidth: 0.07,
   hand: 0.042, // 手の丸の半径
   outline: 0.02, // 縁取りの太さ
@@ -148,8 +148,8 @@ export function figureSvg(p: Posed, style: FigureStyle = {}): string {
   const lw = P.limbWidth * h * k;
   const aw = P.armWidth * h * k;
   const tw = P.torsoWidth * h * k;
-  // 2 本の足は腰の左右に少しずらして付ける（立った姿でも 2 本に見える）
-  const off = (q: Pt, s: number): Pt => [q[0] + s * d * lw * 0.28, q[1]];
+  // 2 本の足は腰の左右に分けて付け、重ならないようにする（間は縁の線 1 本ぶんだけ）
+  const off = (q: Pt, s: number): Pt => [q[0] + s * d * (lw / 2 + o * 0.5), q[1]];
   const legPts = (s: "near" | "far", sign: number): Pt[] => [off(j.hip, sign), off(j[`knee_${s}`], sign), off(j[`foot_${s}`], sign)];
   // 靴: 足先から前へ出る小判形。すねに直角の向きにして、斜めの足でも足首が折れて見えないようにする。奥の靴は短く
   const bootPts = (s: "near" | "far", sign: number): Pt[] => {
@@ -166,13 +166,14 @@ export function figureSvg(p: Posed, style: FigureStyle = {}): string {
   const len = Math.hypot(ax[0], ax[1]) || 1;
   const u: Pt = [ax[0] / len, ax[1] / len];
   const per: Pt = [-u[1], u[0]];
-  const top: Pt = [j.shoulder[0] - u[0] * aw * 0.55, j.shoulder[1] - u[1] * aw * 0.55];
+  const top: Pt = [j.shoulder[0] - u[0] * o * 0.5, j.shoulder[1] - u[1] * o * 0.5];
   // 腕は胴の中から出す（肩に瘤を作らない）
-  const sh: Pt = [j.shoulder[0] + u[0] * aw * 0.25, j.shoulder[1] + u[1] * aw * 0.25];
+  const sh: Pt = [j.shoulder[0] + u[0] * aw * 0.6, j.shoulder[1] + u[1] * aw * 0.6];
   const armPts = (s: "near" | "far"): Pt[] => [sh, j[`elbow_${s}`], j[`hand_${s}`]];
   const bot: Pt = [j.hip[0] + u[0] * lw * 0.3, j.hip[1] + u[1] * lw * 0.3];
   const at = (q: Pt, s: number, wd: number): Pt => [q[0] + per[0] * s * wd / 2, q[1] + per[1] * s * wd / 2];
-  const torso: Pt[] = [at(top, -1, tw * 0.8), at(top, 1, tw * 0.8), at(bot, 1, tw), at(bot, -1, tw)];
+  const hipW = Math.max(tw, 2 * lw + 2 * o);
+  const torso: Pt[] = [at(top, -1, tw * 0.8), at(top, 1, tw * 0.8), at(bot, 1, hipW), at(bot, -1, hipW)];
   const bandC: Pt = [j.shoulder[0] + ax[0] * 0.62, j.shoulder[1] + ax[1] * 0.62];
   const bandHalf = (tw * (0.8 + 0.2 * 0.62)) / 2;
   const neck: Pt[] = [j.shoulder, j.neck];
