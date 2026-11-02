@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 /** どの用途の呼び出しか。費用の上限は用途ごとに持つ */
 export type Purpose = "hook" | "night" | "demo" | "mcp" | "measure" | "app";
+export const PURPOSES: readonly Purpose[] = ["hook", "night", "demo", "mcp", "measure", "app"];
 
 /** USD / 100 万トークン。出どころ: https://platform.claude.com/docs/en/about-claude/pricing（2026-11-02 に取得） */
 export const PRICES: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
@@ -117,7 +118,7 @@ export const DEFAULT_LIMITS: Record<Purpose, Limits> = {
 export class BudgetExceededError extends Error {
   constructor(
     public purpose: Purpose,
-    public which: "perCall" | "perDay" | "total",
+    public which: "perCall" | "perDay" | "total" | "allPerDay",
     public estimateUsd: number,
   ) {
     super(`費用の上限を超えるので呼ばない（${purpose}・${which}・見込み ${estimateUsd.toFixed(4)} USD）`);
@@ -151,8 +152,72 @@ export function startOfJstDay(ms: number): string {
   return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 3600_000).toISOString();
 }
 
+/**
+ * 全部の用途を合わせた 1 日（日本時間）の上限。用途ごとの 1 日の上限を足すと 100 USD になるので、それとは別に持つ。
+ * 環境変数 API_BUDGET_USD_PER_DAY から読み、無いか数でなければ 10
+ */
+export const DEFAULT_DAY_BUDGET_USD = 10;
+/** 8 割を超えたら、その日に 1 回だけ警告する */
+export const DAY_WARN_RATIO = 0.8;
+
+type ProcessLike = { env?: Record<string, string | undefined>; cwd?: () => string; getBuiltinModule?: (id: string) => unknown };
+const proc = () => (globalThis as { process?: ProcessLike }).process;
+
+export function dayBudgetUsd(env: Record<string, string | undefined> | undefined = proc()?.env): number {
+  const n = Number(env?.API_BUDGET_USD_PER_DAY);
+  return env?.API_BUDGET_USD_PER_DAY && Number.isFinite(n) && n > 0 ? n : DEFAULT_DAY_BUDGET_USD;
+}
+
+/** 全部の用途の、since からの費用の合計 */
+export async function sumAllUsd(log: CallLog, since?: string): Promise<number> {
+  let s = 0;
+  for (const p of PURPOSES) s += await log.sumUsd(p, since);
+  return s;
+}
+
+export interface BudgetEvent {
+  kind: "warn" | "stop";
+  /** 日本時間のその日の始まり（ISO） */
+  day: string;
+  spentUsd: number;
+  estimateUsd: number;
+  budgetUsd: number;
+  purpose: Purpose;
+  label: string;
+}
+
+export const budgetLine = (e: BudgetEvent) =>
+  `- ${new Date().toISOString()} 費用の${e.kind === "stop" ? "上限で止めた" : "警告（8 割を超えた）"}: その日の合計 ${e.spentUsd.toFixed(2)} USD＋見込み ${e.estimateUsd.toFixed(2)} USD／上限 ${e.budgetUsd} USD（${e.purpose}・${e.label}）`;
+
+/**
+ * 既定の知らせ方。手元の Node では、リポジトリの private/overnight-notes.md（環境変数 OVERNIGHT_NOTES で変えられる）に 1 行足す。
+ * private/ が無いところ（Worker・まっさらな写し）では console.warn だけ
+ */
+export function notifyBudget(e: BudgetEvent): void {
+  const line = budgetLine(e);
+  console.warn(line);
+  try {
+    const p = proc();
+    const fs = p?.getBuiltinModule?.("node:fs") as typeof import("node:fs") | undefined;
+    if (!fs || !p?.cwd) return;
+    const file = p.env?.OVERNIGHT_NOTES ?? `${p.cwd()}/private/overnight-notes.md`;
+    if (!p.env?.OVERNIGHT_NOTES && !fs.existsSync(`${p.cwd()}/private`)) return;
+    fs.appendFileSync(file, `${line}\n`, "utf-8");
+  } catch {
+    // 知らせが書けなくても、止めることは変えない
+  }
+}
+
+/** 警告を出した日（同じプロセスの中で 1 日 1 回） */
+const warnedDays = new Set<string>();
+export const resetBudgetWarnings = () => warnedDays.clear();
+
 export interface GuardedDeps extends CallDeps {
   limits?: Record<Purpose, Limits>;
+  /** 全部の用途を合わせた 1 日の上限。無ければ dayBudgetUsd() */
+  dayBudgetUsd?: number;
+  /** 警告と止めたときの知らせ。無ければ notifyBudget */
+  onBudget?: (e: BudgetEvent) => void;
   sleep?: (ms: number) => Promise<void>;
   maxAttempts?: number;
 }
@@ -172,6 +237,18 @@ export async function guardedCall(deps: GuardedDeps, req: CallRequest): Promise<
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const est = estimateMaxUsd(req.params);
   if (est > limits.perCallUsd) throw new BudgetExceededError(req.purpose, "perCall", est);
+  const day = startOfJstDay(now());
+  const budget = deps.dayBudgetUsd ?? dayBudgetUsd();
+  const spent = await sumAllUsd(deps.log, day);
+  const event = (kind: BudgetEvent["kind"]): BudgetEvent => ({ kind, day, spentUsd: spent, estimateUsd: est, budgetUsd: budget, purpose: req.purpose, label: req.label });
+  if (spent + est > budget) {
+    (deps.onBudget ?? notifyBudget)(event("stop"));
+    throw new BudgetExceededError(req.purpose, "allPerDay", est);
+  }
+  if (spent + est > budget * DAY_WARN_RATIO && !warnedDays.has(day)) {
+    warnedDays.add(day);
+    (deps.onBudget ?? notifyBudget)(event("warn"));
+  }
   if ((await deps.log.sumUsd(req.purpose, startOfJstDay(now()))) + est > limits.perDayUsd)
     throw new BudgetExceededError(req.purpose, "perDay", est);
   if ((await deps.log.sumUsd(req.purpose)) + est > limits.totalUsd) throw new BudgetExceededError(req.purpose, "total", est);
