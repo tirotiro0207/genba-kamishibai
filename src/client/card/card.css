@@ -10,7 +10,7 @@
 .card-dots { list-style: none; margin: 0; padding: 0; display: flex; justify-content: center; gap: 10px; }
 .card-dots button { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--fg); background: transparent; padding: 0; cursor: pointer; }
 .card-dots .on button { background: var(--fg); }
-.card-show { font: inherit; font-size: 18px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.card-show { text-align: center; text-decoration: none; font: inherit; font-size: 18px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
 .card-text { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
 .card-text p { margin: 0; font-size: 18px; }
 .card-text span { display: block; font-size: 13px; color: var(--muted); }

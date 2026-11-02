@@ -6,6 +6,7 @@ import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
 import { ReadScreen } from "./read/ReadScreen";
+import { RouteScreen } from "./route/RouteScreen";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { GradeScreen } from "./trial/GradeScreen";
 import { NewTrial } from "./trial/NewTrial";
@@ -36,6 +37,8 @@ export function App() {
   if (r[0] === "t" && r[2] === "audit" && r[3]) body = <AuditScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/card/<カード> ・ カードの画面（作る側・監修者。状態の帯つき）
   if (r[0] === "t" && r[2] === "card" && r[3]) body = <CardScreen tenant={r[1]} cardId={r[3]} />;
+  // #/t/<テナント>/route/<カード> ・ 経路の画面（監修者。部品 → 文 → 元の文）
+  if (r[0] === "t" && r[2] === "route" && r[3]) body = <RouteScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）

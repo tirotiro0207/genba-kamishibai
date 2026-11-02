@@ -146,6 +146,9 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
               <p lang="vi">{b.words.vi.normalize("NFC")}</p>
             </div>
           )}
+          <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/route/${encodeURIComponent(card.id)}`} data-testid="card-route">
+            経路を見る（部品 → 元の文）
+          </a>
           <button className="card-show" onClick={() => setOpen(false)} data-testid="card-hide">
             閉じる
           </button>

@@ -39,7 +39,7 @@ function headers(tenant: string): Record<string, string> {
   }
   return h;
 }
-async function req<T>(tenant: string, path: string, init?: RequestInit): Promise<T> {
+export async function req<T>(tenant: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(api(tenant, path), { ...init, headers: { ...headers(tenant), ...(init?.headers ?? {}) } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
