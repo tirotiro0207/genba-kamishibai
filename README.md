@@ -87,7 +87,7 @@ npm ci
 npm test
 ```
 
-To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. Without the API key the app still starts, but calls to Claude return 503.
+To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. Without the API key the app still starts, but calls to Claude return 503. The names shown for each role (`SUPERVISOR_1_NAME`, `SUPERVISOR_2_NAME`, `TRAINER_NAME`, `AUTHOR_NAME`) also go in `.dev.vars`; if they are missing, the name is left blank. The local Node scripts in `scripts/` read `.env` instead (see `.env.example`).
 
 ```bash
 npx wrangler d1 migrations apply DB --local

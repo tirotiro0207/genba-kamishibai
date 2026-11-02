@@ -1,6 +1,6 @@
 // 利用者と役割（030b）。役割で入ったしるしは「テナント.役割.番号.期限」に HMAC で署名した文字列で、x-role ヘッダーで渡す。
 // 署名・停止は監修者だけが通せる。新入社員はカードの API に入れない（署名済みだけを読む入口は 028）。
-// 名前は環境変数（SUPERVISOR_1_NAME など）から読み、無ければ空欄にする。DB には名前を置かない。
+// 名前は Worker の環境変数（SUPERVISOR_1_NAME など。手元は .dev.vars、本番は wrangler secret）から読み、無ければ空欄にする。DB には名前を置かない。
 import type { Context, Next } from "hono";
 import { Hono } from "hono";
 import type { Env } from "./env";
@@ -39,8 +39,8 @@ export async function verifyRole(secret: string, token: string, tenantId: string
 
 /** 役割の名前。環境変数に無ければ空欄 */
 export function personName(env: Env, p: Person): string {
-  const key = p.role === "supervisor" ? `SUPERVISOR_${p.slot}_NAME` : p.role === "trainer" ? "TRAINER_NAME" : p.role === "author" ? "AUTHOR_NAME" : "";
-  const v = key ? (env as unknown as Record<string, unknown>)[key] : undefined;
+  const key: keyof Env | "" = p.role === "supervisor" ? (p.slot === 1 ? "SUPERVISOR_1_NAME" : "SUPERVISOR_2_NAME") : p.role === "trainer" ? "TRAINER_NAME" : p.role === "author" ? "AUTHOR_NAME" : "";
+  const v: unknown = key ? env[key] : undefined;
   return typeof v === "string" ? v.trim() : "";
 }
 

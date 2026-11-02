@@ -87,7 +87,7 @@ npm ci
 npm test
 ```
 
-手元でアプリを動かすときは、`.dev.vars` に `SESSION_SECRET`（長い乱数の文字列）と `ANTHROPIC_API_KEY` を書きます。API の鍵が無くてもアプリは起動しますが、Claude の呼び出しは 503 になります。
+手元でアプリを動かすときは、`.dev.vars` に `SESSION_SECRET`（長い乱数の文字列）と `ANTHROPIC_API_KEY` を書きます。API の鍵が無くてもアプリは起動しますが、Claude の呼び出しは 503 になります。役割ごとに出す名前（`SUPERVISOR_1_NAME`・`SUPERVISOR_2_NAME`・`TRAINER_NAME`・`AUTHOR_NAME`）も `.dev.vars` に書きます。無ければ空欄になります。`scripts/` の Node のスクリプトは、代わりに `.env` を読みます（`.env.example` を参照）。
 
 ```bash
 npx wrangler d1 migrations apply DB --local

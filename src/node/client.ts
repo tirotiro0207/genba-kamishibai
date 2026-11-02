@@ -1,4 +1,5 @@
-// 手元のスクリプトから Claude を呼ぶための client。鍵は .env から読むだけで、表に出さない
+// 手元のスクリプトから Claude を呼ぶための client。鍵は .env から読むだけで、表に出さない。
+// .env を読むのは Node のスクリプトだけ。手元の Worker（画面と API）は .dev.vars を読む（役割の名前もそちら）
 import Anthropic from "@anthropic-ai/sdk";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
