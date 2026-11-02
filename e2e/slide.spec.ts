@@ -121,6 +121,56 @@ test("画面・タブ・カード送りが 0.3〜0.4 秒でスッと動き、コ
   await page.screenshot({ path: test.info().outputPath("slide-make.png") });
 });
 
+test("凝った部分: 抜く紙が持ち上がって影が付き、引っかかってから速く抜ける。続けて押すと紙が重なる（076b）", async ({ page }) => {
+  await mock(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/t/practice/read");
+  await expect(page.getByTestId("read-card")).toHaveAttribute("data-card", "slide-0");
+
+  // 動きを止めて、途中の形を時刻ごとに読む
+  await page.getByTestId("read-next").click();
+  const at = (ms: number) =>
+    page.evaluate((t) => {
+      const piece = document.querySelector<HTMLElement>(".slide-out")!;
+      for (const a of piece.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+      const cs = getComputedStyle(piece);
+      const m = new DOMMatrix(cs.transform);
+      const dim = document.querySelector<HTMLElement>(".dim-out")!;
+      for (const a of dim.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+      return { x: m.m41 / piece.offsetWidth, angle: (Math.atan2(m.m12, m.m11) * 180) / Math.PI, shadow: cs.boxShadow, dim: Number(getComputedStyle(dim).opacity) };
+    }, ms);
+  const early = await at(70);
+  const mid = await at(175);
+  const late = await at(280);
+  // 影が付き、少し傾く
+  expect(early.shadow).not.toBe("none");
+  expect(mid.angle).toBeLessThan(-0.3);
+  // 速さの緩急: 最初の 2 割はゆっくり（3% ほど）、後半で速く抜ける
+  expect(Math.abs(early.x)).toBeLessThan(0.04);
+  expect(Math.abs(late.x) - Math.abs(mid.x)).toBeGreaterThan(Math.abs(mid.x) - Math.abs(early.x));
+  // 下の画面は影から明るくなる
+  expect(early.dim).toBeGreaterThan(late.dim);
+  await page.evaluate(() => document.querySelectorAll(".slide-layer *").forEach((e) => e.getAnimations().forEach((a) => a.finish())));
+  await expect(page.locator(".slide-run")).toHaveCount(0);
+
+  // 続けて押すと、前の紙が抜けきる前に次の紙が重なる
+  await page.getByTestId("read-prev").click();
+  await expect(page.locator(".slide-run")).toHaveCount(0, { timeout: 2000 });
+  await page.getByTestId("read-next").click();
+  await page.getByTestId("read-next").click();
+  expect(await page.locator(".slide-run").count()).toBe(2);
+  await page.screenshot({ path: test.info().outputPath("slide-overlap.png") });
+  await expect(page.locator(".slide-run")).toHaveCount(0, { timeout: 2000 });
+  await expect(page.getByTestId("slide-layer").first()).not.toHaveAttribute("data-moving", /./);
+  await expect(page.getByTestId("read-card")).toHaveAttribute("data-card", "slide-2");
+});
+
 test.describe("動きを減らす設定", () => {
   test.use({ reducedMotion: "reduce" });
 

@@ -1,5 +1,7 @@
 // 紙芝居の切り替え（076a・仕様 §3b）。k が変わると、今の画面の写しが紙芝居の絵を抜くようにスッと横へ動き、下から次の画面が出る。
 // 戻るときは、前の画面が横から差し込まれる。動きは 0.35 秒で、写しは押せない（下の画面はすぐ操作できる）。
+// 凝った部分（076b）: 抜くときは紙が少し持ち上がって影が濃くなり、引っかかってから速く抜ける（速さの緩急）。下の画面は影から明るくなる。
+// 続けて押すと、前の紙が抜けきる前に次の紙が重なって動く。
 // 端末の「動きを減らす」設定のときは動かさずに切り替える。
 import { Component, createRef, type ReactNode, useEffect, useState } from "react";
 import "./slide.css";
@@ -45,7 +47,6 @@ function copyOf(el: HTMLElement): HTMLElement {
 export class Slide extends Component<Props> {
   private box = createRef<HTMLDivElement>();
   private layer = createRef<HTMLDivElement>();
-  private run = 0;
 
   getSnapshotBeforeUpdate(prev: Props): HTMLElement | null {
     if (prev.k === this.props.k || reducedMotion() || !this.box.current) return null;
@@ -56,25 +57,35 @@ export class Slide extends Component<Props> {
     const layer = this.layer.current;
     const box = this.box.current;
     if (!snap || !layer || !box) return;
-    layer.replaceChildren();
-    const run = ++this.run;
     const back = (this.props.dir ?? 1) < 0;
-    // 進む: 古い画面の写しを上に置いて抜く。戻る: 新しい画面の写しを横から差し込み、終わったら本物を見せる
+    const kind = back ? "in" : "out";
+    // 1 回の動きを 1 つの組にまとめる。続けて押すと組が重なり、前の紙が抜けきる前に次の紙が動く（076b）
+    const group = document.createElement("div");
+    group.className = "slide-run";
+    group.dataset.kind = kind;
+    const dim = document.createElement("i");
+    dim.className = `slide-dim ${back ? "dim-in" : "dim-out"}`;
+    // 進む: 古い画面の写しを上に置いて抜く。抜けた下の本物は少し影から明るくなり、わずかに沈んでから落ち着く
+    // 戻る: 新しい画面の写しを横から差し込み、終わったら本物を見せる。下の前の画面は影に入る
     const piece = back ? copyOf(box) : snap;
     piece.className = `slide-piece ${back ? "slide-in" : "slide-out"}`;
-    piece.style.animationDuration = `${SLIDE_MS}ms`;
+    for (const el of [piece, dim]) el.style.animationDuration = `${SLIDE_MS}ms`;
     if (back) {
-      // 差し込む間は、本物の上に前の画面の写しを敷き、その上へ差し込む
       snap.className = "slide-piece slide-under";
-      layer.appendChild(snap);
+      for (const el of [snap, dim, piece]) group.appendChild(el);
+    } else {
+      for (const el of [dim, piece]) group.appendChild(el);
+      box.animate?.([{ transform: "scale(0.985)" }, { transform: "none" }], { duration: SLIDE_MS, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
     }
-    layer.appendChild(piece);
-    layer.dataset.moving = back ? "in" : "out";
-    // 続けて押したときは、前の動きの後片付けで今の動きを消さない
+    layer.appendChild(group);
+    layer.dataset.moving = kind;
     const done = () => {
-      if (run !== this.run) return;
-      layer.replaceChildren();
-      delete layer.dataset.moving;
+      if (!group.isConnected) return;
+      group.remove();
+      // まだ動いている組が残っていれば、その向きを出す
+      const last = layer.lastElementChild as HTMLElement | null;
+      if (last) layer.dataset.moving = last.dataset.kind;
+      else delete layer.dataset.moving;
     };
     piece.addEventListener("animationend", done, { once: true });
     // 画面が隠れていて動きが走らないときも残さない

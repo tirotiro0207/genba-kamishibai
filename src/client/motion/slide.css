@@ -1,10 +1,23 @@
-/* 紙芝居の切り替え（076a）。写しは押せない。下の本物の画面はすぐ操作できる */
+/* 紙芝居の切り替え（076a・076b）。写しは押せない。下の本物の画面はすぐ操作できる */
 .slide { position: relative; }
 .slide-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .slide-layer:empty { display: none; }
-.slide-piece { position: absolute; inset: 0; background: var(--bg); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); animation-fill-mode: both; }
-.slide-out { animation-name: slide-pull; }
-.slide-in { animation-name: slide-push; box-shadow: 8px 0 16px color-mix(in srgb, var(--fg) 18%, transparent); }
-@keyframes slide-pull { from { transform: translateX(0); } to { transform: translateX(-105%); } }
-@keyframes slide-push { from { transform: translateX(-105%); } to { transform: translateX(0); } }
+.slide-run { position: absolute; inset: 0; }
+.slide-piece { position: absolute; inset: 0; background: var(--bg); animation-fill-mode: both; transform-origin: 100% 100%; }
+/* 抜く: 最初の 2 割で紙が少し持ち上がって引っかかり（影が濃くなる）、残りで速く抜ける */
+.slide-out { animation-name: slide-pull; animation-timing-function: linear; }
+@keyframes slide-pull {
+  0% { transform: translateX(0) rotate(0); box-shadow: 0 0 0 transparent; animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
+  22% { transform: translateX(-3%) rotate(-0.6deg) scale(1.006); box-shadow: 10px 6px 22px rgb(0 0 0 / 26%); animation-timing-function: cubic-bezier(0.55, 0, 0.9, 0.6); }
+  100% { transform: translateX(-108%) rotate(-2.4deg) scale(1.006); box-shadow: 18px 8px 30px rgb(0 0 0 / 30%); }
+}
+/* 差し込む: 速く入って、最後にゆっくり収まる */
+.slide-in { animation-name: slide-push; animation-timing-function: cubic-bezier(0.15, 0.85, 0.25, 1); box-shadow: 10px 0 22px rgb(0 0 0 / 22%); }
+@keyframes slide-push { from { transform: translateX(-106%) rotate(-1.6deg); } 80% { transform: translateX(0.6%) rotate(0.1deg); } to { transform: translateX(0) rotate(0); } }
+/* 下の画面の影 */
+.slide-dim { position: absolute; inset: 0; background: #000; animation-fill-mode: both; animation-timing-function: ease-out; }
+.dim-out { animation-name: slide-dim-out; }
+.dim-in { animation-name: slide-dim-in; }
+@keyframes slide-dim-out { from { opacity: 0.16; } to { opacity: 0; } }
+@keyframes slide-dim-in { from { opacity: 0; } to { opacity: 0.14; } }
 @media (prefers-reduced-motion: reduce) { .slide-layer { display: none; } }
