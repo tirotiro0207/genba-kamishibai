@@ -1,5 +1,6 @@
 // カードの画面（037）。3〜4 コマを紙芝居のように 1 コマずつ送る。絵の面は文字 0 字で、番号や帯は面の外に置く。
 // 絵をタップすると「守ること・なぜ・言葉」が出る。署名の前は「未承認の下書き」、元の文に無い理由を足した枚は「AI 下書き」の帯を出す。
+// 作る人が「監修者に確認」の印を付けた枚は、その理由を帯の下に出す（039）。
 // 確かめる AI の証拠が無いうちは「確認待ち」で OK を押せない（047・Check.tsx）。
 // コマを送るときは、同じ動きの JSON をコマの間だけ 0.35 秒で再生する（076a）。「動きを減らす」設定では飛ぶ。
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +30,17 @@ function Band({ card }: { card: CardView }) {
     <p className={`card-band${ai ? " ai" : ""}`} data-testid="card-band" data-status={card.status}>
       <strong>{head}</strong>
       <span>{note}</span>
+    </p>
+  );
+}
+
+/** 「監修者に確認」の印。署名済み・停止の枚には出さない */
+function Ask({ card }: { card: CardView }) {
+  if (!card.ask || card.status === "signed" || card.status === "stopped") return null;
+  return (
+    <p className="card-ask" data-testid="card-ask">
+      <strong>監修者に確認</strong>
+      <span>{card.ask}</span>
     </p>
   );
 }
@@ -97,6 +109,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   return (
     <article className="card" data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
+      <Ask card={card} />
       {card.verify?.dangerous && card.status !== "signed" && card.status !== "stopped" && (
         // 危険の印（048）は絵の面の外に置く。絵の面は 0 字のまま
         <p className="card-danger" data-testid="card-danger" role="alert">

@@ -254,17 +254,23 @@ function ReviewStep({ tenant, id, text, rules, onDone }: { tenant: string; id: s
   );
 }
 
-/** OK した項目を 1 つずつカードにする。できたカードは未承認の下書きで、カードの画面へのつなぎを出す */
+/**
+ * OK した項目を 1 つずつカードにする。できたカードは未承認の下書きで、カードの画面へのつなぎを出す。
+ * 言い換えた・元の文と合うか分からない項目は「監修者に確認」の印と理由を付けて作れる（039）
+ */
 function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rules: Rule[]; ok: number[] }) {
   const [made, setMade] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [ask, setAsk] = useState<Record<number, string | undefined>>({});
 
   async function make(item: number) {
     setBusy(item);
     setErr("");
     try {
-      const c = await req<{ id: string }>(tenant, `/extract/${encodeURIComponent(id)}/make`, { method: "POST", body: JSON.stringify({ item }) });
+      const why = ask[item]?.trim();
+      if (ask[item] !== undefined && !why) throw new Error("監修者に確かめてほしいことを書いてください");
+      const c = await req<{ id: string }>(tenant, `/extract/${encodeURIComponent(id)}/make`, { method: "POST", body: JSON.stringify({ item, ask: why || undefined }) });
       setMade((m) => ({ ...m, [item]: c.id }));
     } catch (e) {
       setErr((e as Error).message);
@@ -279,6 +285,20 @@ function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rule
         {ok.map((i) => (
           <li key={i} className="make-rule" data-testid={`made-${i}`}>
             <span className="make-text">{rules[i]?.text}</span>
+            {!made[i] && (
+              <div className="make-ask">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={ask[i] !== undefined}
+                    onChange={(e) => setAsk((a) => ({ ...a, [i]: e.target.checked ? (rules[i]?.reworded ? "言い換えた文なので、元の文と合うか確かめてほしい" : "") : undefined }))}
+                    data-testid={`ask-${i}`}
+                  />
+                  監修者に確認
+                </label>
+                {ask[i] !== undefined && <input value={ask[i]} onChange={(e) => setAsk((a) => ({ ...a, [i]: e.target.value }))} placeholder="何を確かめてほしいか" data-testid={`ask-text-${i}`} />}
+              </div>
+            )}
             {made[i] ? (
               <a className="big" href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(made[i])}`} data-testid={`card-link-${i}`}>
                 カードを見る（未承認の下書き）

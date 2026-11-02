@@ -15,6 +15,8 @@ export interface CheckedCard {
   version: number;
   body: CardBody;
   verify?: Evidence | null;
+  /** 監修者に確認してほしい理由（039） */
+  ask?: string | null;
 }
 
 const BAND: Record<Evidence["band"], string> = { green: "緑（80% 以上）", yellow: "黄（60〜79%）", red: "赤（60% 未満か危ない読み違い）" };

@@ -60,6 +60,20 @@ describe("正式な流れの作成の API（034a）", () => {
     expect(s.input).toBe(x.id);
     expect(text.slice(s.start, s.end)).toBe("盤に触る前に検電する");
   });
+
+  it("「監修者に確認」の印を理由つきで付けて作れ、カードと ② の行に残る。文字でない印は断る（039）", async () => {
+    const x = (await (await call("/api/t/practice/extract", json("POST", { text: "見出し\n盤に触る前に検電する\n感電のおそれ" }))).json()) as { id: string };
+    await call(`/api/t/practice/extract/${x.id}/ok`, json("POST", { items: [0] }));
+    expect((await call(`/api/t/practice/extract/${x.id}/make`, json("POST", { item: 0, ask: 3 }))).status).toBe(400);
+    const card = (await (await call(`/api/t/practice/extract/${x.id}/make`, json("POST", { item: 0, ask: "  言い換えた文なので確かめてほしい " }))).json()) as { id: string; ask: string | null };
+    expect(card.ask).toBe("言い換えた文なので確かめてほしい");
+    expect(((await (await call(`/api/t/practice/cards/${card.id}`)).json()) as { ask: string | null }).ask).toBe("言い換えた文なので確かめてほしい");
+    const audit = (await (await call(`/api/t/practice/audit/cards/${card.id}`)).json()) as { entries: { kind: string; payload: { ask?: string } }[] };
+    expect(audit.entries.find((e) => e.kind === "make")!.payload.ask).toBe("言い換えた文なので確かめてほしい");
+    // 付けなければ印は無い
+    const plain = (await (await call(`/api/t/practice/extract/${x.id}/make`, json("POST", { item: 0 }))).json()) as { ask: string | null };
+    expect(plain.ask).toBeNull();
+  });
 });
 
 describe("AI 下書きの判定（035）", () => {

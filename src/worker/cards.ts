@@ -27,17 +27,27 @@ export interface CardRow {
   version: number;
   created_at: string;
   updated_at: string;
+  /** 監修者に確認してほしい理由（039）。無ければ null */
+  ask: string | null;
 }
 
-const COLS = "id, tenant_id, body, status, version, created_at, updated_at";
+const COLS = "id, tenant_id, body, status, version, created_at, updated_at, ask";
+export const ASK_MAX = 300;
 
 export async function getCard(db: D1Database, tenantId: string, id: string) {
   return db.prepare(`SELECT ${COLS} FROM cards WHERE id = ? AND tenant_id = ?`).bind(id, tenantId).first<CardRow>();
 }
 
-export const cardView = (r: CardRow) => ({ id: r.id, status: r.status, version: r.version, created_at: r.created_at, updated_at: r.updated_at, body: JSON.parse(r.body) as CardBody });
+export const cardView = (r: CardRow) => ({ id: r.id, status: r.status, version: r.version, created_at: r.created_at, updated_at: r.updated_at, ask: r.ask ?? null, body: JSON.parse(r.body) as CardBody });
 
-type Payload = { card?: CardBody; actor?: string; reason?: string };
+/** 「監修者に確認」の理由を受け取る。空なら undefined、文字でなければ null（断る） */
+export function readAsk(x: unknown): string | undefined | null {
+  if (x === undefined || x === null || x === "") return undefined;
+  if (typeof x !== "string") return null;
+  return x.trim().slice(0, ASK_MAX) || undefined;
+}
+
+type Payload = { card?: CardBody; actor?: string; reason?: string; ask?: unknown };
 const readBody = async (c: { req: { json: <T>() => Promise<T> } }) => c.req.json<Payload>().catch(() => ({}) as Payload);
 const actorOf = (b: Payload, fallback: string) => (typeof b.actor === "string" && b.actor.trim() ? b.actor.trim().slice(0, 40) : fallback);
 
@@ -67,14 +77,15 @@ cards.get("/stats", async (c) => {
 
 /**
  * 未承認の下書きとして保存し、監査の記録に ① と ② を足す（034a の作成からも使う）。
- * 元の文に無い理由か数字があれば「AI 下書き」で保存し、その理由を監査の記録に残す（035）。origins は元の文の抜き出し
+ * 元の文に無い理由か数字があれば「AI 下書き」で保存し、その理由を監査の記録に残す（035）。origins は元の文の抜き出し。
+ * ask は「監修者に確認」の理由（039）。② の行にも残す
  */
-export async function createCard(db: D1Database, tenantId: string, card: CardBody, actor: string, origins?: string[]): Promise<CardRow> {
+export async function createCard(db: D1Database, tenantId: string, card: CardBody, actor: string, origins?: string[], ask?: string): Promise<CardRow> {
   const id = crypto.randomUUID();
   const reasons = aiDraftReasons(card, origins);
-  await db.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at) VALUES (?, ?, ?, ?, 1, datetime('now'))").bind(id, tenantId, JSON.stringify(card), reasons.length ? "ai_draft" : "draft").run();
+  await db.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at, ask) VALUES (?, ?, ?, ?, 1, datetime('now'), ?)").bind(id, tenantId, JSON.stringify(card), reasons.length ? "ai_draft" : "draft", ask ?? null).run();
   await appendAudit(db, tenantId, { card_id: id, kind: "source", actor, payload: { version: 1, ...sourcePayload(card) } });
-  await appendAudit(db, tenantId, { card_id: id, kind: "make", actor, payload: { version: 1, ...makePayload(card) } });
+  await appendAudit(db, tenantId, { card_id: id, kind: "make", actor, payload: { version: 1, ...makePayload(card), ...(ask ? { ask } : {}) } });
   if (reasons.length) await appendAudit(db, tenantId, { card_id: id, kind: "ai_draft", actor: "system", payload: { version: 1, reasons } });
   return (await getCard(db, tenantId, id))!;
 }
@@ -84,7 +95,9 @@ cards.post("/", async (c) => {
   const card = b.card as CardBody;
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
-  return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, actorOf(b, "maker"))), 201);
+  const ask = readAsk(b.ask);
+  if (ask === null) return c.json({ error: "ask は文字" }, 400);
+  return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, actorOf(b, "maker"), undefined, ask)), 201);
 });
 
 /** 用語表に積む（036）。同じカードの同じ言葉は 1 行 */
