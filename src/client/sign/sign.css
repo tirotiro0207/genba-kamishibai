@@ -1,0 +1,16 @@
+/* 署名の入力（051b）。朱は印鑑の中だけ（画面の色の意味は増やさない） */
+.sign { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin: 0 auto; }
+.sign h1 { font-size: 22px; margin: 4px 0; }
+.sign-head p { margin: 0; }
+.sign-frames { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.sign-frames li { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
+.sign-frames svg { display: block; width: 100%; height: auto; }
+.sign-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.sign-row > * { flex: 1; }
+.sign-pick, .sign-input, .sign-done { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.sign-pad-wrap, .sign-stamp-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.sign-pad { width: 100%; aspect-ratio: 3; border: 2px dashed var(--line); border-radius: 8px; background: #fff; touch-action: none; cursor: crosshair; }
+.sign-stamp { width: 160px; height: 160px; opacity: 0.25; transition: opacity 0.2s, transform 0.2s; }
+.sign-stamp.on { opacity: 1; transform: rotate(-4deg); }
+.sign-wait { border-left: 4px solid var(--fg); padding-left: 10px; }
+@media (prefers-reduced-motion: reduce) { .sign-stamp { transition: none; } }

@@ -10,6 +10,7 @@ import { signRole } from "./people";
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
 const base = "/api/t/practice/cards";
 const reply = (obj: unknown) => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(obj) }], usage: { input_tokens: 10, output_tokens: 10 } }) as unknown as Anthropic.Message;
+const MARK = { kind: "finger", png: "data:image/png;base64," + btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3)) };
 const PNG = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0));
 
 async function as(role: "supervisor" | "author" | "trainer", slot: 1 | 2 = 1) {
@@ -50,7 +51,7 @@ describe("署名の記録（051a）", () => {
     const before = new Date(Date.now() - 7.5 * 60000).toISOString();
     await env.DB.prepare("UPDATE card_opens SET opened_at = ? WHERE card_id = ?").bind(before, id).run();
 
-    const res = await post(`${base}/${id}/sign`, { version: 1 }, sup);
+    const res = await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, sup);
     expect(res.status).toBe(200);
     const s = (await res.json()) as { version: number; signed_at: string; content_sha256: string; minutes: number; opened_at: string };
     expect(s).toMatchObject({ version: 1, minutes: 8, opened_at: before });
@@ -65,8 +66,10 @@ describe("署名の記録（051a）", () => {
     expect(sign[0]).toMatchObject({ step: 5, actor: "supervisor.2", payload: { content_sha256: s.content_sha256 } });
     expect(log.chain_ok).toBe(true);
 
+    // 署名の入力（051b）は種類と PNG のハッシュが ⑤ に残る
+    expect((sign[0].payload as unknown as { mark: { kind: string; sha256: string } }).mark).toMatchObject({ kind: "finger", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     // 署名済みはもう一度は署名できない
-    expect((await post(`${base}/${id}/sign`, { version: 1 }, sup)).status).toBe(409);
+    expect((await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, sup)).status).toBe(409);
   });
 
   it("監修者のほかは署名できない", async () => {
@@ -85,9 +88,18 @@ describe("署名の記録（051a）", () => {
     expect((await post(`${base}/missing/sign`, { version: 1 }, sup)).status).toBe(404);
   });
 
+  it("署名の入力（指か電子印鑑の PNG）が無い・PNG でない署名は断り、署名済みにしない（051b）", async () => {
+    const sup = await as("supervisor");
+    const id = await okCard();
+    for (const mark of [undefined, { kind: "pen", png: MARK.png }, { kind: "stamp", png: "data:image/png;base64," + btoa("GIF89a....") }, { kind: "stamp", png: "data:image/png;base64,%%%" }])
+      expect((await post(`${base}/${id}/sign`, { version: 1, mark }, sup)).status, JSON.stringify(mark)).toBe(400);
+    expect((await env.DB.prepare("SELECT status FROM cards WHERE id = ?").bind(id).first<{ status: string }>())!.status).toBe("ok");
+    expect((await post(`${base}/${id}/sign`, { version: 1, mark: { ...MARK, kind: "stamp" } }, sup)).status).toBe(200);
+  });
+
   it("開いた記録が無ければ分数は空。署名のあとに中身を書き換えると、ハッシュが合わないと分かる", async () => {
     const id = await okCard();
-    const s = (await (await post(`${base}/${id}/sign`, { version: 1 }, await as("supervisor"))).json()) as { minutes: number | null };
+    const s = (await (await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, await as("supervisor"))).json()) as { minutes: number | null };
     expect(s.minutes).toBeNull();
     const sig = async () => (await (await call(`${base}/${id}/signature`)).json()) as { signed: boolean; matches: boolean };
     expect(await sig()).toMatchObject({ signed: true, matches: true });

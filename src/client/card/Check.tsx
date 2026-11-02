@@ -110,6 +110,10 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
           <button className="big go" onClick={move("ok")} disabled={!ev || ev.dangerous || !!busy} data-testid="card-ok" title={!ev ? "確認待ち: 証拠が無い" : ev.dangerous ? "危険の印: 直してから確かめ直す" : ""}>
             {!ev ? "OK（確認待ちのため押せない）" : ev.dangerous ? "OK（危険の印のため押せない）" : "OK（署名へ）"}
           </button>
+        ) : card.status === "ok" ? (
+          <a className="big go" href={`#/t/${encodeURIComponent(tenant)}/sign/${encodeURIComponent(card.id)}`} data-testid="card-to-sign">
+            署名へ（監修者）
+          </a>
         ) : null}
       </div>
       {err && <p className="err">{err}</p>}

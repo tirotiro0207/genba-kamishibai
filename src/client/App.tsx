@@ -9,6 +9,7 @@ import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
 import { ReadScreen } from "./read/ReadScreen";
 import { RouteScreen } from "./route/RouteScreen";
+import { SignScreen } from "./sign/SignScreen";
 import { StatsBar } from "./stats/StatsBar";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { GradeScreen } from "./trial/GradeScreen";
@@ -46,13 +47,15 @@ export function App() {
   if (r[0] === "t" && r[2] === "fix" && r[3]) body = <FixScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/fold/<カード> ・ 折りたたみ（元のページが積み重なり、1 枚・0 字にたたまれる）
   if (r[0] === "t" && r[2] === "fold" && r[3]) body = <FoldScreen tenant={r[1]} cardId={r[3]} />;
+  // #/t/<テナント>/sign/<カード> ・ 署名の入力（監修者。指か電子印鑑）
+  if (r[0] === "t" && r[2] === "sign" && r[3]) body = <SignScreen tenant={r[1]} cardId={r[3]} />;
   // #/t/<テナント>/read ・ 新入社員の閲覧（署名済みだけ）
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
   if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない
-  const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit"].includes(r[2]);
+  const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign"].includes(r[2]);
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
   return (
     <main data-testid="app">

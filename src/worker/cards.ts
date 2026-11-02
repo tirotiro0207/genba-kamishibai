@@ -139,10 +139,11 @@ cards.post("/:id/open", async (c) => {
 });
 
 cards.post("/:id/sign", async (c) => {
-  const b = await c.req.json<{ version?: unknown }>().catch(() => ({}) as { version?: unknown });
-  const res = await signCard(c.env.DB, c.var.tenant.id, c.req.param("id"), (c.var as PeopleVars).person, b.version);
+  const b = await c.req.json<{ version?: unknown; mark?: unknown }>().catch(() => ({}) as { version?: unknown; mark?: unknown });
+  const res = await signCard(c.env.DB, c.var.tenant.id, c.req.param("id"), (c.var as PeopleVars).person, b.version, b.mark);
   if (!res.ok) return c.json({ error: res.error }, res.status);
-  return c.json({ signed: true, ...res.payload });
+  const { mark, ...rest } = res.payload;
+  return c.json({ signed: true, ...rest, mark: { kind: mark.kind, sha256: mark.sha256 } });
 });
 
 cards.get("/:id/signature", async (c) => {
