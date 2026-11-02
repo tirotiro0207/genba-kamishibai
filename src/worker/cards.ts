@@ -6,7 +6,10 @@ import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from 
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
+import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
+import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
+import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
 
@@ -90,9 +93,59 @@ cards.get("/glossary", async (c) => {
   return c.json({ terms: [...byJa.values()] });
 });
 
+/** 今の版の確かめる AI の証拠（監査の記録 ③ の最後の 1 行）。無ければ null（確認待ち） */
+export async function currentEvidence(db: D1Database, tenantId: string, r: CardRow): Promise<Evidence | null> {
+  const { results } = await db
+    .prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'verify' ORDER BY created_at DESC, n DESC LIMIT 20")
+    .bind(tenantId, r.id)
+    .all<{ payload: string }>();
+  const frames = (JSON.parse(r.body) as CardBody).frames.length;
+  for (const row of results) {
+    const p = JSON.parse(row.payload) as { version?: number; evidence?: unknown };
+    if (p.version === r.version) return hasEvidence(p.evidence, frames) ? p.evidence : null;
+  }
+  return null;
+}
+
 cards.get("/:id", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
-  return r ? c.json(cardView(r)) : c.json({ error: "カードが無い" }, 404);
+  return r ? c.json({ ...cardView(r), verify: await currentEvidence(c.env.DB, c.var.tenant.id, r) }) : c.json({ error: "カードが無い" }, 404);
+});
+
+const PNG_MAX = 3_000_000;
+const isPng = (b: Uint8Array) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+// 確かめる AI の正式版（047）: コマの PNG（描く側が JSON から作ったもの）を順に受け取り、サーバーから確かめる AI を呼び、
+// 証拠を監査の記録 ③ に残す。証拠は画面やスクリプトから書き込めない（ここでしか作らない）。PNG はハッシュを残す
+cards.post("/:id/verify", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードは確かめ直さない" }, 409);
+  const body = JSON.parse(r.body) as CardBody;
+  const b = await c.req.json<{ frames?: unknown }>().catch(() => ({}) as { frames?: unknown });
+  const frames = Array.isArray(b.frames) ? b.frames : [];
+  if (frames.length !== body.frames.length || !frames.every((f) => typeof f === "string")) return c.json({ error: `コマの PNG を ${body.frames.length} 枚、順に送る` }, 400);
+  const b64 = (frames as string[]).map((f) => f.replace(/^data:image\/png;base64,/, ""));
+  let bytes: Uint8Array<ArrayBuffer>[];
+  try {
+    bytes = b64.map((f) => Uint8Array.from(atob(f), (ch) => ch.charCodeAt(0)));
+  } catch {
+    return c.json({ error: "base64 で読めない" }, 400);
+  }
+  if (!bytes.every((x) => isPng(x) && x.length <= PNG_MAX)) return c.json({ error: "PNG ではないか、大きすぎる" }, 400);
+  const client = claudeClient(c.env);
+  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
+  const images = bytes.map((_, i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: b64[i] } }));
+  let evidence: Evidence;
+  try {
+    evidence = await verifyCard({ client, log: new D1CallLog(c.env.DB) }, "app", body, images);
+  } catch (e) {
+    return c.json({ error: `確かめる AI が答えなかった: ${(e as Error).message}` }, 502);
+  }
+  const png_sha256 = await Promise.all(bytes.map(async (x) => hex(await crypto.subtle.digest("SHA-256", x as Uint8Array<ArrayBuffer>))));
+  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "verify", actor: evidence.agent, payload: { version: r.version, evidence, png_sha256 } });
+  return c.json({ version: r.version, evidence });
 });
 
 // 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。署名済みは先に停止する
@@ -142,6 +195,8 @@ cards.post("/:id/status", async (c) => {
   if (!STATUSES.includes(to as CardStatus)) return c.json({ error: "to が状態の名前ではない" }, 400);
   if (to === "signed") return c.json({ error: "署名は署名の記録からだけ" }, 403);
   if (!canMove(r.status, to!)) return c.json({ error: `${r.status} から ${to} へは移れない` }, 409);
+  // 確認待ちの関門（047）: 今の版に確かめる AI の証拠が無ければ OK にしない
+  if (to === "ok" && !(await currentEvidence(c.env.DB, c.var.tenant.id, r))) return c.json({ error: "確認待ち: 確かめる AI の証拠（どの絵を見て・何点で・なぜか）が無いので OK できない" }, 409);
   const res = await c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status).run();
   if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
   await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "status", actor: actorOf(b, "system"), payload: { version: r.version, from: r.status, to } });

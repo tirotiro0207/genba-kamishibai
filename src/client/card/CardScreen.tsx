@@ -1,19 +1,16 @@
 // カードの画面（037）。3〜4 コマを紙芝居のように 1 コマずつ送る。絵の面は文字 0 字で、番号や帯は面の外に置く。
 // 絵をタップすると「守ること・なぜ・言葉」が出る。署名の前は「未承認の下書き」、元の文に無い理由を足した枚は「AI 下書き」の帯を出す。
+// 確かめる AI の証拠が無いうちは「確認待ち」で OK を押せない（047・Check.tsx）。
 // コマを送るときは、同じ動きの JSON をコマの間だけ 0.35 秒で再生する（076a）。「動きを減らす」設定では飛ぶ。
 import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
 import { cutFrames, frameAt, type MotionJson } from "../../shared/picto/motion";
 import { type Frame, renderFrame } from "../../shared/picto/scene";
 import { reducedMotion, SLIDE_MS } from "../motion/Slide";
+import { Check, type CheckedCard } from "./Check";
 import "./card.css";
 
-interface CardView {
-  id: string;
-  status: CardStatus;
-  version: number;
-  body: CardBody;
-}
+type CardView = CheckedCard;
 
 /** 状態ごとの帯。署名済みには帯を出さない。署名の前（確認待ち・OK も）は「未承認の下書き」と出し、状態は添える */
 function Band({ card }: { card: CardView }) {
@@ -124,6 +121,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           </button>
         </nav>
       )}
+      <Check tenant={tenant} card={card} onChange={setCard} />
       {!open && (
         <button className="card-show" onClick={() => setOpen(true)} data-testid="card-show">
           文を見る

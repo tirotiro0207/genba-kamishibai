@@ -1,6 +1,8 @@
+import type Anthropic from "@anthropic-ai/sdk";
 import { env, exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sampleCard } from "../../tests/fixtures/card";
+import { setClientFactory } from "./claude-client";
 import { signRole } from "./people";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
@@ -29,7 +31,8 @@ describe("カードの保存と状態（019）", () => {
     const c = await newCard();
     expect((await move(c.id, "ok")).status).toBe(409);
     expect((await move(c.id, "pending")).status).toBe(200);
-    expect((await move(c.id, "ok")).status).toBe(200);
+    // 確かめる AI の証拠が無いので OK にはならない（047 の関門。証拠があるときは下の 047 のテスト）
+    expect((await move(c.id, "ok")).status).toBe(409);
     expect((await move(c.id, "signed")).status).toBe(403);
     expect((await move(c.id, "nope")).status).toBe(400);
   });
@@ -86,5 +89,71 @@ describe("枠と指示（044a）", () => {
     const c = await newCard();
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
     expect((await fix(c.id, { frame: 0, box, text: "x" })).status).toBe(409);
+  });
+});
+
+describe("確かめる AI の正式版と確認待ちの関門（047）", () => {
+  const sent: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const reply = (obj: unknown) => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(obj) }], usage: { input_tokens: 100, output_tokens: 50 } }) as unknown as Anthropic.Message;
+  beforeAll(() =>
+    setClientFactory(() => ({
+      messages: {
+        create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          sent.push(p);
+          if (String(p.system).includes("新入社員です")) return reply({ frames: [{ frame: 1, saw: "盤に近づく人" }], meaning: "盤に道具を当てる", do: "当てる", dont: null, why_guess: null, confidence: 50 });
+          return reply({ points: [{ id: "s1", credit: "full", frame: 2, reason: "2 コマ目で当てている" }, { id: "s2", credit: "none", frame: null, reason: "理由は描かれていない" }], dangerous: false, danger_reason: null, summary: "やることは伝わるが、理由は伝わらない" });
+        },
+      },
+    })),
+  );
+  afterAll(() => setClientFactory(null));
+
+  // PNG の印だけの小さなバイト列（読む側は偽物なので中身は見ない）
+  const PNG = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0));
+  const verify = (id: string, frames: unknown) => call(`${base}/${id}/verify`, json("POST", { frames }));
+
+  it("証拠が無いうちは確認待ちで、OK を受け付けない", async () => {
+    const c = await newCard();
+    expect(((await (await call(`${base}/${c.id}`)).json()) as { verify: unknown }).verify).toBeNull();
+    expect((await move(c.id, "pending")).status).toBe(200);
+    const res = await move(c.id, "ok");
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/確認待ち/);
+  });
+
+  it("コマの PNG を順に送ると、絵だけを読ませて証拠を ③ に残し、OK できるようになる", async () => {
+    const c = await newCard();
+    await move(c.id, "pending");
+    expect((await verify(c.id, [PNG, PNG])).status).toBe(400);
+    expect((await verify(c.id, [PNG, PNG, btoa("not a png")])).status).toBe(400);
+    expect((await verify(c.id, [PNG, PNG, "%%%"])).status).toBe(400);
+    sent.length = 0;
+    const res = await verify(c.id, [PNG, PNG, `data:image/png;base64,${PNG}`]);
+    expect(res.status).toBe(200);
+    const { evidence } = (await res.json()) as { evidence: { rate: number; band: string; cited: number[]; frames: number; reason: string } };
+    expect(evidence).toMatchObject({ rate: 60, band: "yellow", cited: [2], frames: 3, reason: "やることは伝わるが、理由は伝わらない" });
+    // 読む側には文を見せていない
+    expect(JSON.stringify(sent[0])).not.toContain(sampleCard().rule);
+    const log = (await (await call(`/api/t/practice/audit/cards/${c.id}`)).json()) as { entries: { kind: string; step: number; actor: string; payload: { version: number; png_sha256: string[] } }[] };
+    const row = log.entries.find((e) => e.kind === "verify")!;
+    expect(row).toMatchObject({ step: 3, actor: "verifier", payload: { version: 1 } });
+    expect(row.payload.png_sha256).toHaveLength(3);
+    expect(((await (await call(`${base}/${c.id}`)).json()) as { verify: { rate: number } }).verify.rate).toBe(60);
+    expect((await move(c.id, "ok")).status).toBe(200);
+  });
+
+  it("中身を直して版が上がると、前の版の証拠では OK できない", async () => {
+    const c = await newCard();
+    await move(c.id, "pending");
+    await verify(c.id, [PNG, PNG, PNG]);
+    expect((await call(`${base}/${c.id}`, json("PUT", { card: { ...sampleCard(), why: "感電して大けがをするから" } }))).status).toBe(200);
+    await move(c.id, "pending");
+    expect((await move(c.id, "ok")).status).toBe(409);
+  });
+
+  it("証拠は画面やスクリプトから書き込めない（監査の記録は追記の口を持たない）", async () => {
+    const c = await newCard();
+    const res = await call("/api/t/practice/audit", json("POST", { card_id: c.id, kind: "verify", payload: { version: 1, evidence: {} } }));
+    expect(res.status).toBe(405);
   });
 });

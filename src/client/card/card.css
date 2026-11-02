@@ -16,3 +16,12 @@
 .card-text span { display: block; font-size: 13px; color: var(--muted); }
 .card-rule { font-weight: 700; font-size: 20px !important; }
 .card-words p + p { margin-top: 4px; }
+/* 確認待ちの関門（047）。色は増やさず、枠と文字で出す */
+.card-check { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card-check p { margin: 0; font-size: 16px; }
+.card-rate span, .card-wait span { display: block; font-size: 13px; color: var(--muted); }
+.card-rate b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.card-wait { border-left: 4px solid var(--fg); padding-left: 10px; }
+.card-wait strong { font-size: 20px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.card-actions > * { flex: 1; }

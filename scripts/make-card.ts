@@ -2,7 +2,7 @@
 // コマの PNG は private/picto/make に書き、画面に出すのは数だけ。
 //
 //   npx tsx scripts/make-card.ts <項目の番号 1〜8> [決まりの番号 0〜] [台本のフォルダ]
-//   CHECK=1 を付けると、確かめる AI（仮版）で採点し、赤なら作り直す（034b。上限は MAX_FIXES=<回数>、既定 1）
+//   CHECK=1 を付けると、確かめる AI（正式版・047）で伝わる率を出し、赤なら作り直す（034b。上限は MAX_FIXES=<回数>、既定 1）
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeClient } from "../src/node/client";
@@ -30,7 +30,7 @@ if (process.env.CHECK) {
   const checks = await makeAndCheck(deps, "measure", rule, locate, { render: (f) => imageBlock(svgToPng(renderFrame(f).svg)), maxFixes: Number(process.env.MAX_FIXES ?? 1) });
   card = checks.at(-1)!.card;
   calls = checks.length * 3;
-  console.log(`試し ${checks.length} 回・点 ${checks.map((c) => `${c.match.score}${c.red ? "（赤）" : ""}`).join(" → ")}`);
+  console.log(`試し ${checks.length} 回・伝わる率 ${checks.map((c) => `${c.evidence.rate}%${c.red ? "（赤）" : ""}`).join(" → ")}`);
 } else {
   const made = await makeCard(deps, "measure", rule, locate);
   card = made.card;

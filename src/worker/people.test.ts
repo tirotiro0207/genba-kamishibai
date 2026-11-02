@@ -15,10 +15,10 @@ async function login(tenant: string, role: string, slot = 1, extra: Record<strin
 /** 練習用のテナントに、署名の手前（ok）まで進めたカードを作る */
 async function okCard(headers: Record<string, string> = {}) {
   const made = (await (await call("/api/t/practice/cards", req("POST", { card: sampleCard() }, headers))).json()) as { id: string };
-  for (const to of ["pending", "ok"]) {
-    const r = await call(`/api/t/practice/cards/${made.id}/status`, req("POST", { to }, headers));
-    expect(r.status, `→ ${to}`).toBeLessThan(300);
-  }
+  const r = await call(`/api/t/practice/cards/${made.id}/status`, req("POST", { to: "pending" }, headers));
+  expect(r.status, "→ pending").toBeLessThan(300);
+  // OK には確かめる AI の証拠が要る（047）。ここは役割を確かめるので、手元の D1 で OK にする
+  await env.DB.prepare("UPDATE cards SET status = 'ok' WHERE id = ?").bind(made.id).run();
   return made.id;
 }
 
