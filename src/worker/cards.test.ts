@@ -41,7 +41,7 @@ describe("カードの保存と状態（019）", () => {
     const c = await newCard();
     await move(c.id, "pending");
     const fixed = { ...sampleCard(), why: "感電して大けがをするから" };
-    const r = (await (await call(`${base}/${c.id}`, json("PUT", { card: fixed }))).json()) as { status: string; version: number };
+    const r = (await (await call(`${base}/${c.id}`, json("PUT", { card: fixed, reason: "文を直す" }))).json()) as { status: string; version: number };
     expect(r).toMatchObject({ status: "draft", version: 2 });
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
     expect((await call(`${base}/${c.id}`, json("PUT", { card: fixed }))).status).toBe(409);
@@ -146,7 +146,7 @@ describe("確かめる AI の正式版と確認待ちの関門（047）", () => 
     const c = await newCard();
     await move(c.id, "pending");
     await verify(c.id, [PNG, PNG, PNG]);
-    expect((await call(`${base}/${c.id}`, json("PUT", { card: { ...sampleCard(), why: "感電して大けがをするから" } }))).status).toBe(200);
+    expect((await call(`${base}/${c.id}`, json("PUT", { card: { ...sampleCard(), why: "感電して大けがをするから" }, reason: "けがの重さを足す" }))).status).toBe(200);
     await move(c.id, "pending");
     expect((await move(c.id, "ok")).status).toBe(409);
   });

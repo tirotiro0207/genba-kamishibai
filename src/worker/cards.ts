@@ -193,11 +193,18 @@ cards.put("/:id", async (c) => {
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const before = JSON.parse(r.body) as CardBody;
   const changed = (Object.keys({ ...before, ...card }) as (keyof CardBody)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(card[k]));
+  // 修正の差分（050）: 何も変わらない直しは記録も版も増やさない。理由の無い直しは受けない
+  if (!changed.length) return c.json({ ...cardView(r), changed });
+  const reason = typeof b.reason === "string" ? b.reason.trim().slice(0, 1000) : "";
+  if (!reason) return c.json({ error: "直した理由が要る" }, 400);
+  // 直した人は役割のしるしから取る（しるしの無い手元の呼び出しだけ、送られた名前を使う）
+  const person = (c.var as PeopleVars).person;
+  const by = person ? personActor(person) : actorOf(b, "editor");
   await appendAudit(c.env.DB, c.var.tenant.id, {
     card_id: r.id,
     kind: "edit",
-    actor: actorOf(b, "editor"),
-    payload: { from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), reason: typeof b.reason === "string" ? b.reason.slice(0, 1000) : null },
+    actor: by,
+    payload: { from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
   });
   const reasons = aiDraftReasons(card);
   await c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
