@@ -2,7 +2,10 @@
 
     python tools/progress.py          # docs/progress.md と docs/dashboard.html を作り直す
     python tools/progress.py --check  # 作り直した中身とファイルがずれていたら 1 で終わる
-    python tools/progress.py --done 000 10  # マス 000 を済み・実際 10 分にし、前の「直近」を HEAD の番号に書き換えてから作り直す
+    python tools/progress.py --done 000 --start 09:30  # マス 000 を済みにし、実際の分を始めた時刻から今までで数える（日本時間。日付つき 2026-11-03T09:30 も可）
+    python tools/progress.py --done 000 10  # 分を数で渡す。どちらも、前の「直近」をそのマスのコミットの番号に書き換えてから作り直す
+
+実際の分の欄の「35（目安）」は、3 本のスレッドが並んで動いた 11/2 の分で、決まりの数え方と合わない値（数え直さない）。
 
 標準ライブラリだけで動く。「今日」は日本時間の日付。
 """
@@ -64,7 +67,8 @@ def read_plan(text):
                 raise SystemExit(f"plan.md: {c[0]} の筋「{c[8]}」は {'・'.join(LANES)} のどれでもない")
             tasks.append({"id": c[0], "work": c[1], "done": c[2].replace("`", ""), "check": c[3].replace("`", ""), "milestone": c[4], "minutes": int(c[6]),
                           "star": c[7] == "★", "lane": c[8], "state": c[9],
-                          "actual": int(c[10]) if c[10].isdigit() else None,
+                          "actual": int(re.match(r"\d+", c[10]).group()) if re.match(r"^\d+(（目安）)?$", c[10]) else None,
+                          "approx": c[10].endswith("（目安）"),
                           "commit": c[11], "day": section_day})
     return milestones, tasks
 
@@ -92,10 +96,20 @@ def build(compass_text, plan_text, today):
     total = {"n": len(tasks), "done": sum(t["state"] == "済み" for t in tasks),
              "min": sum(t["minutes"] for t in tasks),
              "done_min": sum(t["minutes"] for t in tasks if t["state"] == "済み"),
-             "actual": sum(t["actual"] or 0 for t in tasks)}
+             "actual": sum(t["actual"] or 0 for t in tasks),
+             "approx": sum(t["approx"] for t in tasks)}
     return {"compass": compass, "ms": ms_rows, "tasks": tasks, "days": days, "today": today,
             "left_today": left_today, "left_before": left_before, "total": total,
             "today_plan_min": sum(t["minutes"] for t in tasks if day_key(t["day"]) == today_key)}
+
+
+def act_label(x):
+    """実際の分の表示。目安の値には印を付ける"""
+    return "" if x["actual"] is None else f"{x['actual']}{'（目安）' if x['approx'] else ''}"
+
+
+def approx_note(t):
+    return f"（目安を含む: {t['approx']} マス）" if t["approx"] else ""
 
 
 def pct(a, b):
@@ -110,7 +124,7 @@ def render_md(d):
         L.append(f"- **{title}**: " + " / ".join(items))
     t = d["total"]
     L += ["", "## 目印ごとの進み具合", "",
-          f"全体: {t['done']} / {t['n']} マス、{t['done_min']} / {t['min']} 分（見込みの分で {pct(t['done_min'], t['min'])}）。実際の分の合計 {t['actual']} 分", "",
+          f"全体: {t['done']} / {t['n']} マス、{t['done_min']} / {t['min']} 分（見込みの分で {pct(t['done_min'], t['min'])}）。実際の分の合計 {t['actual']} 分{approx_note(t)}", "",
           "| 目印 | 日 | 済んだマス / 全部 | 済んだ分 / 見込みの分 | 進み |", "|---|---|---|---|---|"]
     for m in d["ms"]:
         L.append(f"| {m['id']} | {m['day']} | {m['done']} / {m['n']} | {m['done_min']} / {m['min']} | {pct(m['done_min'], m['min'])} |")
@@ -123,7 +137,7 @@ def render_md(d):
             star = "**★**" if x["star"] else ""
             work = f"**{x['work']}**" if x["star"] else x["work"]
             L.append(f"| {MARK[x['state']]} {x['state']} | {star} | {x['id']} | {work} | {x['milestone']} | {x['minutes']} | "
-                     f"{x['actual'] if x['actual'] is not None else ''} | {x['commit']} |")
+                     f"{act_label(x)} | {x['commit']} |")
         L.append("")
     L += [f"## 今日の残り（{d['today'].month}/{d['today'].day}）", ""]
     if d["left_before"]:
@@ -400,7 +414,7 @@ def route_svg(d, cur):
             cx, cy = a[0] + ux * t, a[1] + uy * t
             h = size / 2
             k, kl = kind_of(x["work"])
-            act = "" if x["actual"] is None else str(x["actual"])
+            act = act_label(x)
             attrs = (f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{e(label)}" data-ms="{x["milestone"]}"'
                      f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}')
             P.append(f'<g class="bx pick l-{cls} s-{x["state"]}{" now" if x is cur else ""}" tabindex="0" role="button" aria-label="{x["id"]} {e(x["work"])}"{attrs}>'
@@ -526,7 +540,7 @@ def render_html(d):
     P.append('<section class="stats">'
              f'<div class="stat card"><span class="label">済んだマス／全部</span><b>{t["done"]}<span>/ {t["n"]}</span></b></div>'
              f'<div class="stat card"><span class="label">見積もりの分での進み</span><b>{pct(t["done_min"], t["min"])}</b><div class="bar"><i style="width:{w}%"></i></div></div>'
-             f'<div class="stat card"><span class="label">実際の分</span><b>{t["actual"]}<span>分</span></b></div>'
+             f'<div class="stat card"><span class="label">実際の分{approx_note(t)}</span><b>{t["actual"]}<span>分</span></b></div>'
              f'<div class="stat card{" over" if over else ""}"><span class="label">今日の残り</span><b>{len(left)}<span>マス</span> {left_min}<span>分</span></b></div></section>')
     # 軸
     P.append('<section class="sec"><h2>軸<small>何から何へ変えるか</small></h2><div class="axis">')
@@ -553,7 +567,7 @@ def render_html(d):
         for x in ts:
             k, lab = kind_of(x["work"])
             cls = f'tag k-{k} s-{x["state"]}' + (" star" if x["star"] else "") + (" now" if x is cur else "")
-            act = "" if x["actual"] is None else str(x["actual"])
+            act = act_label(x)
             P.append(f'<button type="button" class="{cls}" style="--w:{x["minutes"]}" aria-pressed="false" aria-label="{x["id"]} {e(x["work"])}" title="{x["id"]} {e(x["work"])}&#10;完了の条件: {e(x["done"])}"'
                      f' data-id="{x["id"]}" data-work="{e(x["work"])}" data-state="{x["state"]}" data-kind="{lab}" data-ms="{x["milestone"]}"'
                      f' data-min="{x["minutes"]}" data-act="{act}" data-commit="{e(x["commit"])}" data-done="{e(x["done"])}" data-check="{e(x["check"])}"{" data-star=\"1\"" if x["star"] else ""}></button>')
@@ -572,7 +586,7 @@ def render_html(d):
             P.append(f'<tr class="s-{x["state"]}"><td><span class="st s-{x["state"]}">{x["state"]}</span></td>'
                      f'<td class="n">{"<span class=\"star-mark\">★</span> " if x["star"] else ""}{x["id"]}</td><td class="w">{e(x["work"])}</td>'
                      f'<td><span class="kd k-{k}"><i></i>{lab}</span></td><td class="n">{x["milestone"]}</td><td class="n">{x["minutes"]}</td>'
-                     f'<td class="n">{x["actual"] if x["actual"] is not None else "—"}</td><td class="n">{e(x["commit"])}</td></tr>')
+                     f'<td class="n">{act_label(x) or "—"}</td><td class="n">{e(x["commit"])}</td></tr>')
         P.append("</tbody></table></div></details>")
     P.append(f"</div></section></div><script>{SCRIPT}</script></body></html>")
     return "\n".join(P) + "\n"
@@ -599,6 +613,20 @@ def own_commit(task_id):
     return h
 
 
+def minutes_since(start, now):
+    """始めた時刻（「09:30」なら今日、「2026-11-03T09:30」も可。日本時間）から now までの分。切り上げ"""
+    jst = now.tzinfo
+    if re.match(r"^\d{1,2}:\d{2}$", start):
+        hh, mm = map(int, start.split(":"))
+        t0 = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    else:
+        t0 = datetime.datetime.fromisoformat(start)
+        t0 = t0.replace(tzinfo=jst) if t0.tzinfo is None else t0
+    if t0 > now:
+        raise SystemExit(f"始めた時刻 {start} が今より後")
+    return max(1, -(-int((now - t0).total_seconds()) // 60))
+
+
 def mark_done(task_id, minutes):
     """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、そのマスの番号が件名の頭にあるコミットの番号に書き換える。"""
     path = DOCS / "plan.md"
@@ -618,11 +646,15 @@ def mark_done(task_id, minutes):
 
 
 def main(argv):
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     if "--done" in argv:
         i = argv.index("--done")
-        mark_done(argv[i + 1], int(argv[i + 2]))
+        if "--start" in argv:
+            minutes = minutes_since(argv[argv.index("--start") + 1], now)
+        else:
+            minutes = int(argv[i + 2])
+        mark_done(argv[i + 1], minutes)
         argv = [a for a in argv if a != "--check"]
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), now.date())
     d["now"] = now
     outputs = {DOCS / "progress.md": render_md(d), DOCS / "dashboard.html": render_html(d)}
