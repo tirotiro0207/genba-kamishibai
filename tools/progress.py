@@ -427,7 +427,9 @@ def route_svg(d, cur):
             if x is cur:
                 P.append(f'<circle cx="{f(cx)}" cy="{f(cy)}" r="{f(size * 0.95)}" class="r-now"/>')
                 lx, ly = cx - nx * 0, cy - 26
+                # 文字の後ろに薄い黄色の札を敷き、下の箱と重なっても読めるようにする
                 P.append(f'<g class="r-here"><line x1="{f(cx)}" y1="{f(cy - size)}" x2="{f(cx)}" y2="{f(ly + 6)}"/>'
+                         f'<rect x="{f(lx - 34)}" y="{f(ly - 15)}" width="68" height="21" rx="5"/>'
                          f'<text x="{f(lx)}" y="{f(ly)}" text-anchor="middle">いまここ</text></g>')
     # 始点から終点への太い矢印（筋の上に重ねず、筋の間を通る）
     P.append(f'<line x1="{O[0] + 8}" y1="{O[1] - 8}" x2="{G[0] - 12}" y2="{G[1] + 10}" class="r-main" marker-end="url(#ahb)"/>')
@@ -493,7 +495,7 @@ ROUTE_CSS = """
 .r-check{fill:none;stroke:var(--card);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .bx[aria-pressed="true"] rect,.bx:focus-visible rect{stroke:var(--ink);stroke-width:3.5}
 .r-now{fill:none;stroke:var(--now);stroke-width:3;pointer-events:none}
-.r-here line{stroke:var(--now);stroke-width:2}.r-here text{font-size:13px;font-weight:700;fill:var(--now)}
+.r-here line{stroke:var(--now);stroke-width:2}.r-here rect{fill:var(--now-soft);fill-opacity:.88;stroke:var(--now);stroke-opacity:.55;stroke-width:1}.r-here text{font-size:13px;font-weight:700;fill:var(--now)}
 .route-key{margin:0;display:grid;gap:var(--s-1);font-size:var(--t-sm)}
 .route-key div{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:var(--s-2)}
 .route-key dt{font-weight:700}.route-key dd{margin:0;color:var(--muted)}
