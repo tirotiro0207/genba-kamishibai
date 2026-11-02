@@ -6,14 +6,15 @@ import { readFileSync } from "node:fs";
 
 const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf-8" });
 
-/** `git log --format=%ad%x09%s --date=short` の行 → 日付と件名 */
-export function parseLog(log: string): { day: string; subject: string }[] {
+/** `git log --format=%ad%x09%h%x09%s --date=short` の行 → 日付・短いハッシュ・件名（ハッシュの欄は無くてもよい） */
+export function parseLog(log: string): { day: string; hash: string; subject: string }[] {
   return log
     .split(/\r?\n/)
     .filter(Boolean)
     .map((l) => {
       const [day, ...rest] = l.split("\t");
-      return { day, subject: rest.join("\t") };
+      const hash = rest.length > 1 && /^[0-9a-f]{7,40}$/.test(rest[0]) ? rest.shift()! : "";
+      return { day, hash, subject: rest.join("\t") };
     });
 }
 
@@ -23,12 +24,14 @@ export function taskIds(subject: string): string[] {
   return m ? m[1].split("・") : [];
 }
 
-/** 作業の表から、済みのマスの番号 */
-export function doneTasks(plan: string): Set<string> {
-  const done = new Set<string>();
+/** 作業の表から、済みのマスの番号 → 「コミット」の欄（ハッシュでなければ空） */
+export function doneTasks(plan: string): Map<string, string> {
+  const done = new Map<string, string>();
   for (const line of plan.split(/\r?\n/)) {
     const c = line.split("|").map((x) => x.trim());
-    if (/^\d{3}[a-z]?$/.test(c[1] ?? "") && c.includes("済み")) done.add(c[1]);
+    if (!/^\d{3}[a-z]?$/.test(c[1] ?? "") || !c.includes("済み")) continue;
+    const commit = c[c.length - 2] ?? "";
+    done.set(c[1], /^[0-9a-f]{7,40}$/.test(commit) ? commit : "");
   }
   return done;
 }
@@ -43,11 +46,11 @@ export interface Counts {
   tests: { node: number; worker: number; e2e: number };
   files: { total: number; byDir: [string, number][] };
   days: { day: string; commits: number; done: string[] }[];
-  /** 作業の表では済みだが、件名の頭にその番号が付いたコミットが無いマス */
+  /** 作業の表では済みだが、件名の頭にその番号が付いたコミットも、表の「コミット」の欄に当たるコミットも無いマス */
   unlogged: string[];
 }
 
-/** 数える。済んだマスは、その番号が件名の頭に付いた最初のコミットの日に数える */
+/** 数える。済んだマスは、その番号が件名の頭に付いた最初のコミットか、表の「コミット」の欄のコミットの、早いほうの日に数える */
 export function count(log: string, plan: string, files: string[], read: (f: string) => string): Counts {
   const entries = parseLog(log).reverse(); // 古い順
   const done = doneTasks(plan);
@@ -56,7 +59,8 @@ export function count(log: string, plan: string, files: string[], read: (f: stri
   for (const e of entries) {
     const d = days.get(e.day) ?? { commits: 0, done: [] };
     d.commits++;
-    for (const id of taskIds(e.subject))
+    const byTable = e.hash ? [...done].filter(([, h]) => h && (h.startsWith(e.hash) || e.hash.startsWith(h))).map(([id]) => id) : [];
+    for (const id of [...taskIds(e.subject), ...byTable])
       if (done.has(id) && !seen.has(id)) {
         seen.add(id);
         d.done.push(id);
@@ -77,7 +81,7 @@ export function count(log: string, plan: string, files: string[], read: (f: stri
     tests,
     files: { total: files.length, byDir: [...byDir].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) },
     days: [...days].map(([day, d]) => ({ day, ...d })),
-    unlogged: [...done].filter((id) => !seen.has(id)),
+    unlogged: [...done.keys()].filter((id) => !seen.has(id)),
   };
 }
 
@@ -107,13 +111,13 @@ export function toMarkdown(c: Counts): string {
     "|---|---|---|---|",
     ...c.days.map((d) => `| ${d.day} | ${d.commits} | ${d.done.length} | ${d.done.join("・") || "—"} |`),
     "",
-    `済みだが、件名の頭にその番号が付いたコミットが無いマス: ${c.unlogged.join("・") || "無し"}`,
+    `済みだが、当たるコミットが無いマス（件名の頭の番号・表の「コミット」の欄のどちらにも無い）: ${c.unlogged.join("・") || "無し"}`,
     "",
   ].join("\n");
 }
 
 function main() {
-  const log = git("log", "--format=%ad%x09%s", "--date=short");
+  const log = git("log", "--format=%ad%x09%h%x09%s", "--date=short");
   const files = git("ls-files").split(/\r?\n/).filter(Boolean);
   process.stdout.write(toMarkdown(count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8"))));
 }

@@ -36,13 +36,13 @@ describe("docs/flow.md（112）", () => {
   it("作業の表と食い違わない（済みの段のマスは済み、まだの段のマスは済みでない）", () => {
     for (const s of steps)
       for (const id of s.ids) {
-        if (s.todo) expect(status.get(id), `${id}: ${s.line}`).not.toBe("済み");
-        else expect(status.get(id), `${id}: ${s.line}`).toBe("済み");
+        if (s.todo) expect(status.get(id), `${id} は作業の表で済み。docs/flow.md のこの行の「まだ・」を外す → ${s.line}`).not.toBe("済み");
+        else expect(status.get(id), `${id} は作業の表で済みでない。docs/flow.md のこの行に「まだ・」を付ける → ${s.line}`).toBe("済み");
       }
   });
 
   it("制作記録で済んだマスを、まだの段に書かない", () => {
     const logged = new Set(readFileSync("docs/build-log.md", "utf-8").split(/\r?\n/).filter((l) => l.startsWith("→ ")).flatMap((l) => l.match(/^→ \d{1,2}:\d{2} ([\d・a-z]+) /)?.[1].split("・") ?? []));
-    for (const s of steps.filter((x) => x.todo)) for (const id of s.ids) expect(logged.has(id), `${id}: ${s.line}`).toBe(false);
+    for (const s of steps.filter((x) => x.todo)) for (const id of s.ids) expect(logged.has(id), `${id} は制作記録で済み。docs/flow.md のこの行の「まだ・」を外す → ${s.line}`).toBe(false);
   });
 });
