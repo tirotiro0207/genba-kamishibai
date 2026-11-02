@@ -27,12 +27,12 @@ describe("人形の骨格の正式版（015）", () => {
 
   it("頭・胴・手足が塗りの形でつながり、地面の線がある", () => {
     const { svg, posed } = renderFrame({ figures: [fig()] });
-    expect(svg).toMatch(/<circle [^>]*fill="#000"/); // 塗りの頭
-    expect(svg).toMatch(/stroke-linecap="round"/); // 角の丸い太い棒
+    expect(svg).toMatch(/<circle [^>]*stroke="#000"/); // 縁取りの頭
+    expect(svg).toMatch(/stroke-linejoin="round"/); // 関節の角を丸めた 1 本の線
     expect(svg).toContain('data-part="ground"');
     const j = posed[0].joints;
     // 手足は胴の端（肩・腰）から出る
-    expect(svg).toContain(`x1="${Math.round(j.shoulder[0] * 10) / 10}"`);
+    expect(svg).toContain(`M${Math.round(j.shoulder[0] * 10) / 10} ${Math.round(j.shoulder[1] * 10) / 10}L`);
     // 頭と胴のあいだはピクトグラムの首のすき間ぶんだけ空く
     const gap = Math.hypot(j.head[0] - j.shoulder[0], j.head[1] - j.shoulder[1]) - PROPORTION.head * posed[0].h;
     expect(gap / posed[0].h).toBeGreaterThan(0.01);

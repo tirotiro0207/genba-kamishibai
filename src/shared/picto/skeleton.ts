@@ -1,6 +1,6 @@
 // 人形の骨格の正式版（015。11/2 に作者のスケッチに合わせて見た目を直した）。
-// 丸い頭に目と口、胴はベストを着た塗りの形、足は太く、手は丸。どの形も黒い縁取りで描く。
-// 関節ごとに名前と角度の範囲を持ち、範囲の外は断る。向きは左右を変えられる。奥側の手足は少し濃く塗る。
+// 丸い頭に目と口、胴はベストを着た台形、足は太く、手は丸。縁取りは外周を 1 周するだけにし、関節の区切りを見せない（11/2 の 2 回目の直し）。
+// 関節ごとに名前と角度の範囲を持ち、範囲の外は断る。向きは左右を変えられる。
 
 export const BONES = ["torso", "neck", "arm_near_upper", "arm_near_lower", "arm_far_upper", "arm_far_lower", "leg_near_upper", "leg_near_lower", "leg_far_upper", "leg_far_lower"] as const;
 export type Bone = (typeof BONES)[number];
@@ -33,10 +33,10 @@ export const PROPORTION = {
   lowerArm: 0.14,
   thigh: 0.22,
   shin: 0.22,
-  limbWidth: 0.1, // 足の太さ
+  limbWidth: 0.11, // 足の太さ
   armWidth: 0.07,
   hand: 0.042, // 手の丸の半径
-  outline: 0.014, // 縁取りの太さ
+  outline: 0.02, // 縁取りの太さ
 };
 
 export interface FigureSpec {
@@ -114,13 +114,17 @@ const n = (v: number) => {
 };
 const bar = (a: Pt, b: Pt, w: number, c: string) =>
   `<line x1="${n(a[0])}" y1="${n(a[1])}" x2="${n(b[0])}" y2="${n(b[1])}" stroke="${c}" stroke-width="${n(w)}" stroke-linecap="round"/>`;
-/** 縁取りの棒: 黒い太い棒の上に、縁の分だけ細い塗りの棒を重ねる */
-const outlined = (a: Pt, b: Pt, w: number, o: number, edge: string, fill: string) => bar(a, b, w, edge) + bar(a, b, Math.max(1, w - 2 * o), fill);
+/** 折れ線の太い線（関節の角は丸める） */
+const poly = (pts: Pt[], w: number, c: string) =>
+  `<path d="M${pts.map((q) => `${n(q[0])} ${n(q[1])}`).join("L")}" fill="none" stroke="${c}" stroke-width="${n(w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+/** 閉じた形。stroke を付けると、その半分だけ外へ太る（縁取りの層に使う） */
+const shapePath = (pts: Pt[], fill: string, stroke = 0) =>
+  `<path d="M${pts.map((q) => `${n(q[0])} ${n(q[1])}`).join("L")}Z" fill="${fill}"${stroke ? ` stroke="${fill}" stroke-width="${n(stroke)}" stroke-linejoin="round"` : ""}/>`;
 
-/** 塗りの色（黒とグレーだけ）。faded はほかの人を薄くするときの色 */
+/** 塗りの色（黒とグレーだけ）。腕はベストと同じ色、奥の足だけ 1 段明るくして 2 本に見せる。faded はほかの人を薄くするときの色 */
 const INKS = {
-  normal: { edge: "#000", skin: "#ececec", sleeve: "#d2d2d2", sleeveFar: "#a9a9a9", vest: "#7a7a7a", band: "#e6e6e6", pants: "#1e1e1e", pantsFar: "#4d4d4d" },
-  faded: { edge: "#a8a8a8", skin: "#f4f4f4", sleeve: "#ebebeb", sleeveFar: "#dedede", vest: "#cfcfcf", band: "#f2f2f2", pants: "#bdbdbd", pantsFar: "#cdcdcd" },
+  normal: { edge: "#000", skin: "#ececec", vest: "#7a7a7a", band: "#e6e6e6", pants: "#454545", pantsFar: "#5e5e5e" },
+  faded: { edge: "#a8a8a8", skin: "#f4f4f4", vest: "#d0d0d0", band: "#f0f0f0", pants: "#c4c4c4", pantsFar: "#d2d2d2" },
 };
 
 export interface FigureStyle {
@@ -130,48 +134,79 @@ export interface FigureStyle {
   width?: number;
 }
 
-/** 人形の SVG（g 1 つ）。奥の手足 → 胴 → 手前の足 → 手前の腕と手 → 頭の順に重ねる */
+/**
+ * 人形の SVG（g 1 つ）。2 回描き: まず全部の部位を黒で縁の分だけ太く描き（縁取りの層）、
+ * そのあと同じ形を塗りの色で描く（塗りの層）。関節で縁が交差しないので、手足と胴が 1 つのかたまりに見える。
+ * 手前の足と腕だけは、塗りの下に細い黒を入れて前後を読ませる。
+ */
 export function figureSvg(p: Posed, style: FigureStyle = {}): string {
   const { joints: j, h, d } = p;
   const P = PROPORTION;
   const c = style.faded ? INKS.faded : INKS.normal;
   const k = style.width ?? 1;
-  const o = Math.max(1.5, P.outline * h * k);
+  const o = Math.max(2, P.outline * h * k);
   const lw = P.limbWidth * h * k;
   const aw = P.armWidth * h * k;
   const tw = P.torsoWidth * h * k;
   // 2 本の足は腰の左右に少しずらして付ける（立った姿でも 2 本に見える）
-  const off = (q: Pt, s: number): Pt => [q[0] + s * d * lw * 0.32, q[1]];
-  const leg = (s: "near" | "far", sign: number, fill: string) => {
-    const a = off(j.hip, sign);
-    const b = off(j[`knee_${s}`], sign);
+  const off = (q: Pt, s: number): Pt => [q[0] + s * d * lw * 0.28, q[1]];
+  const legPts = (s: "near" | "far", sign: number): Pt[] => [off(j.hip, sign), off(j[`knee_${s}`], sign), off(j[`foot_${s}`], sign)];
+  // 靴: 足先から前へ出る小判形。すねに直角の向きにして、斜めの足でも足首が折れて見えないようにする。奥の靴は短く
+  const bootPts = (s: "near" | "far", sign: number): Pt[] => {
     const f = off(j[`foot_${s}`], sign);
-    // 靴: 足先から向いている側へ出る角の丸い箱
-    const bx = Math.min(f[0] - lw * 0.45, f[0] + d * lw * 1.05);
-    const boot = `<rect x="${n(bx)}" y="${n(f[1] - lw * 0.1)}" width="${n(lw * 1.5)}" height="${n(lw * 0.6)}" rx="${n(lw * 0.25)}" fill="${c.edge}"/>`;
-    return outlined(a, b, lw, o, c.edge, fill) + outlined(b, f, lw, o, c.edge, fill) + boot;
+    const kn = j[`knee_${s}`];
+    const vl = Math.hypot(f[0] - off(kn, sign)[0], f[1] - kn[1]) || 1;
+    const fw: Pt = [((f[1] - kn[1]) / vl) * d, (-(f[0] - off(kn, sign)[0]) / vl) * d];
+    const toe = s === "near" ? 0.65 : 0.45;
+    return [[f[0] - fw[0] * lw * 0.2, f[1] - fw[1] * lw * 0.2], [f[0] + fw[0] * lw * toe, f[1] + fw[1] * lw * toe]];
   };
-  const arm = (s: "near" | "far", fill: string) => {
-    const e = j[`elbow_${s}`];
-    const hd = j[`hand_${s}`];
-    return outlined(j.shoulder, e, aw, o, c.edge, fill) + outlined(e, hd, aw, o, c.edge, fill) +
-      `<circle cx="${n(hd[0])}" cy="${n(hd[1])}" r="${n(P.hand * h * k)}" fill="${c.skin}" stroke="${c.edge}" stroke-width="${n(o)}"/>`;
-  };
-  // ベスト: 肩から腰までの太い形と、反射材の帯 1 本
+  const bw = lw * 0.55;
+  // 胴: 肩が狭く腰が広い台形。裾は腰より少し下まで伸ばし、足の付け根を覆う
   const ax: Pt = [j.hip[0] - j.shoulder[0], j.hip[1] - j.shoulder[1]];
   const len = Math.hypot(ax[0], ax[1]) || 1;
-  const mid: Pt = [j.shoulder[0] + ax[0] * 0.62, j.shoulder[1] + ax[1] * 0.62];
-  const per: Pt = [(-ax[1] / len) * (tw / 2 - o), (ax[0] / len) * (tw / 2 - o)];
-  const vest = outlined(j.shoulder, j.hip, tw, o, c.edge, c.vest) +
-    `<line x1="${n(mid[0] - per[0])}" y1="${n(mid[1] - per[1])}" x2="${n(mid[0] + per[0])}" y2="${n(mid[1] + per[1])}" stroke="${c.band}" stroke-width="${n(h * 0.03)}"/>`;
-  // 頭: 塗りの丸と、向いている側の目と口。首の傾きに合わせて回す
+  const u: Pt = [ax[0] / len, ax[1] / len];
+  const per: Pt = [-u[1], u[0]];
+  const top: Pt = [j.shoulder[0] - u[0] * aw * 0.55, j.shoulder[1] - u[1] * aw * 0.55];
+  // 腕は胴の中から出す（肩に瘤を作らない）
+  const sh: Pt = [j.shoulder[0] + u[0] * aw * 0.25, j.shoulder[1] + u[1] * aw * 0.25];
+  const armPts = (s: "near" | "far"): Pt[] => [sh, j[`elbow_${s}`], j[`hand_${s}`]];
+  const bot: Pt = [j.hip[0] + u[0] * lw * 0.3, j.hip[1] + u[1] * lw * 0.3];
+  const at = (q: Pt, s: number, wd: number): Pt => [q[0] + per[0] * s * wd / 2, q[1] + per[1] * s * wd / 2];
+  const torso: Pt[] = [at(top, -1, tw * 0.8), at(top, 1, tw * 0.8), at(bot, 1, tw), at(bot, -1, tw)];
+  const bandC: Pt = [j.shoulder[0] + ax[0] * 0.62, j.shoulder[1] + ax[1] * 0.62];
+  const bandHalf = (tw * (0.8 + 0.2 * 0.62)) / 2;
+  const neck: Pt[] = [j.shoulder, j.neck];
   const r = P.head * h;
+  const hr = Math.max(aw * 0.65, P.hand * h * k);
+
+  const edge = [
+    poly(legPts("far", -1), lw + 2 * o, c.edge), poly(bootPts("far", -1), bw + 2 * o, c.edge),
+    poly(armPts("far"), aw + 2 * o, c.edge),
+    shapePath(torso, c.edge, 2 * o),
+    poly(legPts("near", 1), lw + o, c.edge), poly(bootPts("near", 1), bw + o, c.edge),
+    poly(armPts("near"), aw + 2 * o, c.edge),
+    poly(neck, aw * 0.6 + 2 * o, c.edge),
+  ];
+  const fill = [
+    poly(armPts("far"), aw, c.vest),
+    `<circle cx="${n(j.hand_far[0])}" cy="${n(j.hand_far[1])}" r="${n(hr)}" fill="${c.skin}" stroke="${c.edge}" stroke-width="${n(o)}"/>`,
+    poly(legPts("far", -1), lw, c.pantsFar), poly(bootPts("far", -1), bw, c.pantsFar),
+    // 手前の足: 塗りの下に細い黒を入れて、奥の足との境を出す
+    poly(legPts("near", 1), lw + o, c.edge), poly(bootPts("near", 1), bw + o, c.edge),
+    poly(legPts("near", 1), lw, c.pants), poly(bootPts("near", 1), bw, c.pants),
+    shapePath(torso, c.vest),
+    `<line x1="${n(bandC[0] - per[0] * (bandHalf - o * 0.5))}" y1="${n(bandC[1] - per[1] * (bandHalf - o * 0.5))}" x2="${n(bandC[0] + per[0] * (bandHalf - o * 0.5))}" y2="${n(bandC[1] + per[1] * (bandHalf - o * 0.5))}" stroke="${c.band}" stroke-width="${n(h * 0.025)}"/>`,
+    poly(neck, aw * 0.6, c.skin),
+    // 手前の腕: 胴と同じ色なので、細い黒で胴との境を出す
+    poly(armPts("near"), aw + o, c.edge), poly(armPts("near"), aw, c.vest),
+    `<circle cx="${n(j.hand_near[0])}" cy="${n(j.hand_near[1])}" r="${n(hr)}" fill="${c.skin}" stroke="${c.edge}" stroke-width="${n(o)}"/>`,
+  ];
+  // 頭: 塗りの丸と、向いている側の目と口。首の傾きに合わせて回す
   const [hx, hy] = j.head;
   const tilt = (Math.atan2(j.head[0] - j.shoulder[0], j.shoulder[1] - j.head[1]) * 180) / Math.PI;
   const face = `<g transform="rotate(${n(tilt)} ${n(hx)} ${n(hy)})">` +
-    `<circle cx="${n(hx)}" cy="${n(hy)}" r="${n(r)}" fill="${c.skin}" stroke="${c.edge}" stroke-width="${n(o * 1.15)}"/>` +
-    `<circle cx="${n(hx + d * r * 0.42)}" cy="${n(hy + r * 0.05)}" r="${n(r * 0.13)}" fill="${c.edge}"/>` +
-    bar([hx + d * r * 0.3, hy + r * 0.48], [hx + d * r * 0.66, hy + r * 0.44], Math.max(1.5, r * 0.09), c.edge) + "</g>";
-  const parts = [leg("far", -1, c.pantsFar), arm("far", c.sleeveFar), vest, leg("near", 1, c.pants), arm("near", c.sleeve), face];
-  return `<g data-part="figure">${parts.join("")}</g>`;
+    `<circle cx="${n(hx)}" cy="${n(hy)}" r="${n(r)}" fill="${c.skin}" stroke="${c.edge}" stroke-width="${n(o)}"/>` +
+    `<circle cx="${n(hx + d * r * 0.42)}" cy="${n(hy + r * 0.12)}" r="${n(r * 0.12)}" fill="${c.edge}"/>` +
+    bar([hx + d * r * 0.3, hy + r * 0.42], [hx + d * r * 0.6, hy + r * 0.42], Math.max(o * 0.7, r * 0.1), c.edge) + "</g>";
+  return `<g data-part="figure">${edge.join("")}${fill.join("")}${face}</g>`;
 }
