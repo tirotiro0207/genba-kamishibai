@@ -119,6 +119,9 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
         {step === "draw" && (
           <section className="fix-step" data-testid="fix-draw">
             <h1>直したい部分を枠で囲む</h1>
+            <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="fix-to-pose">
+              AI に頼まず、部品を手で 1 つずつ動かす
+            </a>
             <nav className="fix-frames" aria-label="コマ">
               {frames.map((f, j) => (
                 <button

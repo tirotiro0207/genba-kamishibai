@@ -1,0 +1,14 @@
+/* 絵の部品を 1 つずつ動かす画面（091）。選んだ部品は太い点線の枠で示す（色を増やさない） */
+.pose { display: flex; flex-direction: column; gap: 12px; max-width: 1100px; margin: 0 auto; }
+.pose-frames, .pose-parts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pose-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pose-face { position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; cursor: pointer; }
+.pose-face svg { display: block; width: 100%; height: auto; pointer-events: none; }
+.pose-box { position: absolute; border: 3px dashed var(--fg); border-radius: 4px; pointer-events: none; }
+.pose-side { display: flex; flex-direction: column; gap: 12px; }
+.pose-controls { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.pose-slider { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.pose-slider b { font-variant-numeric: tabular-nums; color: var(--fg); }
+.pose-slider input { padding: 0; }
+.pose-json { margin: 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--fg) 6%, transparent); padding: 8px; border-radius: 6px; }
+@media (max-width: 760px) { .pose-main { grid-template-columns: 1fr; } }
