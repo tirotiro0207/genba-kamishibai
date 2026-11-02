@@ -4,6 +4,7 @@
     python tools/progress.py --check  # 作り直した中身とファイルがずれていたら 1 で終わる
     python tools/progress.py --done 000 --start 09:30  # マス 000 を済みにし、実際の分を始めた時刻から今までで数える（日本時間。日付つき 2026-11-03T09:30 も可）
     python tools/progress.py --done 000 10  # 分を数で渡す。どちらも、前の「直近」をそのマスのコミットの番号に書き換えてから作り直す
+    python tools/progress.py --done 000 --start 09:30 --commit 9c45f00  # 「直近」を使わず、自分のコミットの番号を書く（スレッドが並んで動くとき）
 
 実際の分の欄の「35（目安）」は、3 本のスレッドが並んで動いた 11/2 の分で、決まりの数え方と合わない値（数え直さない）。
 
@@ -627,8 +628,18 @@ def minutes_since(start, now):
     return max(1, -(-int((now - t0).total_seconds()) // 60))
 
 
-def mark_done(task_id, minutes):
-    """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、そのマスの番号が件名の頭にあるコミットの番号に書き換える。"""
+def check_commit(h):
+    """渡されたコミットの番号が本当にあるか。短い番号にそろえて返す"""
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "--short", "--verify", "--quiet", f"{h}^{{commit}}"], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"コミット {h} が無い")
+    return r.stdout.strip()
+
+
+def mark_done(task_id, minutes, commit=None):
+    """plan.md の 1 行を済みにする。前に済ませたマスの「直近」は、そのマスの番号が件名の頭にあるコミットの番号に書き換える。
+    commit を渡せば「直近」ではなくその番号を書く。スレッドが並んで動くときは、間に相手のコミットが挟まるのでこちらを使う"""
     path = DOCS / "plan.md"
     out, found = [], False
     for line in path.read_text(encoding="utf-8").split("\n"):
@@ -637,7 +648,7 @@ def mark_done(task_id, minutes):
             if c[11] == "直近":
                 c[11] = own_commit(c[0])
             if c[0] == task_id:
-                c[9], c[10], c[11], found = "済み", str(minutes), "直近", True
+                c[9], c[10], c[11], found = "済み", str(minutes), commit or "直近", True
             line = "| " + " | ".join(c) + " |"
         out.append(line)
     if not found:
@@ -653,7 +664,8 @@ def main(argv):
             minutes = minutes_since(argv[argv.index("--start") + 1], now)
         else:
             minutes = int(argv[i + 2])
-        mark_done(argv[i + 1], minutes)
+        commit = check_commit(argv[argv.index("--commit") + 1]) if "--commit" in argv else None
+        mark_done(argv[i + 1], minutes, commit)
         argv = [a for a in argv if a != "--check"]
     d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), now.date())
     d["now"] = now
