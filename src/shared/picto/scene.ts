@@ -1,5 +1,6 @@
 // 1 コマの絵（015〜）。白い背景・地面の線・人形を重ね、視線・距離・強調・手元のアップを数字で決める。
 // 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。小物と吹き出しは 017・018 で足す。
+import { type PropSpec, propsSvg, validateProps } from "./props";
 import { type FigureSpec, figureSvg, type Joint, type Posed, posePoints, type Pt } from "./skeleton";
 
 export const SIZE = 768;
@@ -22,6 +23,8 @@ export interface FrameFigure extends FigureSpec {
 
 export interface Frame {
   figures: FrameFigure[];
+  /** 小物（人形のあとに重ねる） */
+  props?: PropSpec[];
   /** 手元のアップ: その人のその関節を中心に factor 倍で切り取る */
   zoom?: { figure: number; joint: Joint; factor: number };
 }
@@ -53,6 +56,7 @@ export function validateFrame(f: Frame): string[] {
     if (fig.gaze && (Math.abs(fig.gaze.angle) > 90 || fig.gaze.length < 0.1 || fig.gaze.length > 1.5)) errs.push(`figures[${i}].gaze が範囲の外`);
     for (const e of fig.emphasis ?? []) if (!["thick", "large", "dark", "frame"].includes(e)) errs.push(`figures[${i}].emphasis: ${e}`);
   });
+  errs.push(...validateProps(f.props ?? [], f.figures.length));
   if (f.zoom && (f.zoom.figure < 0 || f.zoom.figure >= f.figures.length || f.zoom.factor < 1 || f.zoom.factor > 5)) errs.push("zoom が範囲の外");
   return errs;
 }
@@ -95,6 +99,7 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
     if (f.gaze) body.push(gazeSvg(p, f.gaze));
     if (f.emphasis?.includes("frame")) body.push(frameBox(p));
   });
+  if (frame.props?.length) body.push(propsSvg(frame.props, posed, size));
   let view: [number, number, number] = [0, 0, size];
   if (frame.zoom) {
     const c = posed[frame.zoom.figure].joints[frame.zoom.joint];
