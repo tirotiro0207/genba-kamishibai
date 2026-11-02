@@ -4,6 +4,7 @@ import { audit } from "./audit";
 import { cards } from "./cards";
 import { extract } from "./extract";
 import { files } from "./files";
+import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
@@ -45,5 +46,7 @@ app.route("/api/t/:tenant/extract", extract);
 app.route("/api/t/:tenant/trials", trials);
 // ○× の組（093a）
 app.route("/api/t/:tenant/pairs", pairs);
+// MCP サーバー（092）。会社ごとの鍵で入り、中で上の API を作者の役で呼ぶ
+app.route("/mcp", mcpApp(app));
 
 export default app;

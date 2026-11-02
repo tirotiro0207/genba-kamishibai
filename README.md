@@ -97,6 +97,23 @@ npx wrangler d1 migrations apply DB --local
 npm run dev
 ```
 
+### Use it from other tools (MCP)
+
+The Worker is also an MCP server (Streamable HTTP) at `/mcp/<tenant>`. Ask "turn this document into cards" and the same pipeline runs: extraction → approval of the chosen rules → card making. It can only make **unapproved drafts**; there is no tool for signing, approving or stopping, and calls that try are refused. A supervisor signs on the screen.
+
+- Each company tenant needs its own key, sent as `Authorization: Bearer <key>`. Calls without a valid key get 401. Only the fictional demo company works without a key.
+- Make a key for a local tenant (the key is written only to `private/tenants/<tenant>-mcp.json`; the database keeps its hash):
+
+```bash
+npx tsx scripts/add-mcp-key.ts practice
+```
+
+- Tools: `list_documents`, `doc_to_cards`, `extract_rules`, `make_drafts`, `get_card`.
+
+```bash
+claude mcp add --transport http genba http://localhost:8787/mcp/demo
+```
+
 Public demo — **not built**.
 
 ## License
