@@ -3,7 +3,9 @@
 import { Hono } from "hono";
 import { guardedCall } from "../shared/claude";
 import { parseRules, rulesParams } from "../shared/extract/rules";
+import { type Locate, makeCard, type OkRule } from "../shared/make/maker";
 import { D1CallLog } from "./api-log";
+import { cardView, createCard } from "./cards";
 import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
 import type { PeopleVars } from "./people";
@@ -81,3 +83,33 @@ extract.post("/:id/ok", async (c) => {
   await c.env.DB.prepare("INSERT INTO extraction_oks (extraction_id, tenant_id, items, actor) VALUES (?, ?, ?, ?)").bind(x.id, c.var.tenant.id, JSON.stringify([...items].sort((a, b) => a - b)), actor).run();
   return c.json({ ok: [...items].sort((a, b) => a - b) }, 201);
 });
+
+// 正式な流れの作成（034a）。OK した 1 項目から、3〜4 コマの未承認の下書きを 1 枚作る
+extract.post("/:id/make", async (c) => {
+  const x = await getExtraction(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!x) return c.json({ error: "無い" }, 404);
+  const { item } = await c.req.json<{ item?: unknown }>().catch(() => ({}) as { item?: unknown });
+  if (!Number.isInteger(item) || !x.ok.includes(item as number)) return c.json({ error: "OK した項目の番号ではない" }, 400);
+  const client = claudeClient(c.env);
+  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
+  const rule = x.rules[item as number] as OkRule;
+  const made = await makeCard({ client, log: new D1CallLog(c.env.DB) }, "app", rule, locator(x.id, x.input.text, x.input.source));
+  const row = await createCard(c.env.DB, c.var.tenant.id, made.card, "maker");
+  return c.json(cardView(row), 201);
+});
+
+/** 渡した行の番号を、カードの元の位置にする。資料はページと行、話した言葉は入れた文の字の範囲 */
+export function locator(extractionId: string, text: string, source: InputSource): Locate {
+  const lines = text.split("\n");
+  const starts = lines.reduce<number[]>((a, l, i) => (a.push(i ? a[i - 1] + lines[i - 1].length + 1 : 0), a), []);
+  return (f) => {
+    if (source.kind === "doc") {
+      const a = whereIs(source, f.line);
+      const b = whereIs(source, f.line_end);
+      return { kind: "doc", doc: source.doc, page: a.page ?? 1, line: a.line, ...(b.page === a.page && b.line > a.line ? { line_end: b.line } : {}) };
+    }
+    const start = starts[f.line - 1] ?? 0;
+    const end = (starts[f.line_end - 1] ?? start) + (lines[f.line_end - 1]?.length ?? 1);
+    return { kind: "speech", input: extractionId, start, end: Math.max(end, start + 1) };
+  };
+}

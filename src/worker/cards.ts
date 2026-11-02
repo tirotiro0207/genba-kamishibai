@@ -45,19 +45,21 @@ cards.get("/", async (c) => {
   return c.json({ cards: results.map(cardView) });
 });
 
+/** 未承認の下書きとして保存し、監査の記録に ① と ② を足す（034a の作成からも使う） */
+export async function createCard(db: D1Database, tenantId: string, card: CardBody, actor: string): Promise<CardRow> {
+  const id = crypto.randomUUID();
+  await db.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at) VALUES (?, ?, ?, 'draft', 1, datetime('now'))").bind(id, tenantId, JSON.stringify(card)).run();
+  await appendAudit(db, tenantId, { card_id: id, kind: "source", actor, payload: { version: 1, ...sourcePayload(card) } });
+  await appendAudit(db, tenantId, { card_id: id, kind: "make", actor, payload: { version: 1, ...makePayload(card) } });
+  return (await getCard(db, tenantId, id))!;
+}
+
 cards.post("/", async (c) => {
   const b = await readBody(c);
   const card = b.card as CardBody;
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare("INSERT INTO cards (id, tenant_id, body, status, version, updated_at) VALUES (?, ?, ?, 'draft', 1, datetime('now'))")
-    .bind(id, c.var.tenant.id, JSON.stringify(card))
-    .run();
-  const actor = actorOf(b, "maker");
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: id, kind: "source", actor, payload: { version: 1, ...sourcePayload(card) } });
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: id, kind: "make", actor, payload: { version: 1, ...makePayload(card) } });
-  return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, id))!), 201);
+  return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, actorOf(b, "maker"))), 201);
 });
 
 cards.get("/:id", async (c) => {

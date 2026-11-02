@@ -15,6 +15,8 @@ export interface Statement {
   field: "rule" | "why";
   text: string;
   sources: SourceRef[];
+  /** 元の文に無いことを AI が書いた文（理由など）。sources はその文の根拠にした元の位置。035 で「AI 下書き」に落とす */
+  ai?: boolean;
 }
 
 /**
