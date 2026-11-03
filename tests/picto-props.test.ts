@@ -150,3 +150,30 @@ describe("作者のスケッチに合わせた見た目（11/2）", () => {
     }
   });
 });
+
+describe("伝わらない絵を直すために足した小物（058）", () => {
+  it("体の具合が悪い印・幅の矢印・床の端・吊り元の綱・ごみ箱がそろい、どれも絵柄のテストが通る", () => {
+    for (const kind of ["unwell", "anchor_line"] as const) {
+      const svg = renderFrame({ figures: [F()], props: [{ kind, at: { figure: 0, joint: DEFAULT_JOINT[kind]! }, size: 0.16 }] }).svg;
+      expect(svg, kind).toContain('data-part="prop"');
+      expect(checkStyle(svg), kind).toEqual([]);
+    }
+    for (const kind of ["span_arrow", "edge", "trash_bin"] as const) {
+      const svg = renderFrame({ figures: [F()], props: [{ kind, at: { x: 0.6, y: 0.88 }, size: 0.2 }] }).svg;
+      expect(checkStyle(svg), kind).toEqual([]);
+    }
+  });
+
+  it("人に付けた安全帯は肩とももにもベルトが付き、吹き出しの中の安全帯は腰のベルトだけ", () => {
+    const on = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { figure: 0, joint: "hip" }, size: 0.16 }] }).svg;
+    const off = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { x: 0.5, y: 0.5 }, size: 0.16 }] }).svg;
+    // 肩から腰へ 2 本・胸 1 本・もも 2 本を、縁と中の 2 本の線で描く
+    expect(on.split("<line").length - off.split("<line").length).toBe(10);
+  });
+
+  it("吊り元の綱は天井の線まで届く", () => {
+    const svg = renderFrame({ figures: [F()], props: [{ kind: "anchor_line", at: { figure: 0, joint: "hip" }, size: 0.16 }] }).svg;
+    expect(svg).toMatch(/<rect x="[\d.]+" y="46.1"/);
+  });
+});
+

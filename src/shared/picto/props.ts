@@ -14,6 +14,8 @@ export const PROP_KINDS = [
   "clock", "checklist", "prohibit", "circle_mark", "cross_mark",
   // 11/2 スケッチに合わせて足した
   "outlet", "toolbox", "check_mark", "think_question", "think_check",
+  // 058 伝わらない絵を直すために足した
+  "unwell", "span_arrow", "edge", "anchor_line", "trash_bin",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -63,7 +65,15 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   check_mark: null,
   think_question: "head",
   think_check: "head",
+  unwell: "head",
+  span_arrow: null,
+  edge: null,
+  anchor_line: "hip",
+  trash_bin: null,
 };
+
+/** 天井の線の高さ（scene.ts の CEILING と同じ。吊り元の綱が天井まで届く） */
+const CEIL = 0.06;
 
 const INK = "#000";
 const GRAY = "#8a8a8a";
@@ -256,6 +266,42 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, icon = false)
     case "circle_mark":
       // ○: 正しいやり方の印。太い黒の輪
       return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(h * 0.8)}" fill="none" stroke="${INK}" stroke-width="${n(w * 2.2)}"/>`;
+    case "unwell": {
+      // 体の具合が悪い印: 頭の前の上のうず巻きと、頭の後ろの汗の粒 3 つ。c は頭
+      const sx = cx + d * h * 0.75;
+      const sy = cy - h * 1.05;
+      const pts: string[] = [];
+      for (let k = 0; k <= 60; k++) {
+        const a = (k / 60) * Math.PI * 5;
+        const r = (k / 60) * h * 0.5;
+        pts.push(`${n(sx + Math.cos(a) * r)},${n(sy + Math.sin(a) * r)}`);
+      }
+      const drop = (x: number, y: number, r: number) =>
+        `<path d="M${n(x)} ${n(y - r * 1.8)}Q${n(x + r * 1.1)} ${n(y - r * 0.2)} ${n(x)} ${n(y + r)}Q${n(x - r * 1.1)} ${n(y - r * 0.2)} ${n(x)} ${n(y - r * 1.8)}Z" fill="${GRAY}" stroke="${INK}" stroke-width="${n(w * 0.6)}"/>`;
+      return `<polyline points="${pts.join(" ")}" fill="none" stroke="${INK}" stroke-width="${n(w * 0.9)}" stroke-linecap="round"/>` +
+        drop(cx - d * h * 0.85, cy - h * 0.55, h * 0.13) + drop(cx - d * h * 1.05, cy - h * 0.1, h * 0.11) + drop(cx - d * h * 0.8, cy + h * 0.3, h * 0.1);
+    }
+    case "span_arrow":
+      // 幅の矢印: 左右の両方へ向く矢じりと、端の縦の線。c は真ん中、長さは size
+      return line(cx - h * 0.85, cy, cx + h * 0.85, cy, INK, w * 1.3) +
+        poly([[cx - h, cy], [cx - h * 0.72, cy - h * 0.2], [cx - h * 0.72, cy + h * 0.2]], INK) +
+        poly([[cx + h, cy], [cx + h * 0.72, cy - h * 0.2], [cx + h * 0.72, cy + h * 0.2]], INK) +
+        line(cx - h, cy - h * 0.3, cx - h, cy + h * 0.3, INK, w) + line(cx + h, cy - h * 0.3, cx + h, cy + h * 0.3, INK, w);
+    case "edge":
+      // 床の端: c から右は床が無く、下へ暗い穴が続く（足を踏み外すと落ちる）。c は床の端の角
+      return rect(cx, cy - w * 0.5, s * 20, s * 20, "#3a3a3a", 0) + line(cx, cy, cx, cy + s * 20, INK, w * 1.6) +
+        line(cx - s * 0.4, cy, cx, cy, INK, w * 1.6);
+    case "anchor_line":
+      return ""; // 天井までの長さが要るので propsSvg で描く
+    case "trash_bin": {
+      // ごみ箱: 下の狭い台形の箱と、ふたと、縦の筋 2 本。c は箱の下の真ん中
+      const bh = s * 0.9;
+      const lid = s * 0.12;
+      let out = `<path d="M${n(cx - h * 0.8)} ${n(cy - bh)}L${n(cx + h * 0.8)} ${n(cy - bh)}L${n(cx + h * 0.62)} ${n(cy)}L${n(cx - h * 0.62)} ${n(cy)}Z" fill="${GRAY}" stroke="${INK}" stroke-width="${n(w)}" stroke-linejoin="round"/>` +
+        rect(cx - h * 0.92, cy - bh - lid, h * 1.84, lid, "#5a5a5a", lid * 0.3, INK, w * 0.8);
+      for (const k of [-1, 1]) out += line(cx + k * h * 0.28, cy - bh * 0.8, cx + k * h * 0.22, cy - bh * 0.15, INK, w * 0.6);
+      return out;
+    }
     case "cross_mark":
       // ×: まちがったやり方の印。太い黒の 2 本線（赤は禁止の部品だけに使う）
       return line(cx - h * 0.7, cy - h * 0.7, cx + h * 0.7, cy + h * 0.7, INK, w * 2.2) + line(cx + h * 0.7, cy - h * 0.7, cx - h * 0.7, cy + h * 0.7, INK, w * 2.2);
@@ -338,7 +384,47 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
         return `<g data-part="prop">${bubbleSvg(p.kind, c, p.size * size, to, p.inner, size)}</g>`;
       }
       const s = HEADWEAR.has(p.kind) && "figure" in p.at && p.at.joint === "head" ? posed[p.at.figure].h * PROPORTION.head * 2.5 : p.size * size;
-      return `<g data-part="prop">${shape(p.kind, c, s, d)}</g>`;
+      if (p.kind === "anchor_line") return `<g data-part="prop">${anchorLine(c, s, d, size)}</g>`;
+      // 人に付けた安全帯は、腰のベルトに加えて肩のベルトともものベルトを体に沿って描く（058）
+      const straps = p.kind === "harness" && "figure" in p.at ? harnessStraps(posed[p.at.figure], s) : "";
+      return `<g data-part="prop">${straps}${shape(p.kind, c, s, d)}</g>`;
     })
     .join("");
+}
+
+/** 吊り元の綱: 腰の後ろから天井の金具までの綱と、天井にかけたフック。c は腰 */
+function anchorLine([cx, cy]: Pt, s: number, d: number, size: number): string {
+  const w = Math.max(3, s * 0.07);
+  const top = CEIL * size;
+  const bx = cx - d * s * 0.45;
+  const tx = cx - d * s * 0.7;
+  const hookY = top + s * 0.45;
+  return `<path d="M${n(bx)} ${n(cy)}Q${n(tx - d * s * 0.25)} ${n((cy + hookY) / 2)} ${n(tx)} ${n(hookY)}" fill="none" stroke="${INK}" stroke-width="${n(w)}" stroke-linecap="round"/>` +
+    `<path d="M${n(tx)} ${n(hookY)}V${n(top + s * 0.2)}A${n(s * 0.12)} ${n(s * 0.12)} 0 0 ${d > 0 ? 1 : 0} ${n(tx + d * s * 0.24)} ${n(top + s * 0.2)}V${n(top + s * 0.3)}" fill="none" stroke="${INK}" stroke-width="${n(w * 1.3)}" stroke-linecap="round"/>` +
+    `<rect x="${n(tx - s * 0.2)}" y="${n(top)}" width="${n(s * 0.64)}" height="${n(s * 0.12)}" fill="${GRAY}" stroke="${INK}" stroke-width="${n(w * 0.6)}"/>`;
+}
+
+/** 安全帯の肩とももをつなぐベルト（フルハーネス）。肩から腰へ 2 本、胸に横の 1 本、ももに 1 本ずつ */
+function harnessStraps(p: Posed, s: number): string {
+  const w = Math.max(3, s * 0.07);
+  const j = p.joints;
+  const tw = p.h * PROPORTION.torsoWidth * 0.32;
+  const strap = (a: Pt, b: Pt) =>
+    `<line x1="${n(a[0])}" y1="${n(a[1])}" x2="${n(b[0])}" y2="${n(b[1])}" stroke="${INK}" stroke-width="${n(w * 1.9)}" stroke-linecap="round"/>` +
+    `<line x1="${n(a[0])}" y1="${n(a[1])}" x2="${n(b[0])}" y2="${n(b[1])}" stroke="${GRAY}" stroke-width="${n(w)}" stroke-linecap="round"/>`;
+  const at = (a: Pt, b: Pt, u: number): Pt => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+  let out = "";
+  for (const k of [-1, 1]) out += strap([j.shoulder[0] + k * tw, j.shoulder[1]], [j.hip[0] + k * tw, j.hip[1]]);
+  const chest = at(j.shoulder, j.hip, 0.3);
+  out += strap([chest[0] - tw * 1.3, chest[1]], [chest[0] + tw * 1.3, chest[1]]);
+  const lw = p.h * PROPORTION.limbWidth * 0.75;
+  for (const knee of [j.knee_far, j.knee_near]) {
+    const m = at(j.hip, knee, 0.35);
+    const vx = knee[0] - j.hip[0];
+    const vy = knee[1] - j.hip[1];
+    const len = Math.hypot(vx, vy) || 1;
+    const [px, py] = [-vy / len, vx / len];
+    out += strap([m[0] + px * lw, m[1] + py * lw], [m[0] - px * lw, m[1] - py * lw]);
+  }
+  return out;
 }
