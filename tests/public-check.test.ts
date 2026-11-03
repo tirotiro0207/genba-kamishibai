@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadBanned, namesFromVars, scan, secretValues } from "../scripts/public-check";
+import { loadBanned, namesFromList, namesFromVars, scan, secretValues } from "../scripts/public-check";
 
 // 102: 公開物の検査の道具。禁句・鍵・個人情報の見つけ方を、作りものの一覧と値で確かめる（本物の一覧・PIN・名前は使わない）
 const rules = "# 約束\n\n```banned\n作りもの会社\nZZ\n\n```\n";
@@ -33,8 +33,16 @@ describe("公開物の検査（102）", () => {
     expect(h.map((x) => [x.kind, x.what])).toEqual([
       ["メール", "…@gmail.com"],
       ["電話", "電話番号の形"],
-      ["名前", "SUPERVISOR_1_NAME"],
+      ["名前", "SUPERVISOR_1_NAME（1 行目）"],
     ]);
     expect(scan("c.md", "版は 1.03-1234-5678 ではない 2026-11-03", secrets).filter((x) => x.kind === "電話")).toEqual([]);
+  });
+
+  it("名前の一覧のファイル: 1 行 1 語を読み、当たった文書の行と一覧の何行目かだけを返す", () => {
+    const names = namesFromList("\uFEFF# 見出し\n作り太郎\n\n例の花子\n");
+    expect(names.map(([l]) => l)).toEqual(["名前の一覧の 2 行目", "名前の一覧の 4 行目"]);
+    const h = scan("d.md", "一行目\n担当は 作り 太郎\n三行目は例の\n花子", { banned: [], values: [], names });
+    expect(h.map((x) => x.what)).toEqual(["名前の一覧の 2 行目（2 行目）", "名前の一覧の 4 行目（行をまたぐ）"]);
+    expect(JSON.stringify(h)).not.toMatch(/太郎|花子/);
   });
 });

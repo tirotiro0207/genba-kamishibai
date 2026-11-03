@@ -1,12 +1,12 @@
 // 102: 公開物（リポジトリと公開デモ）に、禁句・鍵・個人情報・資料の文が無いかを調べる。見つけたものは直さずに一覧にする。
 // 一覧は private/audit/102-public-check.json（git の外）。画面には件数と、どのファイルのどの種類かだけを出し、見つけた値は出さない。
 //
-//   BANNED_RULES=<約束のファイル> npx tsx scripts/public-check.ts [--no-demo]
+//   BANNED_RULES=<約束のファイル> PUBLIC_CHECK_NAMES_FILE=<名前の一覧> npx tsx scripts/public-check.ts [--no-demo]
 //
 // 調べる所: git に入っているファイル全部・コミットの文全部・公開デモ（GET だけ。入口・画面の JS・架空の会社の API）。
 // 禁句: BANNED_RULES のファイルの banned のコードブロック（コミットのフックと同じ読み方）。
 // 鍵: 鍵の形の文字列と、private/tenants の PIN と鍵の値（値は出さない）。
-// 個人情報: メール（noreply と例を除く）・電話番号・.dev.vars の *_NAME の値。
+// 個人情報: メール（noreply と例を除く）・電話番号・.dev.vars の *_NAME の値・PUBLIC_CHECK_NAMES_FILE の名前の一覧（1 行 1 語。中身は出さず、一覧の何行目かだけを出す）。
 // 資料の文: 手元のマニュアルの文（private/pdf/manual）と 20 文字続けて同じ所。確認用の 10 項目は読まない
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -67,7 +67,8 @@ export interface Secrets {
 export function scan(where: string, text: string, s: Omit<Secrets, "material">): Hit[] {
   const hits: Hit[] = [];
   const add = (kind: Kind, what: string) => hits.some((h) => h.kind === kind && h.what === what) || hits.push({ where, kind, what });
-  for (const line of text.split(/\r?\n/)) {
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
     const n = norm(line);
     for (const b of s.banned) if (b.re.test(n)) add("禁句", b.word);
     for (const [label, re] of KEY_RES) if (re.test(line)) add("鍵", label);
@@ -76,7 +77,12 @@ export function scan(where: string, text: string, s: Omit<Secrets, "material">):
   }
   for (const [label, v] of s.values) if (v.length >= 4 && text.includes(v)) add(label.startsWith("PIN") ? "PIN" : "鍵", label);
   const nt = norm(text);
-  for (const [label, v] of s.names) if (norm(v).length >= 2 && nt.includes(norm(v))) add("名前", label);
+  for (const [label, v] of s.names) {
+    const nv = norm(v);
+    if (nv.length < 2 || !nt.includes(nv)) continue;
+    const at = lines.flatMap((l, i) => (norm(l).includes(nv) ? [i + 1] : []));
+    add("名前", `${label}（${at.length ? `${at.slice(0, 5).join("・")} 行目` : "行をまたぐ"}）`);
+  }
   return hits;
 }
 
@@ -90,6 +96,15 @@ export function secretValues(json: unknown, label: string): [string, string][] {
   };
   walk(json, "");
   return out;
+}
+
+/** 名前の一覧（1 行 1 語。空の行と # の行は飛ばす）→ ラベルは「名前の一覧の N 行目」 */
+export function namesFromList(list: string): [string, string][] {
+  return list
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l, i) => [`名前の一覧の ${i + 1} 行目`, l.trim()] as [string, string])
+    .filter(([, v]) => v && !v.startsWith("#"));
 }
 
 /** .dev.vars の *_NAME の値（ラベルは変数の名前） */
@@ -115,7 +130,10 @@ function loadSecrets(): Secrets {
   return {
     banned: loadBanned(readFileSync(rulesPath, "utf-8")),
     values,
-    names: existsSync(vars) ? namesFromVars(readFileSync(vars, "utf-8")) : [],
+    names: [
+      ...(existsSync(vars) ? namesFromVars(readFileSync(vars, "utf-8")) : []),
+      ...(process.env.PUBLIC_CHECK_NAMES_FILE ? namesFromList(readFileSync(process.env.PUBLIC_CHECK_NAMES_FILE, "utf-8")) : []),
+    ],
     material: existsSync(manual)
       ? readdirSync(manual)
           .filter((f) => /^p\d+\.json$/.test(f))
