@@ -3,7 +3,7 @@
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
-import { DEFAULT_FACE, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
+import { DEFAULT_FACE, earsSvg, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
 import type { Angles } from "./poses";
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
@@ -165,6 +165,8 @@ function curly(dx: number, sx: number, open = false) {
 const HAIR_FILL: Partial<Record<Hair, string>> = { buzz: "#444" };
 /** かぶり物をかぶったとき、ほかの形に押し込む髪（くせ毛は short の形になる） */
 const UNDER_HAT: Partial<Record<Hair, Hair>> = { curly: "short" };
+/** 耳を覆う髪（耳を描かない） */
+const HIDES_EARS = new Set<Hair>(["bob", "long", "curly"]);
 /** かぶらないときの頭のいちばん上（地面に置くのに使う）。無い髪は −92 */
 const HAIR_TOP: Partial<Record<Hair, number>> = { curly: -108 };
 const HAIR_B: Record<Hair, Record<View, { back?: string; behind?: string; front: string; gloss?: string }>> = {
@@ -422,7 +424,9 @@ const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: Ch
   const k = faceHalfWidth(f.face) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
-  return `${h.back}${faceSvg(view, f)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f)}${h.front}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
+  // 耳は髪の前の層の上に描く。耳を覆う髪（おかっぱ・ロング・くせ毛）のときは描かない
+  const ears = HIDES_EARS.has(headwear === "none" ? hair : (UNDER_HAT[hair] ?? hair)) ? "" : earsSvg(view, f);
+  return `${h.back}${faceSvg(view, f)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
 const ANKLE_MAX = 25;

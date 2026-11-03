@@ -2,6 +2,7 @@
 // 体・髪・かぶり物の上に重ねる 4 つ目の層で、どの部品も 3 つの向き（正面・斜め・真横）で描ける。
 // 胴の部品は胴の座標（原点＝腰、胴の上の端 −142・下の端 20）、頭の部品は頭の座標（原点＝首の付け根、顔は y −70〜0）で描く。
 // 色は使わず、灰色の明るさと形で見分ける。部品ごとに g の id（part_…）を付け、Illustrator で直したあとに取り込めるようにする。
+import { EAR_BOTTOM, EAR_MARK, EAR_TOP } from "./avatar";
 import type { HeadwearKind, View } from "./character";
 
 /** 胴に重ねる服。並べた順に描く（下に着るものから） */
@@ -316,15 +317,15 @@ const MASK: Record<View, [number, number, number, number]> = {
   quarter: [1, 37, -29, -8],
   side: [17, 43, -29, -8],
 };
-const EAR_AT: Record<View, number[]> = { front: [-44, 44], quarter: [-34, 44], side: [-4] };
 export const maskSvg = (view: View, k = 1) => {
   const [l, r, t, b] = MASK[view].map((v, i) => (i < 2 ? Number(n(v * k)) : v));
   const strap = (ear0: number) => {
     const ear = Number(n(ear0 * k));
     const edge = ear < l ? l : r;
-    return `<path d="M${edge} ${t + 5}L${ear} ${t - 5}M${edge} ${b - 4}L${ear} ${b - 12}" stroke="#000" stroke-width="3"/>`;
+    // 紐は耳の上と下の端の少し内側へ（耳を後から描くので、紐の先は耳の裏に入って掛かって見える）
+    return `<path d="M${edge} ${t + 5}L${ear} ${EAR_TOP + 4}M${edge} ${b - 4}L${ear} ${EAR_BOTTOM - 4}" stroke="#000" stroke-width="3"/>`;
   };
-  return part("mask", EAR_AT[view].map(strap).join("") + `<rect x="${l}" y="${t}" width="${r - l}" height="${b - t}" rx="9" fill="#fff" ${S(4)}/>`);
+  return part("mask", EAR_MARK[view].map(strap).join("") + `<rect x="${l}" y="${t}" width="${r - l}" height="${b - t}" rx="9" fill="#fff" ${S(4)}/>`);
 };
 
 /** かぶり物の線（横に回る帯）。[左の端, 右の端, 高さ] を本数ぶん */

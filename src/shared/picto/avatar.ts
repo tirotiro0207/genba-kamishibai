@@ -69,8 +69,10 @@ const MARK: Record<View, {
   quarter: { eyes: [8, 30], out: [-1, 1], nose: [21, -25, 2], mouth: [20, 6.5, -10.5] },
   side: { eyes: [27], out: [1], nose: [37, -27, 2.2], mouth: [32.5, 4, -11.5] },
 };
-/** 耳の目印（マスクの紐・眼鏡の蔓の先）。正面は左右、斜めは見える耳と奥の顔の縁、真横は見える耳 */
-export const EAR_MARK: Record<View, number[]> = { front: [-44, 44], quarter: [-34, 44], side: [-4] };
+/** 耳の目印（マスクの紐の先）。正面は左右の耳の付け根の少し外、斜めは見える耳（後ろ寄り）と奥の顔の縁、真横は見える耳 */
+export const EAR_MARK: Record<View, number[]> = { front: [-47, 47], quarter: [-35, 44], side: [-5] };
+/** 耳の上と下の端（目の高さ −42 から鼻の下 −22 まで） */
+export const EAR_TOP = -42, EAR_BOTTOM = -22;
 
 export interface Landmarks {
   w: number;
@@ -146,6 +148,24 @@ const mouthSvg = (lm: Landmarks, kind: Mouth) => {
 };
 const beardSvg = (lm: Landmarks, kind: Beard) =>
   kind === "none" ? "" : line(`M${n(lm.mouth.cx - lm.mouth.hw - 2 * lm.k)} -19Q${n(lm.mouth.cx)} -21 ${n(lm.mouth.cx + lm.mouth.hw + 2 * lm.k)} -19`, 3.5);
+
+/**
+ * 耳（髪の前の層の上・かぶり物の下に描く。マスクの紐と眼鏡の蔓は耳の下へ入る）。
+ * 正面は顔の縁から外へ出た半分だけを描く。斜めは奥へ回った見える耳 1 つ、真横は頭の真ん中の耳 1 つで、穴の向きは顔の向く側
+ */
+export const earsSvg = (view: View, p: FaceParts) => {
+  const { w, k } = landmarks(p.face, view);
+  const skin = SKIN_TONE[p.skin];
+  const ink = (d: string) => `<path d="${d}" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>`;
+  if (view === "front") return [-1, 1].map((s) => {
+    const x = (d: number) => n(s * (w + d));
+    return `<path d="M${x(-1)} ${EAR_TOP}Q${x(11)} ${EAR_TOP - 4} ${x(10)} -32Q${x(10)} ${EAR_BOTTOM + 2} ${x(-1)} ${EAR_BOTTOM}Z" fill="${skin}" stroke="#000" stroke-width="4" stroke-linejoin="round"/>` +
+      ink(`M${x(3)} -38Q${x(7)} -34 ${x(3.5)} -27`);
+  }).join("");
+  const cx = EAR_MARK[view][0] * k, rx = view === "side" ? 6.5 : 6;
+  return `<ellipse cx="${n(cx)}" cy="-32" rx="${rx}" ry="10" fill="${skin}" stroke="#000" stroke-width="4"/>` +
+    ink(`M${n(cx + 2.5)} -37Q${n(cx - 2.5)} -37 ${n(cx - 2)} -31Q${n(cx - 1.5)} -27 ${n(cx + 2)} -26`);
+};
 
 /** 顔（輪郭・目・まつげ・眉・鼻・口・ひげ）。初めの値は今までの FACE_B と同じ文字列になる */
 export const faceSvg = (view: View, p: FaceParts) => {
