@@ -12,6 +12,7 @@ import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
 import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
 import { issue } from "./issue";
+import { queue } from "./queue";
 import { read } from "./read";
 
 export const app = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
@@ -41,8 +42,8 @@ app.use("/api/t/:tenant/*", roleRequiredGate);
 app.use("/api/t/:tenant/cards", cardsGate);
 app.use("/api/t/:tenant/cards/*", cardsGate);
 app.use("/api/t/:tenant/audit/*", auditGate);
-// 新入社員が使わない口（052）。データを戻す・回答の記録・○× の組は、新入社員の役割では開かない
-for (const part of ["reset", "trials", "pairs"]) {
+// 新入社員が使わない口（052）。データを戻す・回答の記録・○× の組・確認待ちの列と仕分け（061）は、新入社員の役割では開かない
+for (const part of ["reset", "trials", "pairs", "queue", "sort"]) {
   app.use(`/api/t/:tenant/${part}`, noNewhireGate);
   app.use(`/api/t/:tenant/${part}/*`, noNewhireGate);
 }
@@ -53,6 +54,8 @@ app.route("/api/t/:tenant/read", read);
 app.route("/api/t/:tenant/issue", issue);
 
 app.route("/api/t/:tenant/cards", cards);
+// 確認待ちの列と仕分けの入れ替え（061）
+app.route("/api/t/:tenant", queue);
 app.route("/api/t/:tenant/audit", audit);
 app.route("/api/t/:tenant/reset", reset);
 app.route("/api/t/:tenant/files", files);

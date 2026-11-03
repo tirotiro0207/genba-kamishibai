@@ -10,6 +10,7 @@ import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
 import { PoseScreen } from "./pose/PoseScreen";
+import { QueueScreen } from "./queue/QueueScreen";
 import { ReadScreen } from "./read/ReadScreen";
 import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
@@ -61,9 +62,11 @@ export function App() {
   if (r[0] === "t" && r[2] === "issue") body = <IssueScreen tenant={r[1]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
   if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
+  // #/t/<テナント>/queue ・ 確認待ちの列（赤から先）と仕分けの一覧の入れ替え（061）
+  if (r[0] === "t" && r[2] === "queue") body = <QueueScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない
-  const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign", "pose"].includes(r[2]);
+  const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign", "pose", "queue"].includes(r[2]);
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
   return (
     <main data-testid="app">

@@ -1,0 +1,21 @@
+/* 確認待ちの列と仕分けの一覧（061）。赤は危ないカードの印だけに使う */
+.queue { display: flex; flex-direction: column; gap: 14px; max-width: 900px; margin: 0 auto; }
+.queue h1 { font-size: 22px; margin: 4px 0; }
+.queue-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.queue-box h2 { font-size: 17px; margin: 0 0 8px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.queue-meta { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.queue-list { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.queue-list > li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.queue-band { font-size: 13px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); }
+.band-red { background: var(--err); border-color: var(--err); color: #fff; }
+.band-yellow { background: var(--band-yellow); border-color: var(--band-yellow); color: #111; }
+.band-green { background: var(--band-green); border-color: var(--band-green); color: #fff; }
+.queue-why { display: flex; flex-direction: row; justify-content: flex-start; text-align: left; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 14px; }
+.queue-why input { flex: 1; min-width: 200px; font-size: 14px; padding: 4px 8px; }
+.queue-sort { border-collapse: collapse; width: 100%; font-size: 14px; }
+.queue-sort td { border-top: 1px dashed var(--line); padding: 6px 6px; vertical-align: top; }
+.queue-page { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+.queue-reason { min-width: 220px; }
+.sort-yes { color: var(--accent); }
+.sort-no { color: var(--muted); }
+.queue-swapped { margin-left: 6px; font-size: 12px; border: 1px solid var(--fg); border-radius: 8px; padding: 0 6px; }
