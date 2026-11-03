@@ -10,9 +10,9 @@ const draw = (view: View, r: (typeof INDUSTRY_DRAFTS)[number]["roles"][number]) 
   characterSvg({ angles: POSES.stand, x: 100, groundY: 300, height: 270, facing: "right", view, role: r.role, hair: "short", headwear: r.headwear, outfit: r.outfit });
 
 describe("職場の服と役の印（下絵）", () => {
-  it("全業種・全役・3 つの向きで描け、色は灰色だけ（R=G=B）", () => {
-    for (const ind of INDUSTRY_DRAFTS)
-      for (const r of ind.roles)
+  // 40 業種あるので、業種ごとに分けて時間切れを防ぐ
+  it.each(INDUSTRY_DRAFTS.map((ind) => [ind.id, ind] as const))("業種 %s: 全役・3 つの向きで描け、色は灰色だけ（R=G=B）", (_id, ind) => {
+    for (const r of ind.roles)
         for (const view of VIEWS) {
           const body = draw(view, r);
           const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="320">${body}</svg>`;

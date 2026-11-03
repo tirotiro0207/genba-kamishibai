@@ -1,5 +1,5 @@
 // 職場の服と役の印の下絵を並べる（API は使わない）。業種ごとに 1 段、役ごとに 正面・斜め・真横 の全身。
-// 出力 1: private/picto/lab/outfit/outfit.png（全業種を並べた 1 枚）と、業種ごとの PNG。
+// 出力 1: private/picto/lab/outfit/outfit_set<番号>.png（5 業種ずつ並べたもの）と、業種ごとの PNG。
 // 出力 2: private/picto/illustrator/修正待ち/部品/部品_<番号>_<業種>.svg（作者が Illustrator で直す下絵。部品は g の id「part_…」）。
 //
 //   npx tsx scripts/picto-outfit.ts
@@ -46,8 +46,13 @@ for (const r of rows) {
   writeFileSync(join(lab, `outfit_${r.ind.id}.png`), svgToPng(s, r.w));
   writeFileSync(join(todo, `部品_${r.ind.id}_${r.ind.name.replace(/[・/]/g, "_")}.svg`), s, "utf-8");
 }
-const W = Math.max(...rows.map((r) => r.w));
+// 40 業種を 1 枚にすると縦に長すぎるので、5 業種ずつのまとめにする
 const RH = TITLE + LABEL + CH + 20;
-const all = svg(W, RH * rows.length, rows.map((r, i) => `<g transform="translate(0 ${i * RH})">${r.body}</g>`).join(""));
-writeFileSync(join(lab, "outfit.png"), svgToPng(all, W));
-console.log(`並べた絵 ${join(lab, "outfit.png")}\n下絵の SVG ${todo}`);
+const PER = 5;
+for (let k = 0; k * PER < rows.length; k++) {
+  const part = rows.slice(k * PER, (k + 1) * PER);
+  const W = Math.max(...part.map((r) => r.w));
+  const all = svg(W, RH * part.length, part.map((r, i) => `<g transform="translate(0 ${i * RH})">${r.body}</g>`).join(""));
+  writeFileSync(join(lab, `outfit_set${k + 1}.png`), svgToPng(all, W));
+}
+console.log(`並べた絵 ${lab}（outfit_set1〜${Math.ceil(rows.length / PER)}.png）\n下絵の SVG ${todo}`);

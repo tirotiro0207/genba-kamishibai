@@ -16,7 +16,12 @@ export type Garment =
   | "harness" // 安全帯の肩と胸のベルト
   | "apronLong" // 腰から下の長い前掛け
   | "apronShort" // 腰から下の短い前掛け
-  | "apronBib"; // 胸当てのエプロン
+  | "apronBib" // 胸当てのエプロン
+  | "uniform" // 制服の上着（ボタン 1 列と胸のポケット。警備・鉄道・運転）
+  | "coverall" // つなぎ（上着とズボンを同じ明るさに。腰に帯）
+  | "tunic" // 襟の無い上衣（看護・リネン）
+  | "lifeJacket" // 救命胴衣
+  | "checked"; // チェックのシャツ
 
 export interface Outfit {
   /** 胴に重ねる服。tone は灰色の明るさ（初めの値は部品ごと） */
@@ -25,16 +30,26 @@ export interface Outfit {
   sleeve?: string;
   pants?: string;
   boots?: string;
-  neck?: "tie" | "scarf";
+  neck?: "tie" | "scarf" | "towel";
   tag?: "clip" | "lanyard";
   toolBelt?: boolean;
   /** 腕章（手前の腕の二の腕） */
   armband?: boolean;
   /** かぶり物の線の本数（安全帽・つばの帽子・衛生キャップ） */
-  stripes?: 0 | 1 | 2;
+  stripes?: 0 | 1 | 2 | 3;
   /** 若葉の印（安全帽の前） */
   leaf?: boolean;
   mask?: boolean;
+  /** 耳当て・ヘッドセット（マイクつき） */
+  ears?: "muffs" | "headset";
+  /** 顔の前の覆い（透明の面・林業の網の面） */
+  visor?: "clear" | "mesh";
+  /** 肩章の線の本数（警備） */
+  rank?: 1 | 2 | 3;
+  /** 袖口の線の本数（鉄道） */
+  cuffs?: 1 | 2 | 3;
+  /** 手袋の明るさ */
+  gloves?: string;
 }
 
 const n = (v: number) => String(Math.round(v * 10) / 10);
@@ -63,6 +78,49 @@ const fullTop = (w: number, tone: string, bottom = 20) =>
   `<rect x="${-w}" y="-142" width="${w * 2}" height="${bottom + 142}" rx="${w === 30 ? 20 : 30}" fill="${tone}" ${S(6)}/>`;
 
 const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) => string }> = {
+  uniform: {
+    tone: "#333",
+    draw: (v, t) => {
+      const w = W(v), c = CX[v], k = ink(t);
+      return fullTop(w, t, 26) + `<path d="M${c - 16} -142L${c} -118L${c + 16} -142Z" fill="#fff" ${S(4)}/>` +
+        `<path d="M${c - 5} -136H${c + 5}L${c + 6} -112L${c} -106L${c - 6} -112Z" fill="#222" ${S(3)}/>` +
+        [-96, -72, -48, -24].map((y) => `<circle cx="${c}" cy="${y}" r="3.5" fill="${k === "#fff" ? "#ccc" : "#555"}"/>`).join("") +
+        `<rect x="${c - 34}" y="-106" width="20" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
+    },
+  },
+  coverall: {
+    tone: "#777",
+    draw: (v, t) => {
+      const w = W(v), c = CX[v], k = ink(t);
+      return fullTop(w, t) + `<path d="M${c - 20} -142L${c - 4} -124L${c} -136L${c + 4} -124L${c + 20} -142" fill="${t}" ${S(4)}/>` +
+        `<path d="M${c} -136V20" stroke="${k}" stroke-width="3"/><path d="M${-w + 3} -40H${w - 3}" stroke="${k}" stroke-width="5"/>`;
+    },
+  },
+  tunic: {
+    tone: "#fff",
+    draw: (v, t) => {
+      const w = W(v), c = CX[v], k = ink(t);
+      return fullTop(w, t, 30) + `<path d="M${c - 18} -142Q${c} -122 ${c + 18} -142" fill="none" stroke="${k}" stroke-width="3"/><path d="M${c - 4} -130V-80" stroke="${k}" stroke-width="3"/>`;
+    },
+  },
+  lifeJacket: {
+    tone: "#777",
+    draw: (v, t) => {
+      const w = W(v), c = CX[v];
+      return `<path d="M${-w} -108Q${-w} -142 ${c - 18} -142L${c - 6} -100V-20H${-w}Z" fill="${t}" ${S(5)}/>` +
+        `<path d="M${w} -108Q${w} -142 ${c + 18} -142L${c + 6} -100V-20H${w}Z" fill="${t}" ${S(5)}/>` +
+        `<path d="M${-w + 2} -60H${w - 2}" stroke="#000" stroke-width="6"/>`;
+    },
+  },
+  checked: {
+    tone: "#bbb",
+    draw: (v, t) => {
+      const w = W(v), c = CX[v];
+      const grid = [-110, -80, -50, -20].map((y) => `<path d="M${-w + 4} ${y}H${w - 4}" stroke="#666" stroke-width="3"/>`).join("") +
+        [-24, 0, 24].filter((x) => Math.abs(x) < w - 6).map((x) => `<path d="M${x} -132V16" stroke="#666" stroke-width="3"/>`).join("");
+      return fullTop(w, t) + grid + `<path d="M${c - 20} -142L${c - 4} -126L${c - 2} -142ZM${c + 20} -142L${c + 4} -126L${c + 2} -142Z" fill="${t}" ${S(4)}/>`;
+    },
+  },
   jacket: {
     tone: "#ccc",
     draw: (v, t) => {
@@ -155,8 +213,11 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
 };
 
 /** 首まわり・胸・腰の小物 */
-const neckSvg = (view: View, kind: "tie" | "scarf") => {
-  const c = CX[view];
+const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
+  const c = CX[view], w = W(view);
+  if (kind === "towel")
+    return `<path d="M${-w + 6} -142Q${c} -124 ${w - 6} -142V-130Q${c} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
+      `<path d="M${c - 22} -132V-86H${c - 10}V-128ZM${c + 10} -128V-86H${c + 22}V-132Z" fill="#fff" ${S(4)}/>`;
   return kind === "tie"
     ? `<path d="M${c - 5} -132H${c + 5}L${c + 7} -74L${c} -64L${c - 7} -74Z" fill="#222" ${S(3)}/><rect x="${c - 6}" y="-140" width="12" height="9" fill="#222" ${S(3)}/>`
     : `<path d="M${c - 24} -142H${c + 24}L${c + 2} -112Z" fill="#222" ${S(4)}/><path d="M${c} -116L${c - 12} -90L${c + 8} -94Z" fill="#222" ${S(4)}/>`;
@@ -175,11 +236,45 @@ const toolBeltSvg = (view: View) => {
   return `<rect x="${x - 12}" y="-44" width="24" height="34" rx="3" fill="#333" ${S(4)}/><path d="M${x - 6} -44V-58M${x + 5} -44V-54" stroke="#000" stroke-width="5" stroke-linecap="round"/>`;
 };
 
+/** 肩章（肩の上の板と線） */
+const rankSvg = (view: View, bars: number) => {
+  const w = W(view);
+  const xs = view === "side" ? [-14] : [-w + 4, w - 28];
+  return xs.map((x) => `<rect x="${x}" y="-146" width="24" height="10" fill="#555" ${S(3)}/>` +
+    Array.from({ length: bars }, (_, i) => `<path d="M${x + 5 + i * 7} -144V-138" stroke="#fff" stroke-width="3"/>`).join("")).join("");
+};
+
 /** 胴の部品（胴の上に重ねる。手前の腕より先に描く） */
 export function outfitTorso(view: View, o: Outfit): string {
   const wear = (o.wear ?? []).map((g) => part(g.kind, GARMENT[g.kind].draw(view, g.tone ?? GARMENT[g.kind].tone))).join("");
-  return wear + part("neck", o.neck ? neckSvg(view, o.neck) : "") + part("tag", o.tag ? tagSvg(view, o.tag) : "") + part("toolbelt", o.toolBelt ? toolBeltSvg(view) : "");
+  return wear + part("neck", o.neck ? neckSvg(view, o.neck) : "") + part("tag", o.tag ? tagSvg(view, o.tag) : "") +
+    part("toolbelt", o.toolBelt ? toolBeltSvg(view) : "") + part("rank", o.rank ? rankSvg(view, o.rank) : "");
 }
+
+/** 袖口の線（前腕の座標。手首の少し上） */
+export const cuffSvg = (count: number, lower: number, sleeve: string) =>
+  part("cuffs", Array.from({ length: count }, (_, i) => `<path d="M-10 ${lower - 16 - i * 7}H10" stroke="${ink(sleeve)}" stroke-width="4"/>`).join(""));
+
+/** 耳当て・ヘッドセット（頭の座標）。斜めと真横は見える耳 1 つ */
+const EAR: Record<View, number[]> = { front: [-50, 50], quarter: [-44], side: [-10] };
+export const earSvg = (view: View, kind: "muffs" | "headset") => {
+  const cups = EAR[view].map((x) => `<rect x="${x - 11}" y="-54" width="22" height="30" rx="9" fill="#333" ${S(4)}/>`).join("");
+  const e = EAR[view][0];
+  const mic = kind === "headset" ? `<path d="M${e} -26Q${e + 6} -8 ${e + 34} -12" stroke="#000" stroke-width="4" fill="none"/><circle cx="${e + 36}" cy="-12" r="5" fill="#333" stroke="#000" stroke-width="3"/>` : "";
+  return part("ears", cups + mic);
+};
+
+/** 顔の前の覆い（頭の座標）。透明の面は縁と光の線だけ、網の面は格子 */
+const VISOR: Record<View, [number, number]> = { front: [-44, 44], quarter: [-32, 52], side: [4, 60] };
+export const visorSvg = (view: View, kind: "clear" | "mesh") => {
+  const [a, b] = VISOR[view];
+  const frame = `<path d="M${a} -64H${b}V-4Q${(a + b) / 2} 4 ${a} -4Z" fill="none" ${S(4)}/>`;
+  const inner = kind === "mesh"
+    ? [-50, -36, -22].map((y) => `<path d="M${a + 2} ${y}H${b - 2}" stroke="#444" stroke-width="2"/>`).join("") +
+      [0.25, 0.5, 0.75].map((f) => `<path d="M${n(a + (b - a) * f)} -62V-4" stroke="#444" stroke-width="2"/>`).join("")
+    : `<path d="M${b - 14} -58L${b - 26} -40" stroke="#999" stroke-width="3"/>`;
+  return part("visor", frame + inner);
+};
 
 /** 腕章（腕の座標。肩から 18〜34 下）。袖が暗いと白、明るいと濃い灰色 */
 export const armbandSvg = (sleeve: string) =>
@@ -209,6 +304,11 @@ const STRIPE: Partial<Record<HeadwearKind, Record<View, [number, number, number]
     side: [[-59, 52, -76], [-56, 48, -88]],
   },
   // 衛生キャップは丸みが低い（てっぺん −90）ので、線は −64 と −74 に、帽子の幅の内側で引く
+  peaked: {
+    front: [[-60, 60, -80], [-62, 62, -90], [-63, 63, -98]],
+    quarter: [[-62, 58, -80], [-64, 60, -90], [-65, 61, -98]],
+    side: [[-66, 54, -80], [-68, 56, -90], [-69, 57, -98]],
+  },
   hygiene: {
     front: [[-44, 44, -64], [-38, 38, -74]],
     quarter: [[-46, 40, -64], [-40, 34, -74]],

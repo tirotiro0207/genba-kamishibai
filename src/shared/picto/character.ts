@@ -2,7 +2,7 @@
 // 長さと太さは新しい絵柄のまま（胴 142・もも 85・すね 77・上腕 70・前腕 52、単位は背の高さ 434 の中の値）、
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
-import { armbandSvg, bootSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso } from "./outfit";
+import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import type { Angles } from "./poses";
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
@@ -15,7 +15,11 @@ export type Hair = "bob" | "short" | "bun";
  * かぶり物の種類。髪とは別の枠で、職場と場面で付け外しする（髪はその人のもので、いつも描く）。
  * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、chefLow＝見習いの低いコック帽、hygiene＝髪をしまう衛生キャップ（食品の工場）
  */
-export type HeadwearKind = "helmet" | "cap" | "chef" | "chefLow" | "hygiene";
+export type HeadwearKind =
+  | "helmet" | "cap" | "chef" | "chefLow" | "hygiene"
+  // 11/3 に足した下絵: 制帽（警備・鉄道・運転）、船長の帽子、つばの広い帽子、手ぬぐい・三角巾、ニット帽、看護・客室の帽子、
+  // クリーンルームのフード、溶接の面（下ろす・上げる）
+  | "peaked" | "captain" | "straw" | "towel" | "knit" | "nurse" | "hood" | "welder" | "welderUp";
 
 export interface CharacterSpec {
   angles: Angles;
@@ -194,7 +198,85 @@ const chef = (dx: number) =>
 const chefLow = (dx: number) =>
   `<g transform="translate(${dx} 0)"><path d="M-56 -76Q-60 -104 0 -104Q60 -104 56 -76Z" FILL ${STROKE}/>` +
   `<path d="M-58 -78H58V-52Q0 -45 -58 -52Z" FILL ${STROKE}/></g>`;
-export const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "hide"; top: number; bottom: number; draw: Record<View, string> }> = {
+/** 制帽（警備・鉄道・運転・船長）。山・帯・黒いひさし。ひさしは前だけ */
+const peaked = (dx: number, view: View) => {
+  const crown = `<path d="M${-60 + dx} -64L${-66 + dx} -102Q${dx} -116 ${66 + dx} -102L${60 + dx} -64Z" FILL ${STROKE}/><path d="M${-61 + dx} -70H${61 + dx}V-52H${-61 + dx}Z" FILL ${STROKE}/>`;
+  const visor = view === "front" ? `<path d="M-50 -52Q0 -38 50 -52Z" fill="#222" ${STROKE}/>`
+    : view === "quarter" ? `<path d="M-30 -52H58Q84 -50 82 -44Q50 -38 -30 -46Z" fill="#222" ${STROKE}/>`
+    : `<path d="M28 -54H62Q92 -52 90 -46Q60 -40 28 -48Z" fill="#222" ${STROKE}/>`;
+  return crown + visor;
+};
+/** つばの広い帽子（農業）。つばを先に、山をその上に描く */
+const straw = (dx: number) =>
+  `<ellipse cx="${dx}" cy="-60" rx="94" ry="13" FILL ${STROKE}/><path d="M${-56 + dx} -62Q${-60 + dx} -118 ${dx} -118Q${60 + dx} -118 ${56 + dx} -62Z" FILL ${STROKE}/><path d="M${-56 + dx} -72Q${dx} -78 ${56 + dx} -72" stroke="#000" stroke-width="5" fill="none"/>`;
+/** 手ぬぐい・三角巾（頭を包み、結び目を後ろに） */
+const towel = (dx: number, knot: number) =>
+  `<path d="M${-58 + dx} -50Q${-64 + dx} -108 ${dx} -108Q${64 + dx} -108 ${58 + dx} -50Q${dx} -62 ${-58 + dx} -50Z" FILL ${STROKE}/>` +
+  (knot ? `<path d="M${knot} -66L${knot - 22} -76L${knot - 18} -54Z" FILL ${STROKE}/>` : "");
+/** ニット帽（折り返しの帯つき） */
+const knit = (dx: number) =>
+  `<path d="M${-58 + dx} -56Q${-62 + dx} -114 ${dx} -114Q${62 + dx} -114 ${58 + dx} -56Z" FILL ${STROKE}/><path d="M${-60 + dx} -70H${60 + dx}V-50H${-60 + dx}Z" FILL ${STROKE}/>`;
+/** 看護・客室係の小さな帽子（頭の上に載せる。髪は覆わない） */
+const nurse = (dx: number) =>
+  `<path d="M${-36 + dx} -86L${-44 + dx} -108Q${dx} -118 ${44 + dx} -108L${36 + dx} -86Q${dx} -94 ${-36 + dx} -86Z" FILL ${STROKE}/>`;
+/** クリーンルームのフード・溶接の面（頭を全部包み、顔の窓だけ開ける。fill-rule で窓を抜く） */
+const hood = (view: View, win: string, dark: boolean) => {
+  const outer = view === "side" ? "M-62 -4Q-70 -112 -4 -114Q54 -112 58 -60L64 -4Z" : view === "quarter" ? "M-60 -2Q-66 -112 2 -114Q64 -112 60 -2Z" : "M-58 -2Q-64 -114 0 -114Q64 -114 58 -2Z";
+  return dark
+    ? `<path d="${outer}" FILL ${STROKE}/><path d="${win}" fill="#777" ${STROKE}/>`
+    : `<path d="${outer}${win}" fill-rule="evenodd" FILL ${STROKE}/>`;
+};
+const HOOD_WIN: Record<View, string> = {
+  front: "M-36 -62H36Q42 -62 42 -54V-14Q42 -6 34 -6H-34Q-42 -6 -42 -14V-54Q-42 -62 -36 -62Z",
+  quarter: "M-26 -62H44Q50 -62 50 -54V-14Q50 -6 42 -6H-26Q-34 -6 -34 -14V-54Q-34 -62 -26 -62Z",
+  side: "M8 -62H50Q56 -62 57 -54L60 -12Q60 -6 52 -6H8Q2 -6 2 -14V-54Q2 -62 8 -62Z",
+};
+const WELD_WIN: Record<View, string> = {
+  front: "M-30 -54H30V-40H-30Z",
+  quarter: "M-18 -54H40V-40H-18Z",
+  side: "M18 -54H54V-40H18Z",
+};
+/** 溶接の面を上げた形（頭の上に黒い面が載る） */
+const welderUp = (dx: number) =>
+  `<path d="M${-58 + dx} -58Q${-62 + dx} -122 ${dx} -122Q${62 + dx} -122 ${58 + dx} -58Z" FILL ${STROKE}/><path d="M${-30 + dx} -104H${30 + dx}V-92H${-30 + dx}Z" fill="#777" ${STROKE}/>`;
+/** tone: role＝役の明るさ、white＝白、ほかは灰色の明るさ（#rgb） */
+export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide"; top: number; bottom: number; draw: Record<View, string> }> = {
+  peaked: {
+    tone: "#333", hair: "show", top: -114, bottom: -52,
+    draw: { front: peaked(0, "front"), quarter: peaked(-2, "quarter"), side: peaked(-6, "side") },
+  },
+  captain: {
+    tone: "white", hair: "show", top: -114, bottom: -52,
+    draw: { front: peaked(0, "front"), quarter: peaked(-2, "quarter"), side: peaked(-6, "side") },
+  },
+  straw: {
+    tone: "#ddd", hair: "show", top: -116, bottom: -56,
+    draw: { front: straw(0), quarter: straw(4), side: straw(-2) },
+  },
+  towel: {
+    tone: "white", hair: "show", top: -108, bottom: -52,
+    draw: { front: towel(0, 0), quarter: towel(-2, -54), side: towel(-4, -60) },
+  },
+  knit: {
+    tone: "#444", hair: "show", top: -114, bottom: -52,
+    draw: { front: knit(0), quarter: knit(-2), side: knit(-4) },
+  },
+  nurse: {
+    tone: "white", hair: "show", top: -116, bottom: -98,
+    draw: { front: nurse(0), quarter: nurse(-2), side: nurse(-6) },
+  },
+  hood: {
+    tone: "white", hair: "hide", top: -114, bottom: 0,
+    draw: { front: hood("front", HOOD_WIN.front, false), quarter: hood("quarter", HOOD_WIN.quarter, false), side: hood("side", HOOD_WIN.side, false) },
+  },
+  welder: {
+    tone: "#333", hair: "hide", top: -114, bottom: 0,
+    draw: { front: hood("front", WELD_WIN.front, true), quarter: hood("quarter", WELD_WIN.quarter, true), side: hood("side", WELD_WIN.side, true) },
+  },
+  welderUp: {
+    tone: "#333", hair: "show", top: -122, bottom: -58,
+    draw: { front: welderUp(0), quarter: welderUp(-2), side: welderUp(-4) },
+  },
   helmet: {
     tone: "role", hair: "show", top: -116, bottom: -50,
     draw: {
@@ -228,10 +310,13 @@ export const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "sho
     },
   },
 };
-export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole) => {
-  const w = HEADWEAR[kind];
-  return w.draw[view].replaceAll("FILL", `fill="${w.tone === "role" ? ROLE_TONE[role] : "#fff"}"`);
+/** かぶり物の明るさ */
+export const headwearTone = (kind: HeadwearKind, role: CharacterRole) => {
+  const t = HEADWEAR[kind].tone;
+  return t === "role" ? ROLE_TONE[role] : t === "white" ? "#fff" : t;
 };
+export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole) =>
+  HEADWEAR[kind].draw[view].replaceAll("FILL", `fill="${headwearTone(kind, role)}"`);
 
 /** b の頭: 髪の後ろ → 顔 → 髪の前 → かぶり物。髪をしまうかぶり物のときは髪を描かない */
 /** 髪の SVG。かぶり物をかぶると、お団子（back）とつやの線は描かない（お団子はかぶり物の中にしまう） */
@@ -245,8 +330,8 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none")
 const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit) => {
   const h = hairSvg(view, hair, headwear);
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
-    headMarks(headwear, view, o, HEADWEAR[headwear].tone === "role" ? ROLE_TONE[role] : "#fff");
-  return `${h.back}${FACE_B[view]}${o.mask ? maskSvg(view) : ""}${h.front}${hat}`;
+    headMarks(headwear, view, o, headwearTone(headwear, role));
+  return `${h.back}${FACE_B[view]}${o.mask ? maskSvg(view) : ""}${h.front}${hat}${o.ears ? earSvg(view, o.ears) : ""}${o.visor ? visorSvg(view, o.visor) : ""}`;
 };
 
 const ANKLE_MAX = 25;
@@ -341,7 +426,7 @@ export function characterSvg(c: CharacterSpec): string {
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, L.lowerArm, sleeve) : ""}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${o.gloves ?? cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const headAt = (inner: string) =>
