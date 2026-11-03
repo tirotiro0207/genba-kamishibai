@@ -3,7 +3,7 @@
 //
 //   npx tsx scripts/night-draft.ts --sort-run <仕分けの番号> --run <番号> [--remote] [--tenant company] [--per-page 2] [--max 10] [--estimate]
 //   --estimate は API を呼ばず、ページの数・カードの数の上限・費用と時間の見込みだけを出す
-import { makeClient } from "../src/node/client";
+import { loadEnv, makeClient } from "../src/node/client";
 import { execD1, wranglerExec } from "../src/node/d1-node";
 import { FileCallLog } from "../src/node/file-log";
 import { readPages } from "../src/node/night";
@@ -30,6 +30,8 @@ async function main() {
   const tenant = opt("--tenant") ?? "company";
   const perPage = Number(opt("--per-page") ?? 2);
   const max = opt("--max") ? Number(opt("--max")) : undefined;
+  // 1 日の上限は .env より、流す命令に付けた API_BUDGET_USD_PER_DAY が勝つ（loadEnvFile は既にある環境変数を上書きしない）
+  loadEnv();
   const db = execD1(wranglerExec(where));
 
   const run = await db.prepare("SELECT doc FROM night_runs WHERE id = ? AND tenant_id = ?").bind(sortRun, tenant).first<{ doc: string }>();
