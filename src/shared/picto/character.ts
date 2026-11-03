@@ -34,9 +34,12 @@ const n = (v: number) => {
   const r = Math.round(v * 10) / 10;
   return Object.is(r, -0) ? "0" : String(r);
 };
-/** 縁取りの黒と中の灰色の 2 本で描く太い棒（0,0 から真下へ len） */
-const limb = (len: number, w: number, fill = "#666") =>
-  `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/><path d="M0 0V${len}" stroke="${fill}" stroke-width="${w - 12}" stroke-linecap="round"/>`;
+/** 手足の 1 段（0,0 から真下へ len）。縁の回は黒で太く、中身の回は灰色で 12 細く描く */
+type Pass = "edge" | "fill";
+const seg = (len: number, w: number, pass: Pass) =>
+  pass === "edge"
+    ? `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/>`
+    : `<path d="M0 0V${len}" stroke="#666" stroke-width="${w - 12}" stroke-linecap="round"/>`;
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
 /** 靴（原点＝足首。かかとは足の後ろの縁、つま先は前へ。靴底の下端は足首から 25 下） */
@@ -121,13 +124,20 @@ export function characterSvg(c: CharacterSpec): string {
   const k = c.height / UNIT;
   const d = c.facing === "right" ? 1 : -1;
   const low = lowest(c.angles, view);
+  // 手足は 1 本ごとに 2 回描く: まず全部の段の縁（黒）、次に全部の段の中身（灰色）。
+  // 段ごとに縁と中身を描くと、下の段の縁が上の段の中身に重なって関節の線（ロボットのような区切り）が出る。
+  // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
   const leg = (i: number) => {
     const g = r.legs[i];
-    return `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${limb(L.thigh, 40)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${limb(L.shin, 40)}<g transform="translate(0 ${L.shin})${rot(g.ankle)}">${SHOE}</g></g></g>`;
+    const chain = (pass: Pass) =>
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})${rot(g.ankle)}">${SHOE}</g>` : ""}</g></g>`;
+    return chain("edge") + chain("fill");
   };
   const arm = (i: number) => {
     const g = r.arms[i];
-    return `<g transform="translate(${SPOT[view].arm[i]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${limb(L.upperArm, 32)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${limb(L.lowerArm, 32)}<circle cy="${L.lowerArm}" r="15" fill="#ccc" stroke="#000" stroke-width="5"/></g></g>`;
+    const chain = (pass: Pass) =>
+      `<g transform="translate(${SPOT[view].arm[i]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="#ccc" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+    return chain("edge") + chain("fill");
   };
   const head = `<g transform="translate(0 ${-142 - L.headUp})${rot(r.neck)}">${HEAD[view]}${hat(HAT[c.role ?? "new"])}</g>`;
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 胴 → 頭 → 手前の腕。
