@@ -163,7 +163,9 @@ export const earsSvg = (view: View, p: FaceParts) => {
       ink(`M${x(3)} -38Q${x(7)} -34 ${x(3.5)} -27`);
   }).join("");
   const cx = EAR_MARK[view][0] * k, rx = view === "side" ? 6.5 : 6;
-  return `<ellipse cx="${n(cx)}" cy="-32" rx="${rx}" ry="10" fill="${skin}" stroke="#000" stroke-width="4"/>` +
+  // 斜め・真横は C の字: 顔にくっつく前の 3 分の 1 には線を引かない（塗りは弦で閉じ、線は後ろの弧だけ）
+  const ex = n(cx + rx / 2), arc = `M${ex} -40.7A${rx} 10 0 1 0 ${ex} -23.3`;
+  return `<path d="${arc}Z" fill="${skin}"/><path d="${arc}" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/>` +
     ink(`M${n(cx + 2.5)} -37Q${n(cx - 2.5)} -37 ${n(cx - 2)} -31Q${n(cx - 1.5)} -27 ${n(cx + 2)} -26`);
 };
 
