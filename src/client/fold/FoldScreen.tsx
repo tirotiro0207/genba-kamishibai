@@ -59,7 +59,12 @@ export function FoldScreen({ tenant, cardId }: { tenant: string; cardId: string 
     req<{ body: CardBody }>(tenant, `/cards/${encodeURIComponent(cardId)}`)
       .then(async (c) => {
         setCard(c.body);
-        setPages(await loadPages(tenant, c.body));
+        // 元の文（資料のページか話した言葉）が置き場に無いと、サーバーは「無い」とだけ返す。何が無いのか分かる文にする（総点検の 5）
+        setPages(
+          await loadPages(tenant, c.body).catch(() => {
+            throw new Error("このカードの元の文（資料のページか、話した言葉）が見つからないので、折りたたみを見せられません");
+          }),
+        );
       })
       .catch((e: Error) => setErr(e.message));
   }, [tenant, cardId]);

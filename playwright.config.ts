@@ -11,6 +11,9 @@ export default defineConfig({
   testDir: "e2e",
   outputDir: join(RECORD_DIR, process.env.E2E_RUNS ?? "runs"),
   reporter: [["list"]],
+  // 手元の D1 は 1 つのファイルなので、録画を並べると「使用中」で落ちる。1 本ずつ流す（総点検の 1）
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 720 },

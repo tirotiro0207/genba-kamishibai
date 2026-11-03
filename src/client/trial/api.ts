@@ -1,5 +1,6 @@
 // 回答の記録の API（011 のサーバー）を呼ぶ
 import type { CardMotion } from "../../shared/card";
+import { authHeaders } from "../pin/TenantPin";
 export type Shown = "card" | "text";
 export interface Assignment {
   participant: string;
@@ -21,8 +22,10 @@ export interface ResponseRow {
   answer: string | null;
 }
 
+/** 会社のテナントでは、入ったしるしと役割のしるしを付けて呼ぶ（総点検の 2・3） */
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+  const tenant = decodeURIComponent(path.split("/")[3] ?? "");
+  const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...authHeaders(tenant), ...(init?.headers ?? {}) } });
   const body = await res.json();
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
   return body as T;

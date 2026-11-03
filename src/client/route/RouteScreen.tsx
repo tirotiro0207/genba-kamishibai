@@ -1,7 +1,7 @@
 // 経路の画面（053・仕様 §3 出どころ・§6 折りたたみ）。監修者が署名の前に、絵のこの部分が元の文のどこから来たかを確かめる。
 // 絵の部品をタップすると、元の文の該当箇所（資料のページと行、または話した言葉の字の範囲）が光り、カードの文と「なぜそう描いたか」が出る。
 // 部品の一覧から 1 枚の全部品を順にタップできる。今のコマに無い部品を選ぶと、その部品が見えるコマへ移る。
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { type CardBody, type CardPart, routeOf, type SourceRef } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
@@ -117,6 +117,19 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
       if (j >= 0) setAt(j);
     }
   };
+  /**
+   * 絵の上の部品を押す。小さい部品が大きい部品（人）の上に重なると、大きい部品が押せなくなる（総点検の 6）。
+   * 選んである部品を同じ所でもう一度押すと、その点に重なる次に大きい部品へ移る（小さい → 大きい → 小さい …）
+   */
+  const tap = (e: MouseEvent<HTMLButtonElement>, part: string) => {
+    if (part !== sel) return pick(part);
+    const r = e.currentTarget.parentElement!.getBoundingClientRect();
+    const [px, py] = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+    const under = (boxes[at] ?? []).filter((x) => px >= x.x && px <= x.x + x.w && py >= x.y && py <= x.y + x.h).sort((p, q) => p.w * p.h - q.w * q.h);
+    if (under.length < 2) return;
+    const i = under.findIndex((x) => x.part === part);
+    pick(under[(i + 1) % under.length].part);
+  };
   const route = sel ? routeOf(b, sel) : null;
   const idx = sel ? b.parts.findIndex((p) => p.id === sel) : -1;
 
@@ -133,7 +146,7 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
                 key={x.part}
                 className={`route-hit${x.part === sel ? " on" : ""}`}
                 style={{ left: `${x.x * 100}%`, top: `${x.y * 100}%`, width: `${x.w * 100}%`, height: `${x.h * 100}%` }}
-                onClick={() => pick(x.part)}
+                onClick={(e) => tap(e, x.part)}
                 aria-label={`部品 ${partName(b.parts.find((p) => p.id === x.part)!, b.parts.findIndex((p) => p.id === x.part))}`}
                 data-testid={`hit-${x.part}`}
               />

@@ -16,6 +16,7 @@ import { ReadScreen } from "./read/ReadScreen";
 import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
 import { StatsBar } from "./stats/StatsBar";
+import { PinGate } from "./pin/TenantPin";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
@@ -51,6 +52,8 @@ export function App() {
     else if (r[4] === "pictures" && r[5]) body = <PictureAnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
+    // 会社のテナントでは、記録アプリも 2 段の PIN で入ってから開く（総点検の 2・3）。回答の記録の口は新入社員の役割では開かないので、作者・監修者・教育担当から選ぶ
+    body = <PinGate tenant={tenant}>{body}</PinGate>;
   }
   // #/t/<テナント>/audit/<カード> ・ 監査の記録（監修者・教育担当）
   if (r[0] === "t" && r[2] === "audit" && r[3]) body = <AuditScreen tenant={r[1]} cardId={r[3]} />;

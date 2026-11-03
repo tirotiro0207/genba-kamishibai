@@ -1,5 +1,6 @@
 // ③ 採点の画面。採点者ごとに開き、もう 1 人の判定は見えない。答えた人の ID も出さない
 import { useCallback, useEffect, useState } from "react";
+import { authHeaders } from "../pin/TenantPin";
 import { csvUrl, type Grade, type Grader, listGrades, listResponses, postGrade, type ResponseRow, type Verdict } from "./api";
 
 const LABEL: Record<Verdict, string> = { correct: "正しい", wrong: "違う", danger: "危ない読み違い" };
@@ -73,9 +74,22 @@ export function GradeScreen({ tenant, id, grader }: { tenant: string; id: string
           />
         ))}
       </ol>
-      <a className="big" href={csvUrl(tenant, id)} download="answers.csv" data-testid="grade-csv">
+      {/* 会社のテナントでは入ったしるしが要るので、リンクではなく、しるしを付けて取ってから保存する（総点検の 2） */}
+      <button
+        className="big"
+        data-testid="grade-csv"
+        onClick={async () => {
+          const res = await fetch(csvUrl(tenant, id), { headers: authHeaders(tenant) });
+          if (!res.ok) return setErr(`CSV を書き出せない: ${res.status}`);
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(await res.blob());
+          a.download = "answers.csv";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }}
+      >
         匿名の CSV を書き出す
-      </a>
+      </button>
     </div>
   );
 }

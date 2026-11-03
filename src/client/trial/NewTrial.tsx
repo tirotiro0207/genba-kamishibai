@@ -7,13 +7,17 @@ export function NewTrial({ tenant }: { tenant: string }) {
   const [seed, setSeed] = useState("");
   const [made, setMade] = useState<Trial | null>(null);
   const [err, setErr] = useState("");
+  const list = ids.split(/[\s,、]+/).filter(Boolean);
+  const dup = list.length !== new Set(list).size;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErr("");
     try {
-      setMade(await createTrial(tenant, ids.split(/[\s,、]+/).filter(Boolean), seed.trim()));
+      setMade(await createTrial(tenant, list, seed.trim()));
     } catch (e2) {
-      setErr((e2 as Error).message);
+      // サーバーの入力の検査のことば（participants は…）はそのまま出さない（総点検の 4）
+      const m = (e2 as Error).message;
+      setErr(m.startsWith("participants") ? "参加者の ID を、重ならないように 1〜200 人まで並べてください" : m);
     }
   };
   return (
@@ -26,9 +30,12 @@ export function NewTrial({ tenant }: { tenant: string }) {
         種（空なら自動）
         <input value={seed} onChange={(e) => setSeed(e.target.value)} data-testid="new-seed" />
       </label>
-      <button className="big" data-testid="new-submit">
+      {/* 参加者の ID が空か重なっていれば押せない（総点検の 4） */}
+      <button className="big" disabled={!list.length || dup} data-testid="new-submit">
         回を作る
       </button>
+      {!list.length && <p className="hint">参加者の ID を 1 つ以上書くと、回を作れます</p>}
+      {dup && <p className="err">同じ参加者の ID が 2 回あります</p>}
       {err && <p className="err">{err}</p>}
       {made && (
         <div data-testid="new-made">

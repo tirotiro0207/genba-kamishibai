@@ -65,6 +65,8 @@ export function ClocksScreen({ tenant, id }: { tenant: string; id: string }) {
 
   if (err) return <p className="err" role="alert">{err}</p>;
   if (!c) return null;
+  // 答えが 0 件の回は針を動かす元の数が無い。0 件と出し、「もう一度」は押せなくする（総点検の 7）
+  const empty = c.card.median_ms === null && c.text.median_ms === null;
   return (
     <section className="clocks" data-testid="clocks" data-fake={c.fake}>
       <h1>分かるまでの時間</h1>
@@ -76,7 +78,12 @@ export function ClocksScreen({ tenant, id }: { tenant: string; id: string }) {
         真ん中の人の秒（カード {c.card.n} 人・文 {c.text.n} 人）
         {c.fake && <span className="clocks-fake" data-testid="clocks-fake">作りものの数（本物の結果を入れる前）</span>}
       </p>
-      <button type="button" className="clocks-again" onClick={() => setRun((x) => x + 1)} data-testid="clocks-again">
+      {empty && (
+        <p className="clocks-note" data-testid="clocks-empty">
+          この回はまだ答えが 0 件なので、時計は動きません
+        </p>
+      )}
+      <button type="button" className="clocks-again" disabled={empty} onClick={() => setRun((x) => x + 1)} data-testid="clocks-again">
         もう一度
       </button>
     </section>

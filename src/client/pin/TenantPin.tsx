@@ -1,7 +1,7 @@
 // 会社のテナントに PIN で入る小さな部品（038）。入ったしるしを sessionStorage の token:<テナント> に残し、
 // ほかの画面（req）がそれを付けて API を呼ぶ。PIN そのものはどこにも残さない。
 // 会社のテナントは、テナントの PIN のあとに役割の PIN でも入る（052 の続き）。役割のしるしは role:<テナント> に残す。
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import "./pin.css";
 
 export const tokenKey = (tenant: string) => `token:${tenant}`;
@@ -18,26 +18,46 @@ export const REVIEWERS = [
 ] as const;
 export const SUPERVISORS = REVIEWERS.slice(0, 2);
 
+/** 入ったしるし（テナントの PIN）と役割のしるしを付けた見出し。しるしが無ければ付けない */
+export function authHeaders(tenant: string): Record<string, string> {
+  const h: Record<string, string> = {};
+  try {
+    const tok = sessionStorage.getItem(tokenKey(tenant));
+    if (tok) h.authorization = `Bearer ${tok}`;
+    const role = sessionStorage.getItem(roleKey(tenant));
+    if (role) h["x-role"] = role;
+  } catch {
+    // 保存が使えない端末では、しるし無しで呼ぶ
+  }
+  return h;
+}
+
 /**
- * テナントの PIN が要るか（会社のテナントで、入ったしるしが無いか期限切れ）を /me で調べる。
- * 発行・署名・監査の画面は、要るときだけ下の 2 段の部品を出し、要らなければ今までの役を選ぶ欄を出す（088 の続き）
+ * テナントの PIN の段が要るか（会社のテナントで、入ったしるしが無いか期限切れか、役割のしるしが無い）を GET /session で調べる。
+ * /session はいつも 200 で答えるので、入る前に 401 を出さない（総点検の 9）。
+ * 発行・署名・監査の画面（088 の続き）と、閲覧・回答の記録の画面（総点検の 2・9）が使う
  */
 export function useNeedsTenantPin(tenant: string): [boolean | null, () => void] {
   const [need, setNeed] = useState<boolean | null>(null);
   const check = useCallback(() => {
-    const h: Record<string, string> = {};
-    try {
-      const tok = sessionStorage.getItem(tokenKey(tenant));
-      if (tok) h.authorization = `Bearer ${tok}`;
-    } catch {
-      // 保存が使えない端末では、しるし無しで調べる
-    }
-    fetch(`/api/t/${encodeURIComponent(tenant)}/me`, { headers: h })
-      .then(async (r) => setNeed(!r.ok && needsPin(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "")))
+    const h = authHeaders(tenant);
+    fetch(`/api/t/${encodeURIComponent(tenant)}/session`, { headers: h })
+      .then(async (r) => {
+        const b = (await r.json().catch(() => ({}))) as { pin?: boolean; valid?: boolean };
+        setNeed(!!b.pin && (!b.valid || !h["x-role"]));
+      })
       .catch(() => setNeed(false));
   }, [tenant]);
   useEffect(check, [check]);
   return [need, check];
+}
+
+/** 会社のテナントでは、入ったしるしがそろうまで 2 段の PIN の画面を出し、そろったら中身を出す */
+export function PinGate({ tenant, roles, children }: { tenant: string; roles?: readonly { value: string; label: string }[]; children: ReactNode }) {
+  const [need, check] = useNeedsTenantPin(tenant);
+  if (need === null) return <p>読み込み中…</p>;
+  if (need) return <TenantPin tenant={tenant} roles={roles} onDone={check} />;
+  return <>{children}</>;
 }
 
 /** 画面で選べる役割。新入社員は閲覧の画面から入る */

@@ -6,7 +6,7 @@ import type { CardMotion } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
 import { Slide } from "../motion/Slide";
-import { needsPin, roleKey, TenantPin, tokenKey } from "../pin/TenantPin";
+import { needsPin, PinGate, roleKey, TenantPin, tokenKey } from "../pin/TenantPin";
 
 const NEWHIRE = [{ value: "newhire.1", label: "新入社員" }] as const;
 
@@ -65,7 +65,16 @@ export function Frames({ motion }: { motion: CardMotion }) {
   return <iframe className="read-html" sandbox="" srcDoc={motion.html} title="動き" data-testid="read-frames" />;
 }
 
+/** 会社のテナントでは、入ったしるしがそろってからカードを読み込む（入る前に 401 を出さない。総点検の 9） */
 export function ReadScreen({ tenant }: { tenant: string }) {
+  return (
+    <PinGate tenant={tenant} roles={NEWHIRE}>
+      <ReadCards tenant={tenant} />
+    </PinGate>
+  );
+}
+
+function ReadCards({ tenant }: { tenant: string }) {
   const [cards, setCards] = useState<ReadCard[] | null>(null);
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);

@@ -9,7 +9,7 @@ import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
-import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
+import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
 import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
 import { issue } from "./issue";
 import { queue } from "./queue";
@@ -29,6 +29,16 @@ app.post("/api/t/:tenant/session", async (c) => {
   const { pin } = await c.req.json<{ pin?: string }>().catch(() => ({ pin: undefined }));
   if (typeof pin !== "string" || !(await verifyPin(pin, t.pin_hash))) return c.json({ error: "PIN が違う" }, 401);
   return c.json({ token: await signSession(c.env.SESSION_SECRET, t.id) });
+});
+
+// PIN が要るテナントか、送った入ったしるしがまだ効くかを 200 で返す（総点検の 2・9）。
+// 画面は先にこれを見て、PIN の画面を出すかを決める（入る前に 401 を出さない）
+app.get("/api/t/:tenant/session", async (c) => {
+  const t = await c.env.DB.prepare("SELECT id, kind FROM tenants WHERE id = ?").bind(c.req.param("tenant")).first<{ id: string; kind: string }>();
+  if (!t) return c.json({ error: "テナントが無い" }, 404);
+  if (t.kind !== "company") return c.json({ pin: false, valid: true });
+  const token = (c.req.header("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return c.json({ pin: true, valid: !!c.env.SESSION_SECRET && !!token && (await verifySession(c.env.SESSION_SECRET, token, t.id)) });
 });
 
 app.use("/api/t/:tenant/*", tenantGuard);
