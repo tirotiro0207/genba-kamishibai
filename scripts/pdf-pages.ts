@@ -44,6 +44,12 @@ async function main() {
       const s = await fetch(`${base}/api/t/${tenant}/session`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin: process.env.UPLOAD_PIN }) });
       if (!s.ok) throw new Error(`PIN で入れない: ${s.status}`);
       headers.authorization = `Bearer ${((await s.json()) as { token: string }).token}`;
+      // 会社のテナントは役割のしるしも要る（052 の続き）。作者の PIN を ROLE_PIN で渡す
+      if (process.env.ROLE_PIN) {
+        const r = await fetch(`${base}/api/t/${tenant}/login`, { method: "POST", headers: { "content-type": "application/json", authorization: headers.authorization }, body: JSON.stringify({ role: "author", slot: 1, pin: process.env.ROLE_PIN }) });
+        if (!r.ok) throw new Error(`作者の PIN で入れない: ${r.status}`);
+        headers["x-role"] = ((await r.json()) as { token: string }).token;
+      }
     }
     for (const [path, body, type] of files) {
       const r = await fetch(`${base}/api/t/${tenant}/files/${path}`, { method: "PUT", headers: { ...headers, "content-type": type }, body });

@@ -20,6 +20,12 @@ async function main() {
       const s = await fetch(`${BASE}/api/t/${tenant}/session`, { method: "POST", headers, body: JSON.stringify({ pin: process.env.RESET_PIN }) });
       if (!s.ok) throw new Error(`PIN で入れない: ${s.status}`);
       headers.authorization = `Bearer ${((await s.json()) as { token: string }).token}`;
+      // 会社のテナントは役割のしるしも要る（052 の続き）。作者の PIN を ROLE_PIN で渡す
+      if (process.env.ROLE_PIN) {
+        const r = await fetch(`${BASE}/api/t/${tenant}/login`, { method: "POST", headers, body: JSON.stringify({ role: "author", slot: 1, pin: process.env.ROLE_PIN }) });
+        if (!r.ok) throw new Error(`作者の PIN で入れない: ${r.status}`);
+        headers["x-role"] = ((await r.json()) as { token: string }).token;
+      }
     }
   }
   const res = await fetch(`${BASE}/api/t/${tenant}/reset`, { method: "POST", headers, body: JSON.stringify({ confirm }) });

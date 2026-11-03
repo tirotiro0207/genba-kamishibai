@@ -36,12 +36,16 @@ async function draw(page: Page) {
 test(`輪（${MASU}）を会社のテナントで未承認の下書きにし、経路が付き、画面で直せる`, async ({ page, request }) => {
   expect(existsSync(CONF) && existsSync(PINS), `private/loops/${MASU}.json と private/tenants/company.json が要る`).toBe(true);
   const conf = JSON.parse(readFileSync(CONF, "utf-8")) as Conf;
-  const pins = JSON.parse(readFileSync(PINS, "utf-8")) as { pin: string };
+  const pins = JSON.parse(readFileSync(PINS, "utf-8")) as { pin: string; people: Record<string, string> };
 
   // 資料のページ（031b で文字にしたもの）を、会社のテナントの非公開の置き場に入れる
   const s = await request.post(`/api/t/${TENANT}/session`, { data: { pin: pins.pin } });
   expect(s.status()).toBe(200);
-  const auth = { authorization: `Bearer ${((await s.json()) as { token: string }).token}` };
+  const bearer = { authorization: `Bearer ${((await s.json()) as { token: string }).token}` };
+  // 会社のテナントは役割のしるしも要る（052 の続き）。作者の PIN で入る
+  const who = await request.post(`/api/t/${TENANT}/login`, { headers: bearer, data: { role: "author", slot: 1, pin: pins.people.author1 } });
+  expect(who.status()).toBe(200);
+  const auth = { ...bearer, "x-role": ((await who.json()) as { token: string }).token };
   const dir = privatePath("pdf", conf.doc);
   await request.put(`/api/t/${TENANT}/files/pdf/${conf.doc}/index.json`, { headers: auth, data: JSON.parse(readFileSync(`${dir}/index.json`, "utf-8")) });
   for (const p of conf.loops.flatMap((l) => l.pages)) {
@@ -56,6 +60,10 @@ test(`輪（${MASU}）を会社のテナントで未承認の下書きにし、�
   await page.goto(`/#/t/${TENANT}/make`);
   await expect(page.getByTestId("tenant-pin")).toBeVisible();
   await page.getByTestId("tenant-pin-input").fill(pins.pin);
+  await page.getByTestId("tenant-pin-enter").click();
+  // 続けて作者の PIN で入る
+  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
+  await page.getByTestId("tenant-pin-input").fill(pins.people.author1);
   await page.getByTestId("tenant-pin-enter").click();
   await expect(page.getByTestId("make-input")).toBeVisible();
 

@@ -2,12 +2,15 @@ import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { sampleCard } from "../../tests/fixtures/card";
 import { currentChain, readChain, verifyTenant } from "./audit";
+import { signRole } from "./people";
 import { hashPin } from "./tenant";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
+// 会社のテナントは PIN の入室に加えて役割のしるしが要る（052 の続き）
+const roles = new Map<string, string>();
 const json = (method: string, body?: unknown, token?: string): RequestInit => ({
   method,
-  headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+  headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...(token && roles.has(token) ? { "x-role": roles.get(token)! } : {}) },
   body: body === undefined ? undefined : JSON.stringify(body),
 });
 
@@ -25,6 +28,7 @@ describe("データを最初の状態に戻す（030）", () => {
   beforeAll(async () => {
     await env.DB.prepare("INSERT INTO tenants (id, kind, name, pin_hash) VALUES ('co-r', 'company', '会社 R', ?)").bind(await hashPin("1234")).run();
     tok = ((await (await call("/api/t/co-r/session", json("POST", { pin: "1234" }))).json()) as { token: string }).token;
+    roles.set(tok, await signRole("test-secret", "co-r", { role: "author", slot: 1 }));
   });
 
   it("練習用テナントは一度で戻り、ほかのテナントは残る", async () => {

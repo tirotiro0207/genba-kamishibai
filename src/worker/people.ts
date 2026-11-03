@@ -56,6 +56,16 @@ export async function personGuard(c: Context<{ Bindings: Env; Variables: PeopleV
   await next();
 }
 
+/** 役割のしるしの要らない口（052 の続き）。役割で入る・入った役割を見る・役割の一覧 */
+const OPEN_WITHOUT_ROLE = /\/(login|me|people)$/;
+
+/** 会社のテナントの関所（052 の続き）。PIN の入室だけで役割のしるしが無いと、役割で入る口のほかは 403。
+ *  練習用と架空の会社は誰でも役割を選べるので、ここでは止めない */
+export async function roleRequiredGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
+  if (c.var.tenant.kind === "company" && !c.var.person && !OPEN_WITHOUT_ROLE.test(c.req.path)) return c.json({ error: "役割で入ってください" }, 403);
+  await next();
+}
+
 /** カードの API の関所。新入社員は入れない。署名と停止は監修者だけ */
 export async function cardsGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
   const p = c.var.person;

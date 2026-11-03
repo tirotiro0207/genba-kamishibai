@@ -6,7 +6,9 @@ import { hashPin } from "./tenant";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
 const put = (path: string, body: string, headers: Record<string, string> = {}) => call(path, { method: "PUT", headers: { "content-type": "text/plain", ...headers }, body });
-const auth = (t: string) => ({ authorization: `Bearer ${t}` });
+// 会社のテナントは PIN の入室に加えて役割のしるしが要る（052 の続き）。しるしごとに、そのテナントの作者の役割を添える
+const roles = new Map<string, string>();
+const auth = (t: string) => ({ authorization: `Bearer ${t}`, ...(roles.has(t) ? { "x-role": roles.get(t)! } : {}) });
 
 describe("会社のテナントの非公開の置き場（031a）", () => {
   let a = "";
@@ -19,6 +21,8 @@ describe("会社のテナントの非公開の置き場（031a）", () => {
     ]);
     const login = async (t: string) => ((await (await call(`/api/t/${t}/session`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin: "1111" }) })).json()) as { token: string }).token;
     [a, b] = [await login("co-fa"), await login("co-fb")];
+    roles.set(a, await signRole("test-secret", "co-fa", { role: "author", slot: 1 }));
+    roles.set(b, await signRole("test-secret", "co-fb", { role: "author", slot: 1 }));
   });
 
   it("鍵はテナントの頭の中だけで、外へ出る名前は作れない", () => {

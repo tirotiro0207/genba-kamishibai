@@ -9,7 +9,7 @@ import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin } from "./tenant";
-import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard } from "./people";
+import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
 import { issue } from "./issue";
 import { read } from "./read";
 
@@ -32,6 +32,8 @@ app.post("/api/t/:tenant/session", async (c) => {
 app.use("/api/t/:tenant/*", tenantGuard);
 // 役割（030b）。署名・停止は監修者だけ、新入社員はカードの API に入れない
 app.use("/api/t/:tenant/*", personGuard);
+// 会社のテナントは、PIN で入ったうえで役割のしるしが要る（052 の続き）
+app.use("/api/t/:tenant/*", roleRequiredGate);
 app.use("/api/t/:tenant/cards", cardsGate);
 app.use("/api/t/:tenant/cards/*", cardsGate);
 app.use("/api/t/:tenant/audit/*", auditGate);

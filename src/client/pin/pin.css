@@ -3,3 +3,4 @@
 .pin h1 { font-size: 22px; margin: 0; }
 .pin label { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
 .pin input { font-size: 24px; letter-spacing: 0.2em; padding: 8px 12px; }
+.pin select { font-size: 20px; padding: 8px 12px; }
