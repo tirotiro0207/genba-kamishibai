@@ -6,6 +6,9 @@ import type { Angles } from "./poses";
 
 export type View = "quarter" | "side";
 export type CharacterRole = "new" | "lead" | "worker";
+/** 絵柄の道。a は 11/3 に仮に決めた丸頭とかぶり物、b は作者の手描きのスケッチ（髪・まつ毛の目・点の鼻）から起こした別の道 */
+export type Look = "a" | "b";
+export type Hair = "bob" | "short" | "bun";
 
 export interface CharacterSpec {
   angles: Angles;
@@ -18,6 +21,11 @@ export interface CharacterSpec {
   facing: "left" | "right";
   view?: View;
   role?: CharacterRole;
+  look?: Look;
+  /** b の髪形 */
+  hair?: Hair;
+  /** b でかぶり物を載せるか（a はいつも載せる） */
+  hat?: boolean;
 }
 
 const UNIT = 434;
@@ -36,10 +44,16 @@ const n = (v: number) => {
 };
 /** 手足の 1 段（0,0 から真下へ len）。縁の回は黒で太く、中身の回は灰色で 12 細く描く */
 type Pass = "edge" | "fill";
-const seg = (len: number, w: number, pass: Pass) =>
+const seg = (len: number, w: number, pass: Pass, fill = "#666") =>
   pass === "edge"
     ? `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/>`
-    : `<path d="M0 0V${len}" stroke="#666" stroke-width="${w - 12}" stroke-linecap="round"/>`;
+    : `<path d="M0 0V${len}" stroke="${fill}" stroke-width="${w - 12}" stroke-linecap="round"/>`;
+
+/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、手、胴、ベスト） */
+const CLOTH: Record<Look, { arm: string; leg: string; hand: string; shirt: string; vest: string }> = {
+  a: { arm: "#666", leg: "#666", hand: "#ccc", shirt: "#666", vest: "#999" },
+  b: { arm: "#fff", leg: "#555", hand: "#fff", shirt: "#fff", vest: "#ccc" },
+};
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
 /**
@@ -58,15 +72,15 @@ function shoe(ankle: number): string {
 }
 
 /** 胴（原点＝腰。斜めはふつうの幅、真横は細く、ベストの V を前寄りに） */
-const TORSO: Record<View, string> = {
-  quarter:
-    `<rect x="-46" y="-142" width="92" height="162" rx="30" fill="#666" stroke="#000" stroke-width="6"/>` +
-    `<path d="M-46 -110Q-46 -142 -20 -142L0 -100L20 -142Q46 -142 46 -110V18H-46Z" fill="#999" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
-    `<path d="M-43 -40H43" stroke="#333" stroke-width="12"/>`,
-  side:
-    `<rect x="-30" y="-142" width="60" height="162" rx="20" fill="#666" stroke="#000" stroke-width="6"/>` +
-    `<path d="M-30 -110Q-30 -142 -8 -142L10 -100L28 -142Q30 -142 30 -110V18H-30Z" fill="#999" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
-    `<path d="M-27 -40H27" stroke="#333" stroke-width="12"/>`,
+const torso = (view: View, look: Look) => {
+  const c = CLOTH[look];
+  return view === "quarter"
+    ? `<rect x="-46" y="-142" width="92" height="162" rx="30" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
+        `<path d="M-46 -110Q-46 -142 -20 -142L0 -100L20 -142Q46 -142 46 -110V18H-46Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
+        `<path d="M-43 -40H43" stroke="#333" stroke-width="12"/>`
+    : `<rect x="-30" y="-142" width="60" height="162" rx="20" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
+        `<path d="M-30 -110Q-30 -142 -8 -142L10 -100L28 -142Q30 -142 30 -110V18H-30Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
+        `<path d="M-27 -40H27" stroke="#333" stroke-width="12"/>`;
 };
 
 /** 頭（原点＝首の付け根。目は半径 6、真横は目 1 つで鼻なし）とかぶり物（つばは前だけ） */
@@ -78,6 +92,55 @@ const HEAD: Record<View, string> = {
     `<circle cy="-45" r="45" fill="#ccc" stroke="#000" stroke-width="6"/><circle cx="24" cy="-38" r="6"/>` +
     `<path d="M28 -20Q36 -14 42 -24" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/>`,
 };
+/**
+ * b の顔（原点＝首の付け根、顔は中心 0,-45 半径 45 の白い丸）。
+ * 目は縦長の小さな楕円に、外側の上へ短いまつ毛を 1 本。鼻は小さな点。口は笑顔と真顔の間のゆるい線。
+ * 線はスケッチのペンに寄せて、体より少し細い 4.5
+ */
+const eyeB = (cx: number, out: number) =>
+  `<ellipse cx="${cx}" cy="-37" rx="4.3" ry="5.6"/>` +
+  `<path d="M${cx + out * 2.8} -41l${out * 3.6} -1.6M${cx + out * 0.8} -42.4l${out * 1.4} -3.6" stroke="#000" stroke-width="2.2" stroke-linecap="round"/>`;
+const FACE_B: Record<View, string> = {
+  quarter:
+    `<circle cy="-45" r="45" fill="#fff" stroke="#000" stroke-width="4.5"/>${eyeB(8, -1)}${eyeB(30, 1)}` +
+    `<circle cx="21" cy="-25" r="2.6"/><path d="M14 -15Q20 -13 26 -15" stroke="#000" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+  side:
+    `<circle cy="-45" r="45" fill="#fff" stroke="#000" stroke-width="4.5"/>${eyeB(27, 1)}` +
+    `<circle cx="37" cy="-27" r="2.6"/><path d="M29 -15Q33 -13.5 37 -15" stroke="#000" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+};
+/**
+ * b の髪（顔の丸の上に重ねる黒い形。内側の縁が生え際になる）。back は顔より後ろに描く分（お団子）。
+ * おかっぱ（bob）はスケッチどおり、後ろ側を長く厚く、前側は短く外へはねる。前髪は後ろの上から前の目の上へ斜めに流す
+ */
+const HAIR_B: Record<Hair, Record<View, { back?: string; front: string }>> = {
+  bob: {
+    quarter: {
+      front: "M58 -22Q51 -30 52 -56C54 -100 22 -108 -6 -106C-50 -104 -66 -78 -64 -44C-63 -16 -56 2 -42 6Q-30 8 -28 -4Q-34 -24 -32 -46C-24 -58 4 -66 24 -72Q34 -74 40 -64Q42 -46 43 -34Q47 -24 58 -22Z",
+    },
+    side: {
+      front: "M44 -60C50 -96 22 -108 -8 -106C-50 -104 -66 -76 -64 -44C-63 -16 -54 2 -40 6Q-26 8 -22 -4Q-14 -24 -10 -44C-2 -62 22 -70 44 -60Z",
+    },
+  },
+  short: {
+    quarter: { front: "M47 -57C49 -96 16 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-48 -32 -40 -27Q-37 -44 -30 -53C-16 -68 16 -72 34 -64Q41 -61 47 -57Z" },
+    side: { front: "M46 -60C46 -94 18 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-46 -30 -34 -26Q-30 -44 -20 -54C-4 -68 24 -70 46 -60Z" },
+  },
+  bun: {
+    quarter: {
+      back: `<circle cx="-36" cy="-94" r="17" fill="#111" stroke="#000" stroke-width="4.5"/>`,
+      front: "M48 -55C50 -96 16 -104 -10 -102C-46 -98 -58 -72 -54 -40Q-50 -22 -40 -18Q-36 -40 -30 -52C-16 -70 16 -72 36 -62Q43 -59 48 -55Z",
+    },
+    side: {
+      back: `<circle cx="-40" cy="-90" r="17" fill="#111" stroke="#000" stroke-width="4.5"/>`,
+      front: "M46 -58C46 -94 18 -104 -10 -102C-46 -98 -58 -72 -54 -40Q-48 -20 -36 -18Q-30 -40 -20 -54C-4 -70 24 -70 46 -58Z",
+    },
+  },
+};
+const headB = (view: View, hair: Hair, hatFill?: string) => {
+  const h = HAIR_B[hair][view];
+  return `${h.back ?? ""}${FACE_B[view]}<path d="${h.front}" fill="#111" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${hatFill ? hat(hatFill) : ""}`;
+};
+
 const hat = (fill: string) => `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`;
 
 const ANKLE_MAX = 25;
@@ -148,6 +211,8 @@ function lowest(a: Angles, view: View): number {
 export function characterSvg(c: CharacterSpec): string {
   const view = c.view ?? "quarter";
   const r = rig(c.angles);
+  const look = c.look ?? "a";
+  const cloth = CLOTH[look];
   const k = c.height / UNIT;
   const d = c.facing === "right" ? 1 : -1;
   const low = lowest(c.angles, view);
@@ -157,7 +222,7 @@ export function characterSvg(c: CharacterSpec): string {
   const leg = (i: number) => {
     const g = r.legs[i];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${shoe(g.ankle)}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, cloth.leg)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, cloth.leg)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${shoe(g.ankle)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const order = armOrder(c.angles, view);
@@ -165,14 +230,17 @@ export function characterSvg(c: CharacterSpec): string {
   const arm = (spot: number) => {
     const g = r.arms[order[spot]];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="#ccc" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, cloth.arm)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, cloth.arm)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${HEAD[view]}${hat(HAT[c.role ?? "new"])}</g>`;
+  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${
+    look === "a" ? HEAD[view] + hat(HAT[c.role ?? "new"]) : headB(view, c.hair ?? "bob", c.hat ? HAT[c.role ?? "new"] : undefined)
+  }</g>`;
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 胴 → 頭 → 手前の腕。
   // 手前の腕を頭より上へ挙げるとき（胴に対して 100° を超える）は、腕を頭の後ろへ回し、顔に重ねない
   const behind = c.angles[order[1] === 1 ? "arm_near_upper" : "arm_far_upper"] > 100;
-  const upper = behind ? `${TORSO[view]}${arm(1)}${head}` : `${TORSO[view]}${head}${arm(1)}`;
+  const body0 = torso(view, look);
+  const upper = behind ? `${body0}${arm(1)}${head}` : `${body0}${head}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }
