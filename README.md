@@ -13,6 +13,12 @@ English | [日本語](README.ja.md)
   - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only" (**not deployed yet** — on the next deploy).
 - Company tenants are private. They open with two PINs: the tenant PIN, then the PIN of your role (author, supervisor, trainer or new hire).
 
+![Compass: from rules in text and in people's heads (start) to signed cards (end). Quality goes up, information goes right](docs/img/shinro.en.svg)
+
+From rules that lived in text and in people's heads (start), fold the information into pictures without losing any of it (quality, information), and deliver it to new hires as signed cards (end). From there, spread to other industries and languages, and learn each company's wording (beyond the end).
+
+Quality goes up, information goes right. Progress per task: [docs/dashboard.html](docs/dashboard.html) · [docs/plan.md](docs/plan.md); the hand-drawn sketch: [docs/sketches/shinro.jpg](docs/sketches/shinro.jpg)
+
 ## The Problem
 
 - On a construction site, the safety rules live in written manuals and in the heads of veteran workers.
