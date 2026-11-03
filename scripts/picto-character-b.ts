@@ -1,6 +1,6 @@
 // 別の道（b: 作者の手描きのスケッチから起こした髪・まつ毛の目・点の鼻の顔）の試し（API は使わない）。
-// 1 枚目 heads.png: 頭を大きく。髪形 3 つ × かぶり物あり・なし、斜めと真横。
-// 2 枚目 poses.png: 名前の付いた 8 つの姿勢を、斜め（おかっぱ）と真横（短い髪・かぶり物）で。
+// 1 枚目 heads.png: 頭を大きく。髪形 3 つ × かぶり物あり・なし、正面・斜め・真横。
+// 2 枚目 poses.png: 名前の付いた 8 つの姿勢を、正面と斜め（おかっぱ）と真横（短い髪・かぶり物）で。
 // 3 本目 poses.mp4: 8 つの姿勢を順につないだ動画。
 // 出力はリポジトリの private/picto/lab/route-b（git に入れない）。
 //
@@ -26,12 +26,12 @@ const HEADS: { hair: Hair; hat: boolean; role: CharacterSpec["role"] }[] = [
   { hair: "bob", hat: true, role: "new" }, { hair: "short", hat: true, role: "lead" }, { hair: "bun", hat: true, role: "worker" },
 ];
 const HW = 360;
-const head = (spec: (typeof HEADS)[number], view: "quarter" | "side", i: number, row: number) =>
+const head = (spec: (typeof HEADS)[number], view: "front" | "quarter" | "side", i: number, row: number) =>
   `<svg x="${i * HW}" y="${row * HW}" width="${HW}" height="${HW}" viewBox="0 0 ${HW} ${HW}">` +
   characterSvg({ angles: STANDING, x: HW * 0.5, groundY: HW * 2.3, height: HW * 2.1, facing: "right", view, look: "b", ...spec }) +
   `</svg>${frame(i * HW, row * HW, HW, HW)}`;
 const hw = HW * HEADS.length;
-writeFileSync(join(out, "heads.png"), svgToPng(svg(hw, HW * 2, [...HEADS.map((h, i) => head(h, "quarter", i, 0)), ...HEADS.map((h, i) => head(h, "side", i, 1))].join("")), hw));
+writeFileSync(join(out, "heads.png"), svgToPng(svg(hw, HW * 3, (["front", "quarter", "side"] as const).flatMap((v, row) => HEADS.map((h, i) => head(h, v, i, row))).join("")), hw));
 
 // スケッチと並べる（スケッチの絵のところを切り出して、同じ高さにそろえる）
 execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", join(out, "sketch.jpg"), "-i", join(out, "heads.png"),
@@ -43,9 +43,10 @@ const cell = (a: Angles, i: number, row: number, extra: Partial<CharacterSpec>) 
   `<g transform="translate(${i * CELL} ${row * CELL})">${frame(0, 0, CELL, CELL)}<path d="M4 ${CELL - 40}H${CELL - 4}" stroke="#000" stroke-width="3"/>` +
   characterSvg({ angles: a, x: CELL * 0.45, groundY: CELL - 40, height: CELL * 0.62, facing: "right", look: "b", ...extra }) + "</g>";
 const pw = CELL * POSE_NAMES.length;
-writeFileSync(join(out, "poses.png"), svgToPng(svg(pw, CELL * 2, [
-  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 0, { view: "quarter", hair: "bob" })),
-  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 1, { view: "side", hair: "short", hat: true, role: "lead" })),
+writeFileSync(join(out, "poses.png"), svgToPng(svg(pw, CELL * 3, [
+  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 0, { view: "front", hair: "bob" })),
+  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 1, { view: "quarter", hair: "bob" })),
+  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 2, { view: "side", hair: "short", hat: true, role: "lead" })),
 ].join("")), pw));
 
 // 動画
