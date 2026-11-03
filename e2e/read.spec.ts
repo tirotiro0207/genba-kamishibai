@@ -10,7 +10,7 @@ test("署名済みのカードだけを 1 枚ずつ送って見る", async ({ pa
   const api = `/api/t/${T}`;
   const ids: Record<string, string> = {};
   for (const s of ["draft", "signed1", "signed2", "stopped"]) {
-    const res = await request.post(`${api}/cards`, { data: { card: { ...sampleCard(), rule: `028e2e ${s}` } } });
+    const res = await request.post(`${api}/cards`, { data: { card: sampleCard() } });
     expect(res.status()).toBe(201);
     ids[s] = ((await res.json()) as { id: string }).id;
   }
@@ -19,7 +19,8 @@ test("署名済みのカードだけを 1 枚ずつ送って見る", async ({ pa
   for (const id of [ids.signed1, ids.signed2, ids.stopped]) expect((await request.post(`${api}/cards/${id}/sign`, { headers: sup, data: { version: 1, mark: MARK } })).status()).toBe(200);
   expect((await request.post(`${api}/cards/${ids.stopped}/status`, { headers: sup, data: { to: "stopped", reason: "録画で止める" } })).status()).toBe(200);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  // 動画用（VIDEO=1）は横長の画面のまま撮る
+  if (!process.env.VIDEO) await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/#/t/${T}/read`);
   const seen: string[] = [];
   await expect(page.getByTestId("read-card")).toBeVisible();

@@ -25,6 +25,9 @@ const ff = (args: string[]) => execFileSync("ffmpeg", ["-loglevel", "error", "-y
 const probe = (f: string) => Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f], { encoding: "utf-8" }).trim());
 const fitBox = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${BG},setsar=1`;
 /** 白いコマを落とす: 明るさの平均（YAVG）が 234 以上のコマは、白（235）一色か「読み込み中」の 1 行だけで、ページが描かれる前か切り替えの途中。白地の多い時計の場面でも 229 ほど */
+/** 出どころの帯: 上に空ける高さと、1 行の字数（2 行で 64 に収まり、右上の取り直しの印に届かない） */
+export const NOTE_TOP = 64;
+export const NOTE_WRAP = 40;
 export const DROP_BLANK = "signalstats,metadata=mode=select:key=lavfi.signalstats.YAVG:value=234:function=less";
 const esc = (p: string) => p.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1\\:");
 
@@ -105,7 +108,11 @@ function main() {
       return esc(f);
     };
     if (s.caption) draw.push(`drawtext=fontfile='${FONT}':textfile='${text("c", wrap(s.caption))}':fontsize=32:line_spacing=10:fontcolor=white:box=1:boxcolor=black@0.62:boxborderw=14:x=(w-tw)/2:y=h-th-36`);
-    if (s.note) draw.push(`drawtext=fontfile='${FONT}':textfile='${text("n", wrap(s.note, 52))}':fontsize=20:line_spacing=6:fontcolor=white:box=1:boxcolor=0x1F3A5F@0.85:boxborderw=8:x=(w-tw)/2:y=24`);
+    // 出どころがある区切りは、中身を少し縮めて上に白い帯を空け、そこに出どころを置く（画面の見出しや取り直しの印に重ねない）
+    if (s.note) {
+      draw.unshift(`scale=-2:${H - NOTE_TOP},pad=${W}:${H}:(ow-iw)/2:${NOTE_TOP}:white`);
+      draw.push(`drawtext=fontfile='${FONT}':textfile='${text("n", wrap(s.note, NOTE_WRAP))}':fontsize=20:line_spacing=6:fontcolor=white:box=1:boxcolor=0x1F3A5F@0.85:boxborderw=8:x=(w-tw)/2:y=8`);
+    }
     draw.push(`drawtext=fontfile='${FONT}':textfile='${text("m", "※取り直し（仮の版）")}':fontsize=18:fontcolor=0xC4372C:box=1:boxcolor=white@0.8:boxborderw=6:x=w-tw-16:y=16`);
     const seg = join(tmp, `s${String(i).padStart(2, "0")}.mp4`);
     ff(["-i", raw, "-vf", draw.join(","), "-t", String(len), ...ENC, seg]);

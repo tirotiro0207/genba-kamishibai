@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DROP_BLANK, wrap } from "../scripts/video-draft";
+import { DROP_BLANK, NOTE_WRAP, wrap } from "../scripts/video-draft";
 import { grepOf, SCENES } from "../scripts/video-rec";
 import { DRAFT, FLOW_CUTS, fit, share, withRun } from "../src/shared/video/draft-cut";
 
@@ -65,5 +65,12 @@ describe("仮の 3 分版のつなぎ方（098）", () => {
     expect(DROP_BLANK).toContain("YAVG:value=234:function=less");
     expect(SCENES).toHaveLength(11);
     expect(grepOf(["a.b", "c|d"])).toBe(String.raw`a\.b|c\|d`);
+  });
+
+  it("3 版目: 出どころは 2 行までで、右上の取り直しの印に届かない幅で折る", () => {
+    const notes = DRAFT.filter((s) => s.note);
+    expect(notes.length).toBeGreaterThan(0);
+    notes.forEach((s) => expect(wrap(s.note, NOTE_WRAP).split("\n").length, s.note).toBeLessThanOrEqual(2));
+    expect(NOTE_WRAP * 20).toBeLessThanOrEqual(1280 - 2 * 220);
   });
 });

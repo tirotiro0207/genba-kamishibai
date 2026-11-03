@@ -27,7 +27,7 @@ export type FlowScene = "取り出し" | "カード" | "直し" | "経路" | "�
 /** 通しの録画の中の場面の切れ目（秒）。録画の置き場ごと。撮り直したら、1 秒ごとのコマを見て直す */
 export const FLOW_CUTS: Record<string, Record<FlowScene, [number, number]>> = {
   "runs-fix": { 取り出し: [0, 4], カード: [4, 8], 直し: [8, 11], 経路: [17, 20], 署名と閲覧: [20, 23] },
-  "runs-video": { 取り出し: [0, 4], カード: [4, 7], 直し: [7, 11], 経路: [17, 19], 署名と閲覧: [19.5, 22.5] },
+  "runs-video": { 取り出し: [0, 4], カード: [4, 7.5], 直し: [8, 11.5], 経路: [17.5, 19.5], 署名と閲覧: [20, 21.9] },
 };
 const flow = (scene: FlowScene): Source => ({ clip: rec("runs-fix", FLOW_NAME), from: FLOW_CUTS["runs-fix"][scene][0], to: FLOW_CUTS["runs-fix"][scene][1], scene });
 
@@ -62,7 +62,8 @@ export const DRAFT: Segment[] = [
       flow("カード"),
       { clip: rec("runs-122", "card-コマを-1-つずつ送り、絵の面は-0-字、タップで文が出る。AI-下書きの帯が出る") },
       flow("経路"),
-      { clip: rec("runs-122", "route-絵の部品をタップすると元の文の該当箇所が光り、なぜそう描いたかが出る。全部品を順にタップできる") },
+      // 経路の録画は、最後にスマホの幅に切り替えて確かめる（2 秒から）。そこは使わない
+      { clip: rec("runs-122", "route-絵の部品をタップすると元の文の該当箇所が光り、なぜそう描いたかが出る。全部品を順にタップできる"), to: 1.95 },
     ],
     caption: "絵は Claude が数で書き、アプリが描きます。絵の部品から、元の文へ戻れます。",
     note: "",

@@ -17,7 +17,8 @@ async function mock(page: Page) {
 
 test("ページが積み重なってカウンターが上がり、1 枚・0 字にたたまれる", async ({ page }) => {
   await mock(page);
-  await page.setViewportSize({ width: 720, height: 900 });
+  // 動画用（VIDEO=1）は横長の画面のまま撮る
+  if (!process.env.VIDEO) await page.setViewportSize({ width: 720, height: 900 });
   await page.goto("/#/t/practice/fold/fold-card");
   await expect(page.getByTestId("fold")).toHaveAttribute("data-phase", "stack");
 
