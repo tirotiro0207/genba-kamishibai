@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { wrap } from "../scripts/video-draft";
-import { DRAFT, fit, share } from "../src/shared/video/draft-cut";
+import { DROP_BLANK, wrap } from "../scripts/video-draft";
+import { grepOf, SCENES } from "../scripts/video-rec";
+import { DRAFT, FLOW_CUTS, fit, share, withRun } from "../src/shared/video/draft-cut";
 
 // 098: 仮の 3 分版のつなぎ方。台本（docs/video.md の 098b の表）と同じ秒割りで、3 分に収まり、字幕は台本の語り
 const sec = (t: string) => {
@@ -48,5 +49,21 @@ describe("仮の 3 分版のつなぎ方（098）", () => {
     const w = wrap("監修者が直したいところを枠で囲み、直ったら署名します。署名したカードだけが、新入社員に届きます。");
     expect(w.split("\n").every((l) => l.length <= 34)).toBe(true);
     expect(w.split("\n")[0].endsWith("。") || w.split("\n")[0].endsWith("、")).toBe(true);
+  });
+
+  it("2 版目: 録画の置き場を差し替えると、録画は全部その置き場のもので、通しの録画はその置き場の切れ目になる", () => {
+    const v2 = withRun(DRAFT, "runs-video");
+    const clips = v2.flatMap((s) => s.sources).filter((x) => "clip" in x);
+    expect(clips.length).toBeGreaterThan(0);
+    clips.forEach((x) => expect(x.clip.startsWith("rec/runs-video/")).toBe(true));
+    clips.filter((x) => x.scene).forEach((x) => expect([x.from, x.to]).toEqual(FLOW_CUTS["runs-video"][x.scene!]));
+    expect(v2.map((s) => [s.start, s.end, s.caption])).toEqual(DRAFT.map((s) => [s.start, s.end, s.caption]));
+    expect(() => withRun(DRAFT, "runs-none")).toThrow(/FLOW_CUTS/);
+  });
+
+  it("2 版目: 白いコマは明るさの平均 234 以上で落とし、撮り直しは 11 場面を 1 つの -g で流す", () => {
+    expect(DROP_BLANK).toContain("YAVG:value=234:function=less");
+    expect(SCENES).toHaveLength(11);
+    expect(grepOf(["a.b", "c|d"])).toBe(String.raw`a\.b|c\|d`);
   });
 });

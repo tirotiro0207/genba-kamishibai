@@ -18,6 +18,9 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 720 },
     video: { mode: "on", size: { width: 1280, height: 720 } },
+    // 動画用（098・VIDEO=1 のときだけ）: 画面を 1152×648（16:9）にし、録画も同じ大きさで撮る。つなぐときに 1280×720 へ広げるので、中身が 1.11 倍に見える。
+    // これより狭いと、枠を描く録画で絵の下が画面の外に出て落ちる。撮るのは scripts/video-rec.ts
+    ...(process.env.VIDEO ? { viewport: { width: 1152, height: 648 }, video: { mode: "on" as const, size: { width: 1152, height: 648 } } } : {}),
   },
   // 画面と API と手元の D1 を一緒に動かす
   webServer: {

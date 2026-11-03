@@ -4,7 +4,7 @@ export type Source =
   /** 静止画を秒のあいだ出す */
   | { still: string }
   /** 動画。足りなければ遅くし（半分の速さまで）、それでも足りなければ最後のコマで止める。長ければ速める */
-  | { clip: string; from?: number; to?: number }
+  | { clip: string; from?: number; to?: number; scene?: FlowScene }
   /** 文字だけの仮の画面（まだ撮っていない所） */
   | { card: string };
 
@@ -21,9 +21,15 @@ export interface Segment {
 
 const rec = (run: string, name: string) => `rec/${run}/${name}/video.webm`;
 const STORY = "material/096b-起";
-/** 065a の通しの録画（練習用テナントで取り出しから記録アプリまで）。秒は録画の中の場面の切れ目 */
-const FLOW = rec("runs-fix", "flow-practice-練習用テナントで、取り出しから記録アプリまでを-1-本で通す");
-const flow = (from: number, to: number): Source => ({ clip: FLOW, from, to });
+/** 065a の通しの録画（練習用テナントで取り出しから記録アプリまで） */
+const FLOW_NAME = "flow-practice-練習用テナントで、取り出しから記録アプリまでを-1-本で通す";
+export type FlowScene = "取り出し" | "カード" | "直し" | "経路" | "署名と閲覧";
+/** 通しの録画の中の場面の切れ目（秒）。録画の置き場ごと。撮り直したら、1 秒ごとのコマを見て直す */
+export const FLOW_CUTS: Record<string, Record<FlowScene, [number, number]>> = {
+  "runs-fix": { 取り出し: [0, 4], カード: [4, 8], 直し: [8, 11], 経路: [17, 20], 署名と閲覧: [20, 23] },
+  "runs-video": { 取り出し: [0, 4], カード: [4, 7], 直し: [7, 11], 経路: [17, 19], 署名と閲覧: [19.5, 22.5] },
+};
+const flow = (scene: FlowScene): Source => ({ clip: rec("runs-fix", FLOW_NAME), from: FLOW_CUTS["runs-fix"][scene][0], to: FLOW_CUTS["runs-fix"][scene][1], scene });
 
 export const DRAFT: Segment[] = [
   { start: 0, end: 4, part: "起", sources: [{ still: `${STORY}/01.png` }], caption: "むかしむかし、あるところに、日本人のお父さんとベトナム人のお母さんがいました。", note: "" },
@@ -44,7 +50,7 @@ export const DRAFT: Segment[] = [
     start: 40,
     end: 55,
     part: "転",
-    sources: [{ clip: rec("runs-122", "make-話した言葉を入れ、送る前に文字を確かめ、取り出した決まりを「どこから」を見て-OK-する") }, flow(0, 4)],
+    sources: [{ clip: rec("runs-122", "make-話した言葉を入れ、送る前に文字を確かめ、取り出した決まりを「どこから」を見て-OK-する") }, flow("取り出し")],
     caption: "決まりの文を入れると、Claude が「守ること」と「なぜ」を、元の行の印つきで取り出します。",
     note: "",
   },
@@ -53,9 +59,9 @@ export const DRAFT: Segment[] = [
     end: 75,
     part: "転",
     sources: [
-      flow(4, 8),
+      flow("カード"),
       { clip: rec("runs-122", "card-コマを-1-つずつ送り、絵の面は-0-字、タップで文が出る。AI-下書きの帯が出る") },
-      flow(17, 20),
+      flow("経路"),
       { clip: rec("runs-122", "route-絵の部品をタップすると元の文の該当箇所が光り、なぜそう描いたかが出る。全部品を順にタップできる") },
     ],
     caption: "絵は Claude が数で書き、アプリが描きます。絵の部品から、元の文へ戻れます。",
@@ -77,10 +83,10 @@ export const DRAFT: Segment[] = [
     end: 110,
     part: "転",
     sources: [
-      flow(8, 11),
+      flow("直し"),
       { clip: rec("runs-122", "fix-マウスで枠を描き、文字を確かめてから送ると、④-人の直しに残る") },
       { clip: rec("runs-122", "sign-パソコンは電子印鑑。監修者の役で入り、印を押して署名すると「未承認の下書き」が消える") },
-      flow(20, 23),
+      flow("署名と閲覧"),
       { clip: rec("runs-122", "read-署名済みのカードだけを-1-枚ずつ送って見る") },
     ],
     caption: "監修者が直したいところを枠で囲み、直ったら署名します。署名したカードだけが、新入社員に届きます。",
@@ -106,6 +112,24 @@ export const DRAFT: Segment[] = [
   { start: 160, end: 172, part: "結", sources: [{ card: "（仮）監修者の一言\n公開の同意をもらってから、録音か文字で入れる" }], caption: "", note: "" },
   { start: 172, end: 180, part: "結", sources: [{ still: `${STORY}/05.png` }], caption: "言葉の壁を越えて、決まりを絵で届ける。現場-紙芝居。", note: "" },
 ];
+
+/**
+ * 録画の置き場を差し替えた版（098 の 2 版目: 動画用に撮り直した runs-video）。
+ * 録画は全部その置き場の同じ名前のものにし、通しの録画の切れ目もその置き場のものにする
+ */
+export function withRun(draft: Segment[], run: string): Segment[] {
+  const cuts = FLOW_CUTS[run];
+  return draft.map((s) => ({
+    ...s,
+    sources: s.sources.map((x) => {
+      if (!("clip" in x)) return x;
+      const clip = x.clip.replace(/^rec\/[^/]+\//, `rec/${run}/`);
+      if (!x.scene) return { ...x, clip };
+      if (!cuts) throw new Error(`${run} の通しの録画の切れ目が無い（FLOW_CUTS に足す）`);
+      return { ...x, clip, from: cuts[x.scene][0], to: cuts[x.scene][1] };
+    }),
+  }));
+}
 
 /** 動画を秒に合わせるときの速さ（1 より大きいと速める）と、最後のコマで止める秒 */
 export function fit(clipSeconds: number, slotSeconds: number): { speed: number; hold: number } {
