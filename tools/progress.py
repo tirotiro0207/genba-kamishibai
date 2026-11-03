@@ -1,6 +1,6 @@
 """軸（docs/compass.md）と作業の表（docs/plan.md）から、進み具合を作る。
 
-    python tools/progress.py          # docs/progress.md と docs/dashboard.html を作り直す
+    python tools/progress.py          # docs/progress.md と docs/dashboard.html と、plan.md の §3 の合計を作り直す
     python tools/progress.py --check  # 作り直した中身とファイルがずれていたら 1 で終わる
     python tools/progress.py --done 000 --start 09:30  # マス 000 を済みにし、実際の分を始めた時刻から今までで数える（日本時間。日付つき 2026-11-03T09:30 も可）
     python tools/progress.py --done 000 10  # 分を数で渡す。どちらも、前の「直近」をそのマスのコミットの番号に書き換えてから作り直す
@@ -49,7 +49,7 @@ def read_compass(text):
 
 def read_plan(text):
     milestones, tasks, section_day = [], [], None
-    in_ms = False
+    in_ms = side = False
     for line in text.splitlines():
         if line.startswith("## 1. 目印"):
             in_ms = True
@@ -57,7 +57,9 @@ def read_plan(text):
             in_ms = False
         m = re.match(r"### (M\d)（(.+?)）", line)
         if m:
-            section_day = m.group(2)
+            section_day, side = m.group(2), False
+        elif line.startswith("### 別枠"):
+            side = True  # 日の見出しは前のまま（進み具合の表では最後の日に並ぶ）。§3 の合計では別の行にする
         if not line.startswith("|"):
             continue
         c = cells(line)
@@ -72,7 +74,7 @@ def read_plan(text):
                           "star": c[7] == "★", "lane": c[8], "state": c[9],
                           "actual": int(re.match(r"\d+", c[10]).group()) if re.match(r"^\d+(（目安）)?$", c[10]) else None,
                           "approx": c[10].endswith("（目安）"),
-                          "commit": c[11], "day": section_day,
+                          "commit": c[11], "day": section_day, "side": side,
                           # 最初の表に無く、直しや新しい観点から後で生まれたマス。進路図では右下にまとめる
                           "extra": EXTRA in c[1],
                           # 録画に絵が映るマス。ピクトグラムが決まったら録画を取り直す（11/3 作者）
@@ -641,6 +643,48 @@ def render_html(d):
     return "\n".join(P) + "\n"
 
 
+TOTALS_HEAD = "## 3. 合計"
+
+
+def render_totals(tasks):
+    """plan.md §3 の 2 つの表（全部と ★、日ごと）。手で書くとマスを足したときにずれるので、作業の表から数える"""
+    def mins(ts):
+        return sum(t["minutes"] for t in ts)
+
+    def hours(m):
+        return f"{m:,}（約 {m / 60:.1f} 時間）"
+
+    star = [t for t in tasks if t["star"]]
+    L = [TOTALS_HEAD, "", "`tools/progress.py` が作業の表から数えて書く（手で書かない）。", "",
+         "| | マス数 | 分 |", "|---|---|---|",
+         f"| 全部 | {len(tasks)} | {hours(mins(tasks))} |", f"| ★ | {len(star)} | {hours(mins(star))} |", "",
+         "| 日 | マス | 分 |", "|---|---|---|"]
+    main_tasks = [t for t in tasks if not t["side"]]
+    for key in sorted({day_key(t["day"]) for t in main_tasks}):
+        ts = [t for t in main_tasks if day_key(t["day"]) == key]
+        sections = list(dict.fromkeys(t["day"] for t in ts))
+        subs = [re.sub(r"^\d+/\d+\s*", "", s).split("。")[0] for s in sections]
+        subs = [s + " まで" if re.match(r"^\d{1,2}:\d{2}$", s) else s for s in subs]
+        note = ""
+        if len(sections) > 1:
+            note = "（" + "・".join(f"{sub} {mins([t for t in ts if t['day'] == s])}" for sub, s in zip(subs, sections)) + "）"
+        elif subs[0]:
+            note = f"（{subs[0]}）"
+        L.append(f"| {key[0]}/{key[1]}{note} | {len(ts)} | {mins(ts):,} |")
+    side = [t for t in tasks if t["side"]]
+    if side:
+        L.append(f"| 別枠（空いた時間） | {len(side)} | {mins(side):,} |")
+    return "\n".join(L) + "\n"
+
+
+def sync_totals(plan_text, tasks):
+    """plan.md の §3 の見出しから、最初の箇条書き（手で書く注意）の前までを作り直した plan.md の中身"""
+    lines = plan_text.split("\n")
+    i = lines.index(TOTALS_HEAD)
+    j = next(k for k in range(i + 1, len(lines)) if lines[k].startswith("- ") or lines[k].startswith("## "))
+    return "\n".join(lines[:i] + render_totals(tasks).split("\n") + lines[j:])
+
+
 def mask_generated(s):
     """作った時刻は毎回変わるので、ずれの検査では見ない"""
     return re.sub(r"(<span class=\"num\" data-generated>)[^<]*", r"\1", s)
@@ -715,12 +759,14 @@ def main(argv):
         commit = check_commit(argv[argv.index("--commit") + 1]) if "--commit" in argv else None
         mark_done(argv[i + 1], minutes, commit)
         argv = [a for a in argv if a != "--check"]
-    d = build((DOCS / "compass.md").read_text(encoding="utf-8"), (DOCS / "plan.md").read_text(encoding="utf-8"), now.date())
+    plan_text = (DOCS / "plan.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+    d = build((DOCS / "compass.md").read_text(encoding="utf-8"), plan_text, now.date())
     d["now"] = now
-    outputs = {DOCS / "progress.md": render_md(d), DOCS / "dashboard.html": render_html(d)}
+    outputs = {DOCS / "progress.md": render_md(d), DOCS / "dashboard.html": render_html(d),
+               DOCS / "plan.md": sync_totals(plan_text, d["tasks"])}
     if "--check" in argv:
         # Windows では git が改行を CRLF にすることがあるので、改行の違いは見ない
-        stale = [p.name for p, s in outputs.items()
+        stale = [p.name + ("（§3 の合計）" if p.name == "plan.md" else "") for p, s in outputs.items()
                  if not p.exists() or mask_generated(p.read_text(encoding="utf-8").replace("\r\n", "\n")) != mask_generated(s)]
         if stale:
             print("進み具合が plan.md とずれています: " + "・".join(stale) + "。python tools/progress.py で作り直してください")
@@ -728,7 +774,7 @@ def main(argv):
         return 0
     for p, s in outputs.items():
         p.write_text(s, encoding="utf-8", newline="\n")
-    print(f"{d['total']['done']} / {d['total']['n']} マス済み。progress.md と dashboard.html を作った")
+    print(f"{d['total']['done']} / {d['total']['n']} マス済み。progress.md と dashboard.html と plan.md の §3 の合計を作った")
     return 0
 
 
