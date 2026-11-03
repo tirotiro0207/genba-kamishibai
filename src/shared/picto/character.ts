@@ -56,8 +56,8 @@ const seg = (len: number, w: number, pass: Pass, fill = "#666") =>
 
 /** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、手、胴、ベスト）。奥の足は 1 段暗くして、重なっても 2 本に見せる（光はカメラの側から当たるので、奥ほどトーンが落ちる） */
 const CLOTH: Record<Look, { arm: string; leg: string; legFar: string; hand: string; shirt: string; vest: string }> = {
-  a: { arm: "#666", leg: "#666", legFar: "#4d4d4d", hand: "#ccc", shirt: "#666", vest: "#999" },
-  b: { arm: "#fff", leg: "#555", legFar: "#3c3c3c", hand: "#fff", shirt: "#fff", vest: "#ccc" },
+  a: { arm: "#666", leg: "#808080", legFar: "#444", hand: "#ccc", shirt: "#666", vest: "#999" },
+  b: { arm: "#fff", leg: "#7a7a7a", legFar: "#333", hand: "#fff", shirt: "#fff", vest: "#ccc" },
 };
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
