@@ -2,7 +2,8 @@ import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { sampleCard } from "../../tests/fixtures/card";
 import { hashPin, signSession } from "./tenant";
-import { personName, signRole, verifyRole } from "./people";
+import { app } from "./index";
+import { NO_SECRET, personName, signRole, verifyRole } from "./people";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
 const req = (method: string, body?: unknown, headers: Record<string, string> = {}): RequestInit => ({ method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -85,5 +86,16 @@ describe("監査の記録の関所（041）", () => {
     }
     const nh = { "x-role": (await login("practice", "newhire")).body.token! };
     expect((await call(`/api/t/practice/audit/cards/${made.id}`, req("GET", undefined, nh))).status).toBe(403);
+  });
+
+  it("入ったしるしの鍵が無いと、役割でも PIN でも 500 ではなく 503 で、何が足りないかを言う", async () => {
+    const bare = { ...env, SESSION_SECRET: "" };
+    const r = await app.request("/api/t/practice/login", req("POST", { role: "author" }), bare);
+    expect(r.status).toBe(503);
+    expect(((await r.json()) as { error: string }).error).toBe(NO_SECRET);
+    await env.DB.prepare("INSERT OR IGNORE INTO tenants (id, kind, name, pin_hash) VALUES ('co-nosecret', 'company', '会社', ?)").bind(await hashPin("1357")).run();
+    const s = await app.request("/api/t/co-nosecret/session", req("POST", { pin: "1357" }), bare);
+    expect(s.status).toBe(503);
+    expect(NO_SECRET).toMatch(/SESSION_SECRET/);
   });
 });

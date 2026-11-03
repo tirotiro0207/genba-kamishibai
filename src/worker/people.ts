@@ -96,6 +96,9 @@ export async function noNewhireGate(c: Context<{ Bindings: Env; Variables: Peopl
 
 export const people = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
+/** 入ったしるしの鍵が無いとき（手元で .dev.vars を書き忘れたとき）の答え。鍵の長さ 0 で署名しようとして 500 にならないように先に断る */
+export const NO_SECRET = "入ったしるしの鍵（SESSION_SECRET）が無いので入れない。手元では .dev.vars に書く";
+
 /** 役割で入る。会社のテナントは役割の PIN が要る。練習用と架空の会社は選ぶだけ */
 people.post("/login", async (c) => {
   const b = await c.req.json<{ role?: unknown; slot?: unknown; pin?: unknown }>().catch(() => ({}) as Record<string, unknown>);
@@ -106,6 +109,7 @@ people.post("/login", async (c) => {
     const row = await c.env.DB.prepare("SELECT pin_hash FROM people WHERE tenant_id = ? AND role = ? AND slot = ?").bind(c.var.tenant.id, role, slot).first<{ pin_hash: string | null }>();
     if (!row?.pin_hash || typeof b.pin !== "string" || !(await verifyPin(b.pin, row.pin_hash))) return c.json({ error: "PIN が違う" }, 401);
   }
+  if (!c.env.SESSION_SECRET) return c.json({ error: NO_SECRET }, 503);
   const p: Person = { role, slot };
   return c.json({ token: await signRole(c.env.SESSION_SECRET, c.var.tenant.id, p), role, slot, name: personName(c.env, p) });
 });

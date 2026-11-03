@@ -10,7 +10,7 @@ import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
-import { auditGate, cardsGate, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
+import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
 import { issue } from "./issue";
 import { queue } from "./queue";
 import { read } from "./read";
@@ -28,6 +28,7 @@ app.post("/api/t/:tenant/session", async (c) => {
   if (!t || t.kind !== "company" || !t.pin_hash) return c.json({ error: "PIN の要らないテナント" }, 400);
   const { pin } = await c.req.json<{ pin?: string }>().catch(() => ({ pin: undefined }));
   if (typeof pin !== "string" || !(await verifyPin(pin, t.pin_hash))) return c.json({ error: "PIN が違う" }, 401);
+  if (!c.env.SESSION_SECRET) return c.json({ error: NO_SECRET }, 503);
   return c.json({ token: await signSession(c.env.SESSION_SECRET, t.id) });
 });
 
