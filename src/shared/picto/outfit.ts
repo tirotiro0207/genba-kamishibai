@@ -63,15 +63,18 @@ const lum = (tone: string) => {
 /** 下地の明るさに対して見える線の色 */
 const ink = (under: string) => (lum(under) < 0x60 ? "#fff" : "#000");
 /** 奥の足のズボン（光はカメラの側から当たるので、奥は暗くする） */
+// 白や明るい灰色の服は、0.45 だと奥の足が黒く沈んで明暗が強すぎるので、ほんのり灰色にとどめる
 export const farTone = (tone: string) => {
-  const v = Math.round(lum(tone) * 0.45).toString(16).padStart(2, "0");
+  const l = lum(tone);
+  const v = Math.round(l * (l >= 0xc0 ? 0.85 : 0.45)).toString(16).padStart(2, "0");
   return `#${v}${v}${v}`;
 };
 
 /** 胴の幅（片側）と、襟の V のまん中（胸の向く側へ寄る） */
 const W = (view: View) => (view === "side" ? 30 : 46);
-const CX: Record<View, number> = { front: 0, quarter: 10, side: 12 };
-/** 襟まわりの横の広がり。真横は胸の前の端が近いので半分に縮め、胴の幅（片側 30）からはみ出さないようにする */
+// 真横の 6 は首の位置（character.ts の NECK_X.side）と下地のベストの V のまん中に合わせる。12 だと襟の開きが首の前へずれて浮く
+const CX: Record<View, number> = { front: 0, quarter: 10, side: 6 };
+/** 襟まわりの横の広がり。真横は胸の前の端が近いので半分に縮め（首の幅 22 と同じ広がり）、胴の幅（片側 30）からはみ出さないようにする */
 const SPAN: Record<View, number> = { front: 1, quarter: 1, side: 0.5 };
 /** 手前の腰（斜めは画面の左、真横は胴のまん中） */
 const NEAR_HIP: Record<View, number> = { front: -26, quarter: -30, side: -4 };
@@ -301,11 +304,24 @@ export const armbandSvg = (sleeve: string) =>
 export const bootSvg = (shin: number, tone: string) =>
   part("boots", `<rect x="-21" y="${shin - 48}" width="42" height="50" rx="4" fill="${tone}" ${S(5)}/>`);
 
-/** マスク（頭の座標。口を覆う） */
-const MASK: Record<View, [number, number]> = { front: [0, 48], quarter: [8, 44], side: [22, 30] };
+/**
+ * マスク（頭の座標。口を覆う）。[左の端, 右の端, 上, 下]。目の下・鼻の上から口までを覆う。
+ * 斜めは顔のまん中（目と目の間、x 19）へ寄せて少し小さく、真横は顔の前の端に寄せる。
+ * 紐は上と下の 2 本で、耳へ向かう。正面は両側、斜めは見える耳と奥の顔の縁、真横は見える耳へ
+ */
+const MASK: Record<View, [number, number, number, number]> = {
+  front: [-24, 24, -30, -6],
+  quarter: [1, 37, -29, -8],
+  side: [17, 43, -29, -8],
+};
+const EAR_AT: Record<View, number[]> = { front: [-44, 44], quarter: [-34, 44], side: [-4] };
 export const maskSvg = (view: View) => {
-  const [x, w] = MASK[view];
-  return part("mask", `<rect x="${x - w / 2}" y="-30" width="${w}" height="24" rx="9" fill="#fff" ${S(4)}/><path d="M${x - w / 2} -24L${x - w / 2 - 14} -34" stroke="#000" stroke-width="3"/>`);
+  const [l, r, t, b] = MASK[view];
+  const strap = (ear: number) => {
+    const edge = ear < l ? l : r;
+    return `<path d="M${edge} ${t + 5}L${ear} ${t - 5}M${edge} ${b - 4}L${ear} ${b - 12}" stroke="#000" stroke-width="3"/>`;
+  };
+  return part("mask", EAR_AT[view].map(strap).join("") + `<rect x="${l}" y="${t}" width="${r - l}" height="${b - t}" rx="9" fill="#fff" ${S(4)}/>`);
 };
 
 /** かぶり物の線（横に回る帯）。[左の端, 右の端, 高さ] を本数ぶん */

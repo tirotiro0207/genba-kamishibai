@@ -373,8 +373,13 @@ const NECK_PIVOT = 30;
 export const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
 export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="5"/>`;
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
-/** 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える） */
-const NECK_X: Record<View, number> = { front: 0, quarter: 10, side: 0 };
+/**
+ * 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える）。
+ * 真横も同じで、首は胴のまん中より少し前（x 6）に立ち、ベストの V（VEST_V.side のまん中 6）と服の襟のまん中（outfit.ts の CX.side）をここにそろえる。
+ * 首を 0 のままにすると、襟の開きが首の前へずれて浮いて見えた
+ */
+// 斜めは服の中心の線（10）に合わせると頭が前へ出すぎて見えたので、少し戻して 6 にする（11/3 作者の確認）
+const NECK_X: Record<View, number> = { front: 0, quarter: 6, side: 6 };
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
 function lowest(a: Angles, view: View, look: Look, top: number): number {
