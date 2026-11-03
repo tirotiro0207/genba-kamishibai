@@ -39,6 +39,14 @@ The flow (details in [docs/flow.md](docs/flow.md)):
 6. **Signature** — a supervisor signs with a finger or a stamp. There is a daily cap per supervisor, and the server refuses to hand out unsigned cards.
 7. **Issue** — signed cards reach new hires one at a time, kamishibai-style. A card can be stopped (with a reason); new hires who saw it get a recall notice.
 
+Screens (the fictional demo company; provisional — retaken once the pictures are final):
+
+| | |
+|---|---|
+| ![Public demo entrance](docs/img/1-entrance.png) Public demo entrance | ![Card with its bands](docs/img/2-card.png) Card: the picture, the "unapproved draft" band and the checking band |
+| ![Route](docs/img/3-route.png) Route: a part of the picture → its source line | ![Review queue](docs/img/4-queue.png) Review queue: red cards first |
+| ![Signature](docs/img/5-sign.png) Signature with a stamp | ![Reading](docs/img/6-read.png) What a new hire sees: signed cards, one at a time |
+
 Also built:
 
 - Roles: author, two supervisors, trainer, new hire. Company tenants need a tenant PIN and a role PIN.
