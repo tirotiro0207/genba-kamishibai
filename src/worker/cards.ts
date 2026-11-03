@@ -12,6 +12,7 @@ import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal"
 import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
 import { claudeClient } from "./claude-client";
+import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import type { PeopleVars } from "./people";
 import { createRecall, readReason } from "./recall";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
@@ -105,6 +106,8 @@ cards.post("/", async (c) => {
 export async function addTerms(db: D1Database, tenantId: string, cardId: string, terms: Term[]) {
   if (!terms.length) return;
   await db.batch(terms.map((t) => db.prepare("INSERT OR IGNORE INTO glossary (tenant_id, ja, vi, card_id) VALUES (?, ?, ?, ?)").bind(tenantId, t.ja.slice(0, 80), t.vi.slice(0, 120), cardId)));
+  // 会社の言葉（085）: 用語表の言葉を、会社の呼び方として積む
+  await addCompanyWords(db, tenantId, callsFromTerms(terms), "glossary", cardId);
 }
 
 // 用語表: 日本語ごとに、ベトナム語（カードによって違えば全部）と、どのカードで使うか
@@ -221,6 +224,8 @@ cards.put("/:id", async (c) => {
     actor: by,
     payload: { from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
   });
+  // 会社の言葉（085）: 直しの前と後から、言い換えと使わない言い方を積む
+  await addEditWords(c.env.DB, c.var.tenant.id, r.id, before as unknown as Record<string, unknown>, card as unknown as Record<string, unknown>);
   const reasons = aiDraftReasons(card);
   await c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
     .bind(JSON.stringify(card), reasons.length ? "ai_draft" : "draft", r.id, c.var.tenant.id)
