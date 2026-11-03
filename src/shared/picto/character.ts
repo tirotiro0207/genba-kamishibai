@@ -54,10 +54,10 @@ const seg = (len: number, w: number, pass: Pass, fill = "#666") =>
     ? `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/>`
     : `<path d="M0 0V${len}" stroke="${fill}" stroke-width="${w - 12}" stroke-linecap="round"/>`;
 
-/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、手、胴、ベスト）。奥の足は 1 段明るくして、重なっても 2 本に見せる（本番の描画と同じ決まり） */
+/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、手、胴、ベスト）。奥の足は 1 段暗くして、重なっても 2 本に見せる（光はカメラの側から当たるので、奥ほどトーンが落ちる） */
 const CLOTH: Record<Look, { arm: string; leg: string; legFar: string; hand: string; shirt: string; vest: string }> = {
-  a: { arm: "#666", leg: "#666", legFar: "#7d7d7d", hand: "#ccc", shirt: "#666", vest: "#999" },
-  b: { arm: "#fff", leg: "#555", legFar: "#6e6e6e", hand: "#fff", shirt: "#fff", vest: "#ccc" },
+  a: { arm: "#666", leg: "#666", legFar: "#4d4d4d", hand: "#ccc", shirt: "#666", vest: "#999" },
+  b: { arm: "#fff", leg: "#555", legFar: "#3c3c3c", hand: "#fff", shirt: "#fff", vest: "#ccc" },
 };
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
