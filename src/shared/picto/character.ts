@@ -29,11 +29,11 @@ export interface CharacterSpec {
 }
 
 const UNIT = 434;
-const L = { torso: 142, shoulderDrop: 22, upperArm: 70, lowerArm: 52, thigh: 85, shin: 77, sole: 25, headUp: 2 };
+export const L = { torso: 142, shoulderDrop: 22, upperArm: 70, lowerArm: 52, thigh: 85, shin: 77, sole: 25, headUp: 2 };
 const HAT: Record<CharacterRole, string> = { new: "#fff", lead: "#222", worker: "#999" };
 
 /** 部位の置き場所（左右）。斜めは腕と足を胴の左右へ、真横は前後に重ねる */
-const SPOT: Record<View, { arm: [number, number]; leg: [number, number] }> = {
+export const SPOT: Record<View, { arm: [number, number]; leg: [number, number] }> = {
   quarter: { arm: [-42, 42], leg: [-18, 18] },
   side: { arm: [-6, 4], leg: [-8, 6] },
 };
@@ -62,7 +62,7 @@ const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
  * 2 つの向きの点を 1 つの形でつなぐので、すねが傾いても口が足からずれず、靴底は床に乗る。
  * ankle は靴底を床と平行に戻す回転（度）。靴底の下端は足首から 25 下
  */
-function shoe(ankle: number): string {
+export function shoe(ankle: number): string {
   const r = (ankle * Math.PI) / 180;
   const f = (x: number, y: number) => `${n(x * Math.cos(r) - y * Math.sin(r))} ${n(x * Math.sin(r) + y * Math.cos(r))}`;
   const body =
@@ -72,7 +72,7 @@ function shoe(ankle: number): string {
 }
 
 /** 胴（原点＝腰。斜めはふつうの幅、真横は細く、ベストの V を前寄りに） */
-const torso = (view: View, look: Look) => {
+export const torso = (view: View, look: Look) => {
   const c = CLOTH[look];
   return view === "quarter"
     ? `<rect x="-46" y="-142" width="92" height="162" rx="30" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
@@ -101,7 +101,7 @@ const eyeB = (cx: number, out: number) =>
   `<ellipse cx="${cx}" cy="-37" rx="4.3" ry="5.6"/>` +
   `<path d="M${cx + out * 2.8} -41l${out * 3.6} -1.6M${cx + out * 0.8} -42.4l${out * 1.4} -3.6" stroke="#000" stroke-width="2.2" stroke-linecap="round"/>`;
 /** 顔の形: 丸ではなく、四角に寄せて角を大きく取る（幅 90・高さ 90、角の半径 26） */
-const FACE_SHAPE = `<rect x="-45" y="-90" width="90" height="90" rx="26" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
+export const FACE_SHAPE = `<rect x="-45" y="-90" width="90" height="90" rx="26" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
 const FACE_B: Record<View, string> = {
   quarter:
     `${FACE_SHAPE}${eyeB(8, -1)}${eyeB(30, 1)}` +
@@ -185,8 +185,8 @@ function armOrder(a: Angles, view: View): [number, number] {
 /** 首は頭の下の方（首の付け根から 30 上）を軸に回し、うつむくほど少し前へ出す。胴の上の端で回すと頭が胴の前へずれる */
 const NECK_PIVOT = 30;
 /** b は頭を少し持ち上げて、あごと胴の間に短い首を見せる（a は首なし） */
-const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
-const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
+export const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
+export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
