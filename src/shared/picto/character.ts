@@ -54,10 +54,10 @@ const seg = (len: number, w: number, pass: Pass, fill = "#666") =>
     ? `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/>`
     : `<path d="M0 0V${len}" stroke="${fill}" stroke-width="${w - 12}" stroke-linecap="round"/>`;
 
-/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、手、胴、ベスト）。奥の足は 1 段暗くして、重なっても 2 本に見せる（光はカメラの側から当たるので、奥ほどトーンが落ちる） */
-const CLOTH: Record<Look, { arm: string; leg: string; legFar: string; hand: string; shirt: string; vest: string }> = {
-  a: { arm: "#666", leg: "#808080", legFar: "#444", hand: "#ccc", shirt: "#666", vest: "#999" },
-  b: { arm: "#fff", leg: "#7a7a7a", legFar: "#333", hand: "#fff", shirt: "#fff", vest: "#ccc" },
+/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、靴、奥の靴、手、胴、ベスト）。奥の足と靴は 1 段暗くして、重なっても 2 本に見せる（光はカメラの側から当たるので、奥ほどトーンが落ちる） */
+const CLOTH: Record<Look, { arm: string; leg: string; legFar: string; shoe: string; shoeFar: string; hand: string; shirt: string; vest: string }> = {
+  a: { arm: "#666", leg: "#808080", legFar: "#444", shoe: "#3a3a3a", shoeFar: "#151515", hand: "#ccc", shirt: "#666", vest: "#999" },
+  b: { arm: "#fff", leg: "#7a7a7a", legFar: "#333", shoe: "#3a3a3a", shoeFar: "#151515", hand: "#fff", shirt: "#fff", vest: "#ccc" },
 };
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
@@ -67,12 +67,12 @@ const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
  * 2 つの向きの点を 1 つの形でつなぐので、すねが傾いても口が足からずれず、靴底は床に乗る。
  * ankle は靴底を床と平行に戻す回転（度）。靴底の下端は足首から 25 下
  */
-export function shoe(ankle: number): string {
+export function shoe(ankle: number, fill = "#222"): string {
   const r = (ankle * Math.PI) / 180;
   const f = (x: number, y: number) => `${n(x * Math.cos(r) - y * Math.sin(r))} ${n(x * Math.sin(r) + y * Math.cos(r))}`;
   const body =
     `M-18 -8L${f(-22, 16)}Q${f(-22, 25)} ${f(-13, 25)}L${f(30, 25)}Q${f(38, 25)} ${f(38, 17)}Q${f(38, 10)} ${f(30, 9)}L${f(16, -2)}Q15 -5 14 -8Z`;
-  return `<path d="${body}" fill="#222" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
+  return `<path d="${body}" fill="${fill}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
     `<path d="M${f(-20, 25)}L${f(38, 25)}" stroke="#000" stroke-width="6" stroke-linecap="round"/>`;
 }
 
@@ -80,10 +80,10 @@ export function shoe(ankle: number): string {
  * 正面から見た靴（つま先がこちらを向く）。i は 0 が画面の左の足、1 が右の足。
  * 内側はすねの縁に合わせてまっすぐ下ろし、外側だけ少し広げる（左右の靴が重ならない）
  */
-export function shoeFront(i: number, ankle: number): string {
+export function shoeFront(i: number, ankle: number, fill = "#222"): string {
   const s = i === 0 ? 1 : -1;
   const x = (v: number) => n(v * s);
-  return `<g transform="rotate(${n(ankle)})"><path d="M${x(-16)} -8H${x(17.5)}V19Q${x(17.5)} 25 ${x(11.5)} 25H${x(-14)}Q${x(-23)} 25 ${x(-21)} 15Z" fill="#222" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
+  return `<g transform="rotate(${n(ankle)})"><path d="M${x(-16)} -8H${x(17.5)}V19Q${x(17.5)} 25 ${x(11.5)} 25H${x(-14)}Q${x(-23)} 25 ${x(-21)} 15Z" fill="${fill}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
     `<path d="M${x(-19)} 25H${x(14)}" stroke="#000" stroke-width="6" stroke-linecap="round"/></g>`;
 }
 
@@ -256,9 +256,12 @@ export function characterSvg(c: CharacterSpec): string {
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
   const leg = (i: number) => {
     const g = r.legs[i];
-    const fill = i === 0 ? cloth.legFar : cloth.leg;
+    // 正面は両足ともカメラから同じ遠さなので、同じ明るさにする
+    const far = i === 0 && view !== "front";
+    const fill = far ? cloth.legFar : cloth.leg;
+    const shoeFill = far ? cloth.shoeFar : cloth.shoe;
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle) : shoe(g.ankle)}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
