@@ -90,6 +90,14 @@ node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toStr
 npx wrangler d1 migrations apply DB --local
 ```
 
+The fictional demo company's ten signed cards come as seed data (`demo/seed.sql`, fictional company only). Load them once, after the migrations, so its screens (`/` and "try it yourself") and their recorded tests (`demo`, `try`) work without an API key:
+
+```bash
+npx wrangler d1 execute DB --local --file demo/seed.sql
+```
+
+To make the demo cards again from scratch instead, the full pipeline calls Claude, so it needs `ANTHROPIC_API_KEY` (with `npm run dev` running): `BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts`, then `npx tsx scripts/demo-seed.ts` writes the seed file again.
+
 ```bash
 npm run dev
 ```
@@ -105,12 +113,6 @@ npx playwright install chromium
 
 ```bash
 npx playwright test --workers=1
-```
-
-On a fresh clone the fictional demo company has no cards yet, so its screens (`/` and "try it yourself") show an empty message and their two recorded tests (`demo`, `try`) fail. Making the demo cards calls Claude, so it needs `ANTHROPIC_API_KEY` (with `npm run dev` running):
-
-```bash
-BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts
 ```
 
 ### Use it from other tools (MCP)

@@ -90,6 +90,14 @@ node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toStr
 npx wrangler d1 migrations apply DB --local
 ```
 
+架空の会社の署名済みのカード 10 枚は、種データ（`demo/seed.sql`。架空の会社の分だけ）として入っています。マイグレーションのあとに 1 回入れると、架空の会社の画面（`/` と「自分も試す」）とその録画（`demo`・`try`）が、API の鍵なしで動きます:
+
+```bash
+npx wrangler d1 execute DB --local --file demo/seed.sql
+```
+
+デモのカードを一から作り直すときは、流れを全部通すので Claude を呼びます。`ANTHROPIC_API_KEY` が要ります（`npm run dev` を動かしたまま）: `BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts` のあとに `npx tsx scripts/demo-seed.ts` で種データを書き直します。
+
 ```bash
 npm run dev
 ```
@@ -105,12 +113,6 @@ npx playwright install chromium
 
 ```bash
 npx playwright test --workers=1
-```
-
-まっさらな clone では、架空の会社にまだカードがありません。そのため架空の会社の画面（`/` と「自分も試す」）は空の知らせを出し、その 2 本の録画（`demo`・`try`）は落ちます。デモのカードを作るには Claude を呼ぶので、`ANTHROPIC_API_KEY` が要ります（`npm run dev` を動かしたまま）:
-
-```bash
-BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts
 ```
 
 ### ほかの道具から使う（MCP）
