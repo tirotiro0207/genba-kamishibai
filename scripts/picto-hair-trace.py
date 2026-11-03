@@ -178,7 +178,8 @@ for no, name in enumerate(NEW, 2):
         hair = smooth(alpha, 0.5 * u)
         # あごより 8 下から下は、胴より後ろの層（三つ編みは胸の前に垂らすので前の層のまま）
         lower = hair & (yy > 8) if name != "braids" else np.zeros_like(hair)
-        front = hair & ~lower
+        # 前の層は切れ目より少し下（1.5）まで伸ばし、後ろの層と重ねる（切れ目にすき間の線が出ないように）
+        front = hair & ~(lower & (yy > 9.5)) if lower.any() else hair
         lower = components(lower, lambda sl, n: n * sv * sv > 150)
         g2 = components(smooth(gray, 0.4 * u), lambda sl, n: n * sv * sv > 3)
         ys, xs = np.nonzero(front)

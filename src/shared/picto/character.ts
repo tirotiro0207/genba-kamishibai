@@ -174,8 +174,6 @@ const UNDER_HAT: Partial<Record<Hair, HandHair>> = {
   twoBlock: "short", mash: "bob", centerPart: "long", slickBack: "short", shortBob: "bob", braids: "long",
   twinTails: "ponytail", softMohawk: "buzz", wolf: "long", halfUp: "long",
 };
-/** 耳を覆う髪（耳を描かない） */
-const HIDES_EARS = new Set<Hair>(["bob", "long", "curly", "shortBob"]);
 /** かぶらないときの頭のいちばん上（地面に置くのに使う）。無い髪は −92 */
 const HAIR_TOP: Partial<Record<Hair, number>> = TRACED_TOP;
 const HAIR_B: Record<HandHair, Record<View, { back?: string; behind?: string; front: string; gloss?: string }>> = {
@@ -425,7 +423,8 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
   const body = h.front.startsWith("<") ? h.front.replaceAll("HAIRFILL", fill).replaceAll("SKINFILL", skin) : `<path d="${h.front}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>`;
   const front = body + gloss;
   const behindSrc = (hair === "bob" ? HAIR_B.bob : TRACED[hair])[view].behind;
-  const behind = behindSrc ? `<path d="${behindSrc}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : "";
+  // 手で塗り直した髪は絵に縁まで入っているので、縁取りを足さない（足すと前の層との切れ目に線が出る）
+  const behind = !behindSrc ? "" : hair === "bob" ? `<path d="${behindSrc}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : `<path d="${behindSrc}" fill="${fill}"/>`;
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
   return { back: fit(bare ? (h.back ?? "") : ""), front: fit(front), behind: fit(behind) };
 };
@@ -435,8 +434,8 @@ const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: Ch
   const k = faceHalfWidth(f.face) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
-  // 耳は髪の前の層の上に描く。耳を覆う髪（おかっぱ・ロング・くせ毛）のときは描かない
-  const ears = HIDES_EARS.has(headwear === "none" ? hair : (UNDER_HAT[hair] ?? hair)) ? "" : earsSvg(view, f);
+  // 耳はどの髪でも髪の前の層の上に描く
+  const ears = earsSvg(view, f);
   return `${h.back}${faceSvg(view, f)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
