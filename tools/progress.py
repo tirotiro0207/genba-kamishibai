@@ -379,7 +379,7 @@ def future_label(compass):
 
 
 def route_svg(d, cur):
-    """始点から終点への進路図。縦が質、横が情報量。マスを筋の上に小さな箱で並べる"""
+    """始点から終点への進路図。縦が質、横が量（情報）。マスを筋の上に小さな箱で並べる"""
     e = html.escape
     W, H = 1000, 570
     O = (90, 500)  # 始点
@@ -399,7 +399,7 @@ def route_svg(d, cur):
     P.append(f'<line x1="{O[0]}" y1="{O[1]}" x2="{O[0]}" y2="40" class="r-axis" marker-end="url(#ahm)"/>')
     P.append(f'<line x1="{O[0]}" y1="{O[1]}" x2="{G[0] + 70}" y2="{O[1]}" class="r-axis" marker-end="url(#ahm)"/>')
     P.append(f'<text x="{O[0] - 14}" y="52" class="r-axl" text-anchor="end">質</text>')
-    P.append(f'<text x="{G[0] + 80}" y="{O[1] + 5}" class="r-axl">情報量</text>')
+    P.append(f'<text x="{G[0] + 80}" y="{O[1] + 5}" class="r-axl">量（情報）</text>')
     P.append(f'<line x1="{G[0]}" y1="{O[1] - 6}" x2="{G[0]}" y2="{O[1] + 6}" class="r-tick"/>')
     P.append(f'<text x="{G[0]}" y="{O[1] + 28}" class="r-sm" text-anchor="middle">≈ 元の文</text>')
     P.append(f'<line x1="{G[0]}" y1="{G[1] + 16}" x2="{G[0]}" y2="{O[1] - 8}" class="r-guide"/>')
@@ -483,7 +483,7 @@ def route_svg(d, cur):
 def route_section(d, cur):
     e = html.escape
     tasks = d["tasks"]
-    P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が情報量。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱に指を置くか押すと中身が出る。</p><div class="card route-card">',
+    P = ['<section class="sec route"><h2>進路図<small>始点から終点へ</small></h2><p class="route-lead">縦が質、横が量（情報）。箱が 1 つのマスで、塗られた箱が済み。終点の先の点線は、会期のあとに足すものと広げる先。箱に指を置くか押すと中身が出る。</p><div class="card route-card">',
          '<ul class="legend route-legend">'
          + "".join(f'<li><i class="l-{c}"></i>{e(lab)}</li>' for lab, c in LANES.values())
          + '<li><i class="lg-done"></i>済み</li><li><i class="lg-todo"></i>まだ</li>'
@@ -492,7 +492,7 @@ def route_section(d, cur):
          f'<div class="route-scroll">{route_svg(d, cur)}</div>',
          '<div class="detail" id="route-detail" aria-live="polite"><span class="empty">箱に指を置くか押すと、ここにそのマスの中身が出ます</span></div>',
          '<dl class="route-key"><div><dt>縦（質）</dt><dd>伝わるか。3 本の筋で上げる: 文字 → ピクトグラム・安全網・直しと人の確認。</dd></div>'
-         '<div><dt>横（情報量）</dt><dd>元の文から、経路つきでカードに持ってこられた量。終点は「カード ≈ 元の文」。ピクトグラムにしても情報は減らず、折りたたんでいるだけで、部品を開けば元の条文に戻れる。これを進めるのが「折りたたみ」の筋。</dd></div></dl>',
+         '<div><dt>横（量）</dt><dd>今回の量は情報。元の文から、経路つきでカードに持ってこられた量。終点は「カード ≈ 元の文」。ピクトグラムにしても情報は減らず、折りたたんでいるだけで、部品を開けば元の条文に戻れる。これを進めるのが「折りたたみ」の筋。</dd></div></dl>',
          '<div class="lane-bars">']
     for key, (label, cls) in LANES.items():
         ts = [x for x in tasks if x["lane"] == key]
