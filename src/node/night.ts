@@ -1,11 +1,9 @@
 // 夜間の走り手（023）。資料を 1 ページずつ仕分け、ページごとの進み具合を D1 の night_pages に置く。
 // 強制終了して走らせ直すと、済んだページは飛ばし、途中だったページ（running）はもう一度やる。ページは 1 行だけなので二重にならない。
 // SQL は D1 に送る関数（Sql）を通す。手元・本番は wrangler の d1 execute、テストは node:sqlite で同じ SQL を流す。
-import { execSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { SortResult } from "../shared/sort/page";
-import { privatePath } from "./private-dir";
 
 export type Sql = (sql: string) => Promise<Record<string, unknown>[]>;
 
@@ -14,21 +12,21 @@ const lit = (v: unknown) => (v === null || v === undefined ? "NULL" : typeof v =
 /** wrangler の d1 execute で D1 に SQL を送る（--local か --remote --env production） */
 export function d1Sql(where: "local" | "remote"): Sql {
   const root = join(import.meta.dirname, "..", "..");
+  const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
   return async (sql) => {
-    // 長い SQL と引用符をコマンドの引数に入れないよう、ファイルに書いて渡す
-    mkdirSync(privatePath("tmp"), { recursive: true });
-    const file = privatePath("tmp", `night-${process.pid}.sql`);
-    writeFileSync(file, sql, "utf-8");
-    const where_ = where === "local" ? "--local" : "--remote --env production -y";
+    // シェルを通さず node で wrangler を直に呼ぶので、SQL の引用符を気にせず --command で渡せる
+    // （--file は本番だと取り込みの進み具合の行が JSON の前に出て読めない）
+    const where_ = where === "local" ? ["--local"] : ["--remote", "--env", "production", "-y"];
     let out: string;
     try {
-      out = execSync(`npx wrangler d1 execute DB ${where_} --json --file "${file}"`, { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
+      out = execFileSync(process.execPath, [wrangler, "d1", "execute", "DB", ...where_, "--json", "--command", sql], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
     } catch (e) {
       // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
       const x = e as { stdout?: string; stderr?: string };
       throw new Error(`D1 に送れなかった: ${(x.stdout || x.stderr || String(e)).slice(-600)}`);
     }
-    const parsed = JSON.parse(out) as { results?: Record<string, unknown>[] }[];
+    // JSON の前に案内の行が付いても読めるよう、最初の [ から読む
+    const parsed = JSON.parse(out.slice(out.indexOf("["))) as { results?: Record<string, unknown>[] }[];
     return parsed.flatMap((r) => r.results ?? []);
   };
 }
