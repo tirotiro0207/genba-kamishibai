@@ -51,7 +51,7 @@ function Used({ tenant, card }: { tenant: string; card: CardView }) {
   const [used, setUsed] = useState<UsedExemplar[]>([]);
   useEffect(() => {
     req<{ used: UsedExemplar[] }>(tenant, `/cards/${encodeURIComponent(card.id)}/exemplars`)
-      .then((r) => setUsed(r.used))
+      .then((r) => setUsed(Array.isArray(r.used) ? r.used : []))
       .catch(() => setUsed([]));
   }, [tenant, card.id]);
   const line = usedLine(used);
