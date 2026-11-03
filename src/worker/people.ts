@@ -66,13 +66,18 @@ export async function roleRequiredGate(c: Context<{ Bindings: Env; Variables: Pe
   await next();
 }
 
-/** カードの API の関所。新入社員は入れない。署名と停止は監修者だけ */
+/** カードの API の関所。新入社員は入れない。署名と停止は監修者だけ。止めるときは理由が要る */
 export async function cardsGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
   const p = c.var.person;
   if (p?.role === "newhire") return c.json({ error: "新入社員は署名済みのカードの入口から読む" }, 403);
   if (c.req.method === "POST" && /\/cards\/[^/]+\/status$/.test(c.req.path)) {
     const { to } = await c.req.json<{ to?: string }>().catch(() => ({ to: undefined }));
     if ((to === "signed" || to === "stopped") && p?.role !== "supervisor") return c.json({ error: "署名と停止は監修者だけ" }, 403);
+    // 止める理由は必ず要る（088 の残り）。回収の知らせに載せるため
+    if (to === "stopped") {
+      const { reason } = await c.req.json<{ reason?: unknown }>().catch(() => ({ reason: undefined }));
+      if (typeof reason !== "string" || !reason.trim()) return c.json({ error: "止める理由が要る" }, 400);
+    }
   }
   await next();
 }

@@ -91,7 +91,8 @@ test("署名済みを止めると新入社員から消え、見た人・回収�
   expect(list.cards.map((c) => c.id)).not.toContain(stopId);
   expect(list.cards).toHaveLength(3);
   const views = (await (await request.get(`${api}/issue/cards/${stopId}/views`, { headers: sup1 })).json()) as { views: { actor: string; version: number }[] };
-  expect(views.views.map((v) => [v.actor, v.version])).toEqual([["newhire.1", 1]]);
+  // 見た印は役割と端末の番号の単位（088 の残り）
+  expect(views.views.map((v) => [v.actor.replace(/#[0-9a-f]{16}$/, "#端末"), v.version])).toEqual([["newhire.1#端末", 1]]);
   await page.evaluate((t) => sessionStorage.setItem(`role:${t}`, ""), T);
   await page.goto(`/#/t/${T}/read`);
   await page.setViewportSize({ width: 390, height: 844 });

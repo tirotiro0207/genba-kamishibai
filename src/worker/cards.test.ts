@@ -47,7 +47,7 @@ describe("カードの保存と状態（019）", () => {
     expect((await call(`${base}/${c.id}`, json("PUT", { card: fixed }))).status).toBe(409);
     // 停止は監修者だけ（030b）
     const sup = await signRole("test-secret", "practice", { role: "supervisor", slot: 1 });
-    expect((await call(`${base}/${c.id}/status`, { ...json("POST", { to: "stopped" }), headers: { "content-type": "application/json", "x-role": sup } })).status).toBe(200);
+    expect((await call(`${base}/${c.id}/status`, { ...json("POST", { to: "stopped", reason: "テストで止める" }), headers: { "content-type": "application/json", "x-role": sup } })).status).toBe(200);
     expect((await move(c.id, "signed")).status).toBe(403);
   });
 

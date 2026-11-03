@@ -78,7 +78,7 @@ test("署名は 1 人 1 日 20 枚まで。署名の無い・停止した・署�
   // 署名のあとの状態を作る: 1 枚停止・1 枚は裏で中身を書き換える
   const stopped = ids[0];
   const tampered = ids[LIMIT - 1];
-  expect((await request.post(`${api}/cards/${stopped}/status`, { headers: sup, data: { to: "stopped" } })).status()).toBe(200);
+  expect((await request.post(`${api}/cards/${stopped}/status`, { headers: sup, data: { to: "stopped", reason: "録画で止める" } })).status()).toBe(200);
   sql(`UPDATE cards SET body = json_set(body, '$.why', '署名のあとに書き換えた') WHERE id = '${tampered}'`);
 
   // 2. 新入社員の口

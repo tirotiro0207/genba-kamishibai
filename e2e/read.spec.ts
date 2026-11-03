@@ -17,7 +17,7 @@ test("署名済みのカードだけを 1 枚ずつ送って見る", async ({ pa
   await toOk(request, T, [ids.signed1, ids.signed2, ids.stopped]);
   const sup = { "x-role": await login(request, T, "supervisor") };
   for (const id of [ids.signed1, ids.signed2, ids.stopped]) expect((await request.post(`${api}/cards/${id}/sign`, { headers: sup, data: { version: 1, mark: MARK } })).status()).toBe(200);
-  expect((await request.post(`${api}/cards/${ids.stopped}/status`, { headers: sup, data: { to: "stopped" } })).status()).toBe(200);
+  expect((await request.post(`${api}/cards/${ids.stopped}/status`, { headers: sup, data: { to: "stopped", reason: "録画で止める" } })).status()).toBe(200);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/#/t/${T}/read`);

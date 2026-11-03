@@ -7,7 +7,13 @@ import "./issue.css";
 
 const ROLE_LABEL: Record<string, string> = { "supervisor:1": "監修者 1", "supervisor:2": "監修者 2", "trainer:1": "教育担当" };
 const ACTOR_LABEL: Record<string, string> = { "supervisor.1": "監修者 1", "supervisor.2": "監修者 2", "trainer.1": "教育担当", "newhire.1": "新入社員", anon: "役割なし" };
-const who = (a: string | null) => (a ? (ACTOR_LABEL[a] ?? a) : "");
+/** 見た記録は「役割#端末の番号」（088 の残り）。端末は頭の 4 文字だけ出す */
+const who = (a: string | null) => {
+  if (!a) return "";
+  const [role, device] = a.split("#");
+  const label = ACTOR_LABEL[role] ?? role;
+  return device ? `${label}（端末 ${device.slice(0, 4)}）` : label;
+};
 
 /** 日本時間で出す（日付と時刻） */
 const jst = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", hour12: false }) : "—");
@@ -139,7 +145,7 @@ function CardRow({ tenant, c, canStop, onChanged }: { tenant: string; c: SignedC
     <li className="issue-card" data-testid={`issue-card-${c.id}`}>
       <strong>{c.rule}</strong>
       <span className="issue-meta">
-        版 {c.version} ・ 署名 {jstDate(c.signed_at)} ・ {who(c.signed_by)} ・ 見た人 {c.viewers} 人（{c.views} 回）
+        版 {c.version} ・ 署名 {jstDate(c.signed_at)} ・ {who(c.signed_by)} ・ 見た端末 {c.viewers}（{c.views} 回）
       </span>
       <div className="issue-actions issue-noprint">
         <button className="pick" onClick={toggleViews} data-testid={`issue-viewers-${c.id}`}>

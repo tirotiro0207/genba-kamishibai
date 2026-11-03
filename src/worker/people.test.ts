@@ -54,7 +54,7 @@ describe("利用者と役割（030b）", () => {
     const sup = await as("supervisor");
     for (const role of ["author", "trainer"]) expect((await call(`/api/t/practice/cards/${id}/status`, req("POST", { to: "stopped" }, await as(role)))).status, role).toBe(403);
     expect((await call(`/api/t/practice/cards/${id}/status`, req("POST", { to: "stopped" }))).status).toBe(403);
-    expect((await call(`/api/t/practice/cards/${id}/status`, req("POST", { to: "stopped" }, sup))).status).toBeLessThan(300);
+    expect((await call(`/api/t/practice/cards/${id}/status`, req("POST", { to: "stopped", reason: "テストで止める" }, sup))).status).toBeLessThan(300);
   });
 
   it("新入社員はカードの API に入れない", async () => {

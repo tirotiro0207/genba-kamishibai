@@ -45,6 +45,18 @@ describe("見た人の記録（088）", () => {
     expect(list.cards.find((x) => x.id === id)).toMatchObject({ viewers: 2, views: 3 });
   });
 
+  it("見た印は役割と端末の番号の単位で分かれる。番号の形が違えば役割だけで残り、名前は残らない（088 の残り）", async () => {
+    const id = await signedCard("practice", "088 端末");
+    const nh = await roleHeader("practice", "newhire");
+    for (const device of ["0a1b2c3d4e5f6071", "0a1b2c3d4e5f6071", "ffffeeee00001111", "../x", "Z".repeat(40)])
+      expect((await call(`/api/t/practice/read/cards/${id}/seen`, json("POST", { device }, nh))).status).toBe(200);
+    const res = await call(`/api/t/practice/issue/cards/${id}/views`, json("GET", undefined, await roleHeader("practice", "trainer")));
+    const { views } = (await res.json()) as { views: { actor: string; views: number }[] };
+    expect(views.map((v) => [v.actor, v.views]).sort()).toEqual([["newhire.1#0a1b2c3d4e5f6071", 2], ["newhire.1#ffffeeee00001111", 1], ["newhire.1", 2]]);
+    const cols = (await env.DB.prepare("SELECT * FROM card_views WHERE card_id = ?").bind(id).first())!;
+    expect(Object.keys(cols).sort()).toEqual(["actor", "card_id", "first_viewed_at", "last_viewed_at", "tenant_id", "version", "views"]);
+  });
+
   it("署名済みでないカード・停止したカードの見た印は断る。別のテナントのカードにも付かない", async () => {
     const draft = (await (await call("/api/t/practice/cards", json("POST", { card: { ...sampleCard(), rule: "088 下書き" } }))).json()) as { id: string };
     expect((await call(`/api/t/practice/read/cards/${draft.id}/seen`, json("POST", {}))).status).toBe(404);
@@ -88,13 +100,18 @@ describe("停止と回収の知らせ（088）", () => {
     expect((await call(`/api/t/demo/issue/recalls/${mine.id}/read`, json("POST", {}, await roleHeader("demo", "trainer")))).status).toBe(404);
   });
 
-  it("理由は無くても止められ（空で残る）、文字でなければ断る。署名済み以外の停止では知らせを作らない", async () => {
+  it("止める理由は必ず要る（無い・空白だけ・文字でないは 400）。署名済み以外の停止では知らせを作らない（088 の残り）", async () => {
     const sup = await roleHeader("practice", "supervisor");
     const id = await signedCard("practice", "088 理由なし");
-    expect((await call(`/api/t/practice/cards/${id}/status`, json("POST", { to: "stopped", reason: 5 }, sup))).status).toBe(400);
-    expect((await call(`/api/t/practice/cards/${id}/status`, json("POST", { to: "stopped" }, sup))).status).toBe(200);
+    for (const reason of [undefined, "", "   ", 5]) {
+      const res = await call(`/api/t/practice/cards/${id}/status`, json("POST", { to: "stopped", reason }, sup));
+      expect(res.status, String(reason)).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("止める理由が要る");
+    }
+    expect((await env.DB.prepare("SELECT status FROM cards WHERE id = ?").bind(id).first<{ status: string }>())!.status).toBe("signed");
+    expect((await call(`/api/t/practice/cards/${id}/status`, json("POST", { to: "stopped", reason: "絵が古い手順のまま" }, sup))).status).toBe(200);
     const n = (await env.DB.prepare("SELECT count(*) AS n, max(reason) AS reason FROM recall_notices WHERE card_id = ?").bind(id).first<{ n: number; reason: string }>())!;
-    expect(n).toEqual({ n: 1, reason: "" });
+    expect(n).toEqual({ n: 1, reason: "絵が古い手順のまま" });
     // 止めたカードを下書きに戻しても、知らせは増えない
     expect((await call(`/api/t/practice/cards/${id}/status`, json("POST", { to: "draft" }, sup))).status).toBe(200);
     expect((await env.DB.prepare("SELECT count(*) AS n FROM recall_notices WHERE card_id = ?").bind(id).first<{ n: number }>())!.n).toBe(1);
