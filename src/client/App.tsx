@@ -3,6 +3,7 @@ import "./app.css";
 import { AuditScreen } from "./audit/AuditScreen";
 import { CardScreen } from "./card/CardScreen";
 import { DemoScreen } from "./demo/DemoScreen";
+import { TryScreen } from "./demo/TryScreen";
 import { FixScreen } from "./fix/FixScreen";
 import { FoldScreen } from "./fold/FoldScreen";
 import { IssueScreen } from "./issue/IssueScreen";
@@ -35,6 +36,8 @@ export function App() {
   const r = useRoute();
   // 何も無い URL と #/demo は、公開デモの入口（093b。架空の会社だけ）
   let body = <DemoScreen />;
+  // #/demo/time ・ #/demo/picture ・ 見る人が答える公開デモ（094）
+  if (r[0] === "demo" && (r[1] === "time" || r[1] === "picture")) body = <TryScreen mode={r[1]} />;
   // #/t/<テナント>/trial/new ・ #/t/<テナント>/trial/<回>/time ・ #/t/<テナント>/trial/<回>/answer/<参加者> ・ #/t/<テナント>/trial/<回>/grade/<g1|g2>
   if (r[0] === "t" && r[2] === "trial") {
     const tenant = r[1];

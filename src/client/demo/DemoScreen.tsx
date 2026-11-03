@@ -1,5 +1,6 @@
 // 公開デモの入口（093b）。架空の会社だけを見せる。「完成品を見る」は署名済みのカードの閲覧へ、
 // 「その場で作る」は入れた文から 1 枚の下書きを作る（同じ所から 1 日 3 回まで・1 回 1 枚まで）。API キーは要らない。
+// 「時間を計って答える」「絵だけで答える」は、見る人が新入社員と同じように試して、新入社員の匿名の結果と並べる（094）
 import { useState } from "react";
 import "./demo.css";
 
@@ -40,6 +41,14 @@ export function DemoScreen() {
         <button type="button" className="big" onClick={() => setOpen(true)} disabled={open} data-testid="demo-make-open">
           その場で作る
         </button>
+      </div>
+      <div className="demo-doors">
+        <a className="big" href="#/demo/time" data-testid="demo-try-time">
+          時間を計って答える
+        </a>
+        <a className="big" href="#/demo/picture" data-testid="demo-try-picture">
+          絵だけで答える
+        </a>
       </div>
       {open && (
         <div className="lane demo-make">

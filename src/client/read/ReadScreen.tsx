@@ -47,7 +47,7 @@ interface ReadCard {
   frames: { t: number; png?: string }[];
 }
 
-function Frames({ motion }: { motion: CardMotion }) {
+export function Frames({ motion }: { motion: CardMotion }) {
   if (motion.kind === "keyframes") {
     return (
       <div className="read-frames" data-testid="read-frames">

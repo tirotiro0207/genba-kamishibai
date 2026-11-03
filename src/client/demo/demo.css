@@ -5,3 +5,15 @@
 .demo-doors .big { text-align: center; text-decoration: none; }
 @media (max-width: 480px) { .demo-doors { grid-template-columns: 1fr; } }
 .demo-make p { margin: 0; }
+/* 見る人が答える（094） */
+.try-step { display: flex; flex-direction: column; gap: 12px; }
+.try-timer { font-size: 32px; font-variant-numeric: tabular-nums; margin: 0; text-align: center; }
+.try-rule { margin: 0; font-size: 18px; }
+.try-yours, .try-meta { margin: 0; color: var(--muted); }
+.try-rank { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
+.try-rank li span { display: inline-block; min-width: 10em; }
+.try-rank li b { font-variant-numeric: tabular-nums; }
+.try-you { font-weight: 700; color: var(--accent); }
+.try-self { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.try-compare { margin: 0; font-size: 18px; }
+.try-fake { margin: 0; font-size: 13px; color: var(--muted); border: 1px dashed var(--muted); border-radius: 8px; padding: 2px 8px; align-self: flex-start; }
