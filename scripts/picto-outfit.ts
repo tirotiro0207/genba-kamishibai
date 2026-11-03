@@ -9,7 +9,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { privatePath } from "../src/node/private-dir";
 import { characterSvg, type View } from "../src/shared/picto/character";
 import { INDUSTRY_DRAFTS } from "../src/shared/picto/industry-drafts";
-import { POSES } from "../src/shared/picto/poses";
+import { A_POSE } from "../src/shared/picto/poses";
 
 /** 名前の文字を出すので、本番の PNG（svgToPng。字体を読まない）とは別に、システムの字体を読んで描く */
 const svgToPng = (s: string, w: number) =>
@@ -33,7 +33,7 @@ const text = (x: number, y: number, s: string, size = 20) =>
 const rows = INDUSTRY_DRAFTS.map((ind) => {
   const cells = ind.roles.flatMap((r, ri) => VIEWS.map((view, vi) => {
     const x = (ri * VIEWS.length + vi) * CW;
-    const fig = characterSvg({ angles: POSES.stand, x: x + CW / 2, groundY: LABEL + CH - 24, height: 270, facing: "right", view, role: r.role, hair: "short", headwear: r.headwear, outfit: r.outfit });
+    const fig = characterSvg({ angles: A_POSE[view], x: x + CW / 2, groundY: LABEL + CH - 24, height: 270, facing: "right", view, role: r.role, hair: "short", headwear: r.headwear, outfit: r.outfit });
     const head = vi === 0 ? text(x + 8, LABEL - 8, r.name) : "";
     return `<g id="${ind.id}_${r.name}_${view}">${head}<path d="M${x + 6} ${LABEL + CH - 24}H${x + CW - 6}" stroke="#bbb" stroke-width="2"/>${fig}</g>`;
   }));

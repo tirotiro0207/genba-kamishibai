@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { svgToPng } from "../src/node/png";
 import { privatePath } from "../src/node/private-dir";
 import { type CharacterSpec, characterSvg, type Hair, type View } from "../src/shared/picto/character";
-import { POSES } from "../src/shared/picto/poses";
+import { A_POSE, POSES } from "../src/shared/picto/poses";
 
 const out = privatePath("picto", "lab", "headwear");
 mkdirSync(out, { recursive: true });
@@ -21,7 +21,7 @@ const frame = (x: number, y: number, w: number, h: number) => `<rect x="${x + 3}
 /** 胸から上を大きく */
 const bust = (spec: Partial<CharacterSpec>, view: View, col: number, row: number) =>
   `<svg x="${col * C}" y="${row * C}" width="${C}" height="${C}" viewBox="0 0 ${C} ${C}">` +
-  characterSvg({ angles: POSES.stand, x: C * 0.5, groundY: C * 2.4, height: C * 2.1, facing: "right", view, ...spec }) +
+  characterSvg({ angles: A_POSE[view], x: C * 0.5, groundY: C * 2.4, height: C * 2.1, facing: "right", view, ...spec }) +
   `</svg>${frame(col * C, row * C, C, C)}`;
 
 const VIEWS: View[] = ["front", "quarter", "side"];
