@@ -20,6 +20,7 @@ import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
 import { NewTrial } from "./trial/NewTrial";
+import { ForecastScreen, PictureAnswerScreen } from "./trial/PicturesScreen";
 import { TimeScreen } from "./trial/TimeScreen";
 
 function useRoute() {
@@ -45,6 +46,9 @@ export function App() {
     else if (r[4] === "time") body = <TimeScreen tenant={tenant} id={r[3]} />;
     // #/t/<テナント>/trial/<回>/clocks ・ 時計 2 つ（095）。回が sample なら作りものの数
     else if (r[4] === "clocks") body = <ClocksScreen tenant={tenant} id={r[3]} />;
+    // #/t/<テナント>/trial/<回>/forecast ・ #/t/<テナント>/trial/<回>/pictures/<参加者> ・ 絵だけの 8 枚と教育担当の勘（059）
+    else if (r[4] === "forecast") body = <ForecastScreen tenant={tenant} id={r[3]} />;
+    else if (r[4] === "pictures" && r[5]) body = <PictureAnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
   }

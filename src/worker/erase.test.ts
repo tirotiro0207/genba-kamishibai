@@ -16,7 +16,7 @@ describe("「追記だけ」と「消す」の決まり（025b）", () => {
     const before = (await readChain(env.DB, "practice", await currentChain(env.DB, "practice"))).length;
 
     const res = await call(`${base}/${t.id}/erase`, json("POST", { participant: "p1" }));
-    expect(await res.json()).toEqual({ erased: { responses: 1, grades: 1 } });
+    expect(await res.json()).toEqual({ erased: { responses: 1, grades: 1, pictures: 0 } });
 
     const rows = await env.DB.prepare("SELECT participant, answer, ms, erased FROM responses WHERE trial_id = ? ORDER BY seq").bind(t.id).all();
     expect(rows.results).toEqual([

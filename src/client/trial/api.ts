@@ -1,4 +1,5 @@
 // 回答の記録の API（011 のサーバー）を呼ぶ
+import type { CardMotion } from "../../shared/card";
 export type Shown = "card" | "text";
 export interface Assignment {
   participant: string;
@@ -56,3 +57,31 @@ export function nextShown(a: Assignment, item: "A" | "B", rows: ResponseRow[]): 
   const k = rows.filter((r) => r.participant === a.participant && r.item === item).length;
   return k < 2 ? a[item][k] : null;
 }
+
+// 絵だけの 8 枚と教育担当の勘（059）
+export interface PictureCard {
+  id: string;
+  rule?: string;
+  motion: CardMotion;
+}
+export interface Forecast {
+  card_id: string;
+  rate: number;
+  created_at: string;
+}
+export interface PicturesView {
+  cards: PictureCard[];
+  forecasts: Forecast[];
+  answers: number;
+  items: { item: "A" | "B"; ja: string | null; vi: string | null }[];
+}
+export const getPictures = (tenant: string, id: string) => req<PicturesView>(`${base(tenant)}/${id}/pictures`);
+export const getMyPictures = (tenant: string, id: string, participant: string) =>
+  req<{ cards: PictureCard[]; answered: string[] }>(`${base(tenant)}/${id}/pictures?participant=${encodeURIComponent(participant)}`);
+export const setPictureCards = (tenant: string, id: string, cards: string[]) => req<{ cards: string[] }>(`${base(tenant)}/${id}/cards`, { method: "POST", body: JSON.stringify({ cards }) });
+export const postForecast = (tenant: string, id: string, card_id: string, rate: number) =>
+  req<{ seq: number; created_at: string }>(`${base(tenant)}/${id}/forecasts`, { method: "POST", body: JSON.stringify({ card_id, rate }) });
+export const postPictureAnswer = (tenant: string, id: string, participant: string, answer: string) =>
+  req<{ seq: number; card_id: string }>(`${base(tenant)}/${id}/picture-answers`, { method: "POST", body: JSON.stringify({ participant, answer }) });
+export const listTenantCards = (tenant: string) =>
+  req<{ cards: { id: string; body: { rule: string; motion: CardMotion }; status: string }[] }>(`/api/t/${encodeURIComponent(tenant)}/cards`).then((r) => r.cards);

@@ -1,0 +1,13 @@
+/* 絵だけの 8 枚と教育担当の勘（059） */
+.forecast, .pic-choose { display: flex; flex-direction: column; gap: 12px; max-width: 760px; margin: 0 auto; padding: 0 16px 32px; }
+.pic-lead, .pic-meta { margin: 0; color: #555; }
+.forecast-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.forecast-list > li { border: 1px solid #ddd; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.forecast-rule { margin: 0; font-weight: 600; }
+.forecast-list label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.forecast-list input[type="number"] { width: 5em; font-size: 1.2rem; padding: 4px 8px; }
+.forecast-at { font-size: 0.85rem; color: #666; }
+.pic-choose ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pic-choose label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.pic-items { border-top: 1px solid #ddd; padding-top: 8px; }
+.pic-answer .read-frames { margin: 8px 0; }

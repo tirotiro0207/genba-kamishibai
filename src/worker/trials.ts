@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
 import { assign, newSeed } from "../shared/assign";
+import { latestForecasts, pictureOrder, PICTURES_MAX } from "../shared/picture-order";
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -118,13 +119,119 @@ trials.post("/:id/erase", async (c) => {
   const b = await c.req.json<{ participant?: unknown }>().catch(() => ({}) as { participant?: unknown });
   const p = b.participant;
   if (typeof p !== "string" || !(JSON.parse(t.participants) as string[]).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
-  const [g, r] = await c.env.DB.batch([
+  const [g, r, pa] = await c.env.DB.batch([
     c.env.DB.prepare("UPDATE grades SET answer_ja = NULL, erased = 1 WHERE trial_id = ? AND erased = 0 AND response_seq IN (SELECT seq FROM responses WHERE trial_id = ? AND participant = ?)").bind(t.id, t.id, p),
     c.env.DB.prepare("UPDATE responses SET answer = NULL, ms = NULL, erased = 1 WHERE trial_id = ? AND participant = ? AND erased = 0").bind(t.id, p),
+    c.env.DB.prepare("UPDATE picture_answers SET answer = NULL, erased = 1 WHERE trial_id = ? AND participant = ? AND erased = 0").bind(t.id, p),
   ]);
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes } });
-  return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes } });
+  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
+  return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
+});
+
+// 絵だけの 8 枚と 2 項目と教育担当の勘（059）
+const pictureCards = async (db: D1Database, trialId: string) =>
+  (await db.prepare("SELECT tc.card_id AS id, c.body FROM trial_cards tc JOIN cards c ON c.id = tc.card_id WHERE tc.trial_id = ? ORDER BY tc.pos").bind(trialId).all<{ id: string; body: string }>()).results.map((r) => {
+    const body = JSON.parse(r.body) as { rule: string; motion: unknown };
+    return { id: r.id, rule: body.rule, motion: body.motion };
+  });
+const answeredCount = async (db: D1Database, trialId: string) =>
+  (await db.prepare("SELECT count(*) AS n FROM picture_answers WHERE trial_id = ?").bind(trialId).first<{ n: number }>())?.n ?? 0;
+
+// 絵だけで見せるカードを決める。勘の記入か答えが始まったら変えない
+trials.post("/:id/cards", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ cards?: unknown }>().catch(() => ({}) as { cards?: unknown });
+  const ids = b.cards;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > PICTURES_MAX || !ids.every((x) => typeof x === "string") || new Set(ids).size !== ids.length) {
+    return c.json({ error: `cards は重ならないカードの ID の並び（1〜${PICTURES_MAX}）` }, 400);
+  }
+  const found = await c.env.DB.prepare(`SELECT count(*) AS n FROM cards WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).bind(c.var.tenant.id, ...ids).first<{ n: number }>();
+  if (found?.n !== ids.length) return c.json({ error: "このテナントに無いカードがある" }, 400);
+  const started = await c.env.DB.prepare("SELECT (SELECT count(*) FROM forecasts WHERE trial_id = ?1) + (SELECT count(*) FROM picture_answers WHERE trial_id = ?1) AS n").bind(t.id).first<{ n: number }>();
+  if (started?.n) return c.json({ error: "勘の記入か答えが始まっているので変えない" }, 409);
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM trial_cards WHERE trial_id = ?").bind(t.id),
+    ...ids.map((id, pos) => c.env.DB.prepare("INSERT INTO trial_cards (trial_id, tenant_id, pos, card_id) VALUES (?, ?, ?, ?)").bind(t.id, c.var.tenant.id, pos, id)),
+  ]);
+  return c.json({ cards: ids }, 201);
+});
+
+// 教育担当の画面: カード（決まりの文つき）・カードごとの最後の予想・答えの数・2 項目の訳
+// ?participant= を付けると、その人の順番に並べた絵だけ（決まりの文は返さない）と、答えたカード
+trials.get("/:id/pictures", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const cards = await pictureCards(c.env.DB, t.id);
+  const p = c.req.query("participant");
+  if (p !== undefined) {
+    if (!(JSON.parse(t.participants) as string[]).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
+    const done = await c.env.DB.prepare("SELECT card_id FROM picture_answers WHERE trial_id = ? AND participant = ?").bind(t.id, p).all<{ card_id: string }>();
+    return c.json({ cards: pictureOrder(t.seed, p, cards).map(({ id, motion }) => ({ id, motion })), answered: done.results.map((r) => r.card_id) });
+  }
+  const fs = await c.env.DB.prepare("SELECT seq, card_id, rate, created_at FROM forecasts WHERE trial_id = ?").bind(t.id).all<{ seq: number; card_id: string; rate: number; created_at: string }>();
+  const items = await c.env.DB.prepare("SELECT item, ja, vi FROM trial_items WHERE trial_id = ? ORDER BY item").bind(t.id).all();
+  return c.json({ cards, forecasts: [...latestForecasts(fs.results).values()], answers: await answeredCount(c.env.DB, t.id), items: items.results });
+});
+
+// 教育担当の勘: カードごとの正答率の予想。絵だけの答えが 1 件でも入ったら受け付けない（記入の日時が結果より前になる）
+trials.post("/:id/forecasts", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ card_id?: unknown; rate?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const rate = Number(b.rate);
+  if (!Number.isInteger(rate) || rate < 0 || rate > 100) return c.json({ error: "rate は 0〜100 の整数" }, 400);
+  const on = await c.env.DB.prepare("SELECT 1 FROM trial_cards WHERE trial_id = ? AND card_id = ?").bind(t.id, String(b.card_id)).first();
+  if (!on) return c.json({ error: "この回で見せるカードではない" }, 400);
+  if (await answeredCount(c.env.DB, t.id)) return c.json({ error: "答えが入り始めたので、勘はもう書けない" }, 409);
+  const row = await c.env.DB.prepare("INSERT INTO forecasts (trial_id, tenant_id, card_id, rate) VALUES (?, ?, ?, ?) RETURNING seq, created_at")
+    .bind(t.id, c.var.tenant.id, b.card_id, rate)
+    .first<{ seq: number; created_at: string }>();
+  return c.json(row, 201);
+});
+
+// 絵だけの答え。見せたカードはその人の順番から決める（答える側に選ばせない）
+trials.post("/:id/picture-answers", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ participant?: unknown; answer?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const p = b.participant;
+  if (typeof p !== "string" || !(JSON.parse(t.participants) as string[]).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
+  const gone = await c.env.DB.prepare("SELECT (SELECT count(*) FROM responses WHERE trial_id = ?1 AND participant = ?2 AND erased = 1) + (SELECT count(*) FROM picture_answers WHERE trial_id = ?1 AND participant = ?2 AND erased = 1) AS n").bind(t.id, p).first<{ n: number }>();
+  if (gone?.n) return c.json({ error: "この参加者の答えは消してある" }, 409);
+  if (typeof b.answer !== "string" || !b.answer.trim()) return c.json({ error: "answer が要る" }, 400);
+  const order = pictureOrder(t.seed, p, await pictureCards(c.env.DB, t.id));
+  const done = new Set((await c.env.DB.prepare("SELECT card_id FROM picture_answers WHERE trial_id = ? AND participant = ?").bind(t.id, p).all<{ card_id: string }>()).results.map((r) => r.card_id));
+  const next = order.find((x) => !done.has(x.id));
+  if (!next) return c.json({ error: "絵の答えは済んでいる" }, 409);
+  const row = await c.env.DB.prepare("INSERT INTO picture_answers (trial_id, tenant_id, participant, card_id, answer) VALUES (?, ?, ?, ?, ?) RETURNING seq, created_at")
+    .bind(t.id, c.var.tenant.id, p, next.id, b.answer.trim().slice(0, 2000))
+    .first<{ seq: number; created_at: string }>();
+  return c.json({ ...row, card_id: next.id }, 201);
+});
+
+trials.get("/:id/picture-answers", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const { results } = await c.env.DB.prepare("SELECT seq, participant, card_id, answer, created_at FROM picture_answers WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all();
+  return c.json({ answers: results });
+});
+
+// 2 項目の元のページの訳。会社のテナント（と練習用）の中だけに置く。公開デモには置かない
+trials.post("/:id/items", async (c) => {
+  if (c.var.tenant.kind === "demo") return c.json({ error: "2 項目の訳は会社のテナントの中だけ" }, 403);
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const b = await c.req.json<{ item?: unknown; ja?: unknown; vi?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  if (b.item !== "A" && b.item !== "B") return c.json({ error: "item は A か B" }, 400);
+  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 4000) : null);
+  await c.env.DB.prepare(
+    "INSERT INTO trial_items (trial_id, tenant_id, item, ja, vi) VALUES (?, ?, ?, ?, ?) ON CONFLICT (trial_id, item) DO UPDATE SET ja = excluded.ja, vi = excluded.vi, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+  )
+    .bind(t.id, c.var.tenant.id, b.item, s(b.ja), s(b.vi))
+    .run();
+  return c.json({ item: b.item, ja: s(b.ja), vi: s(b.vi) }, 201);
 });
 
 // 書き換えと消すことは断る
-trials.on(["PUT", "PATCH", "DELETE"], ["/:id", "/:id/responses", "/:id/responses/*", "/:id/grades", "/:id/grades/*"], (c) => c.json({ error: "記録は追記だけ" }, 405));
+trials.on(["PUT", "PATCH", "DELETE"], ["/:id", "/:id/responses", "/:id/responses/*", "/:id/grades", "/:id/grades/*", "/:id/forecasts", "/:id/forecasts/*", "/:id/picture-answers", "/:id/picture-answers/*"], (c) => c.json({ error: "記録は追記だけ" }, 405));
