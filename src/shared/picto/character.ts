@@ -2,6 +2,7 @@
 // 長さと太さは新しい絵柄のまま（胴 142・もも 85・すね 77・上腕 70・前腕 52、単位は背の高さ 434 の中の値）、
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
+import { armbandSvg, bootSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso } from "./outfit";
 import type { Angles } from "./poses";
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
@@ -12,9 +13,9 @@ export type Look = "a" | "b";
 export type Hair = "bob" | "short" | "bun";
 /**
  * かぶり物の種類。髪とは別の枠で、職場と場面で付け外しする（髪はその人のもので、いつも描く）。
- * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、hygiene＝髪をしまう衛生キャップ（食品の工場）
+ * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、chefLow＝見習いの低いコック帽、hygiene＝髪をしまう衛生キャップ（食品の工場）
  */
-export type HeadwearKind = "helmet" | "cap" | "chef" | "hygiene";
+export type HeadwearKind = "helmet" | "cap" | "chef" | "chefLow" | "hygiene";
 
 export interface CharacterSpec {
   angles: Angles;
@@ -32,6 +33,8 @@ export interface CharacterSpec {
   hair?: Hair;
   /** かぶり物。"none" はかぶっていない（「かぶらないのはダメ」の場面にも使う）。初めの値は a が cap、b が none */
   headwear?: HeadwearKind | "none";
+  /** 職場の服と役の印（outfit.ts。下絵） */
+  outfit?: Outfit;
 }
 
 const UNIT = 434;
@@ -187,6 +190,10 @@ const chef = (dx: number) =>
   `<g transform="translate(${dx} 0)"><path d="M-50 -76C-82 -86 -76 -136 -40 -128C-34 -158 34 -158 40 -128C76 -136 82 -86 50 -76Z" FILL ${STROKE}/>` +
   `<path d="M-20 -80Q-24 -104 -16 -130M20 -80Q24 -104 16 -130" stroke="#000" stroke-width="3" fill="none" stroke-linecap="round"/>` +
   `<path d="M-58 -78H58V-52Q0 -45 -58 -52Z" FILL ${STROKE}/></g>`;
+/** 見習いの低いコック帽（筒が短く、てっぺんが平ら） */
+const chefLow = (dx: number) =>
+  `<g transform="translate(${dx} 0)"><path d="M-56 -76Q-60 -104 0 -104Q60 -104 56 -76Z" FILL ${STROKE}/>` +
+  `<path d="M-58 -78H58V-52Q0 -45 -58 -52Z" FILL ${STROKE}/></g>`;
 export const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "hide"; top: number; bottom: number; draw: Record<View, string> }> = {
   helmet: {
     tone: "role", hair: "show", top: -116, bottom: -50,
@@ -207,6 +214,10 @@ export const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "sho
   chef: {
     tone: "white", hair: "show", top: -158, bottom: -52,
     draw: { front: chef(0), quarter: chef(-1), side: chef(-4) },
+  },
+  chefLow: {
+    tone: "white", hair: "show", top: -104, bottom: -52,
+    draw: { front: chefLow(0), quarter: chefLow(-1), side: chefLow(-4) },
   },
   hygiene: {
     tone: "white", hair: "hide", top: -100, bottom: 0,
@@ -231,9 +242,11 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none")
   const gloss = bare && h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
   return { back: bare ? (h.back ?? "") : "", front: `<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}` };
 };
-const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole) => {
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit) => {
   const h = hairSvg(view, hair, headwear);
-  return `${h.back}${FACE_B[view]}${h.front}${headwear === "none" ? "" : headwearSvg(headwear, view, role)}`;
+  const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
+    headMarks(headwear, view, o, HEADWEAR[headwear].tone === "role" ? ROLE_TONE[role] : "#fff");
+  return `${h.back}${FACE_B[view]}${o.mask ? maskSvg(view) : ""}${h.front}${hat}`;
 };
 
 const ANKLE_MAX = 25;
@@ -308,6 +321,8 @@ export function characterSvg(c: CharacterSpec): string {
   const headwear = c.headwear ?? (look === "a" ? "cap" : "none");
   const top = headwear === "none" ? -92 : HEADWEAR[headwear].top;
   const low = lowest(c.angles, view, look, top);
+  const o = c.outfit ?? {};
+  const sleeve = o.sleeve ?? cloth.arm;
   // 手足は 1 本ごとに 2 回描く: まず全部の段の縁（黒）、次に全部の段の中身（灰色）。
   // 段ごとに縁と中身を描くと、下の段の縁が上の段の中身に重なって関節の線（ロボットのような区切り）が出る。
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
@@ -315,27 +330,28 @@ export function characterSvg(c: CharacterSpec): string {
     const g = r.legs[i];
     // 正面は両足ともカメラから同じ遠さなので、同じ明るさにする
     const far = i === 0 && view !== "front";
-    const fill = far ? cloth.legFar : cloth.leg;
-    const shoeFill = far ? cloth.shoeFar : cloth.shoe;
+    const fill = o.pants ? (far ? farTone(o.pants) : o.pants) : far ? cloth.legFar : cloth.leg;
+    const shoeFill = o.boots ? (far ? farTone(o.boots) : o.boots) : far ? cloth.shoeFar : cloth.shoe;
+    const boot = o.boots ? bootSvg(L.shin, shoeFill) : "";
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `${boot}<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, cloth.arm)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, cloth.arm)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const headAt = (inner: string) =>
     `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, c.hair ?? "bob", headwear, role));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, c.hair ?? "bob", headwear, role, o));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(NECK_B) : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
-  const body0 = torso(view, look);
+  const body0 = torso(view, look) + outfitTorso(view, o);
   const front = view === "front";
   const upper = `${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
