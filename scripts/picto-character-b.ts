@@ -21,9 +21,9 @@ const svg = (w: number, h: number, body: string) =>
 const frame = (x: number, y: number, w: number, h: number) => `<rect x="${x + 4}" y="${y + 4}" width="${w - 8}" height="${h - 8}" fill="none" stroke="#000" stroke-width="4"/>`;
 
 // 頭を大きく: 胸から上だけ見えるよう、背を大きくして枠で切る
-const HEADS: { hair: Hair; hat: boolean; role: CharacterSpec["role"] }[] = [
-  { hair: "bob", hat: false, role: "new" }, { hair: "short", hat: false, role: "new" }, { hair: "bun", hat: false, role: "new" },
-  { hair: "bob", hat: true, role: "new" }, { hair: "short", hat: true, role: "lead" }, { hair: "bun", hat: true, role: "worker" },
+const HEADS: { hair: Hair; headwear: CharacterSpec["headwear"]; role: CharacterSpec["role"] }[] = [
+  { hair: "bob", headwear: "none", role: "new" }, { hair: "short", headwear: "none", role: "new" }, { hair: "bun", headwear: "none", role: "new" },
+  { hair: "bob", headwear: "cap", role: "new" }, { hair: "short", headwear: "cap", role: "lead" }, { hair: "bun", headwear: "cap", role: "worker" },
 ];
 const HW = 360;
 const head = (spec: (typeof HEADS)[number], view: "front" | "quarter" | "side", i: number, row: number) =>
@@ -46,7 +46,7 @@ const pw = CELL * POSE_NAMES.length;
 writeFileSync(join(out, "poses.png"), svgToPng(svg(pw, CELL * 3, [
   ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 0, { view: "front", hair: "bob" })),
   ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 1, { view: "quarter", hair: "bob" })),
-  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 2, { view: "side", hair: "short", hat: true, role: "lead" })),
+  ...POSE_NAMES.map((k, i) => cell(POSES[k], i, 2, { view: "side", hair: "short", headwear: "cap", role: "lead" })),
 ].join("")), pw));
 
 // 動画
@@ -64,7 +64,7 @@ for (let i = 0; i < seq.length - 1; i++) {
     const ang = lerp(POSES[seq[i]], POSES[seq[i + 1]], t);
     const body = `<rect x="20" y="20" width="960" height="710" fill="none" stroke="#000" stroke-width="8"/><path d="M20 660H980" stroke="#000" stroke-width="6"/>` +
       characterSvg({ angles: ang, x: 300, groundY: 660, height: 440, facing: "right", view: "quarter", look: "b", hair: "bob" }) +
-      characterSvg({ angles: ang, x: 720, groundY: 660, height: 440, facing: "left", view: "side", look: "b", hair: "short", hat: true, role: "lead" });
+      characterSvg({ angles: ang, x: 720, groundY: 660, height: 440, facing: "left", view: "side", look: "b", hair: "short", headwear: "cap", role: "lead" });
     writeFileSync(join(frames, `f${String(f++).padStart(5, "0")}.png`), svgToPng(svg(1000, 750, body), 1000));
   }
 }

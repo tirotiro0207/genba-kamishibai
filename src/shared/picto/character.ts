@@ -10,6 +10,11 @@ export type CharacterRole = "new" | "lead" | "worker";
 /** 絵柄の道。b（作者が Illustrator で描き直した髪・点の鼻の顔）が初めの値。a は 11/3 に仮に決めた丸頭とかぶり物 */
 export type Look = "a" | "b";
 export type Hair = "bob" | "short" | "bun";
+/**
+ * かぶり物の種類。髪とは別の枠で、職場と場面で付け外しする（髪はその人のもので、いつも描く）。
+ * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、hygiene＝髪をしまう衛生キャップ（食品の工場）
+ */
+export type HeadwearKind = "helmet" | "cap" | "chef" | "hygiene";
 
 export interface CharacterSpec {
   angles: Angles;
@@ -25,13 +30,14 @@ export interface CharacterSpec {
   look?: Look;
   /** b の髪形 */
   hair?: Hair;
-  /** b でかぶり物を載せるか（a はいつも載せる） */
-  hat?: boolean;
+  /** かぶり物。"none" はかぶっていない（「かぶらないのはダメ」の場面にも使う）。初めの値は a が cap、b が none */
+  headwear?: HeadwearKind | "none";
 }
 
 const UNIT = 434;
 export const L = { torso: 142, shoulderDrop: 22, upperArm: 70, lowerArm: 52, thigh: 85, shin: 77, sole: 25, headUp: 2 };
-const HAT: Record<CharacterRole, string> = { new: "#fff", lead: "#222", worker: "#999" };
+/** 役の明るさ。色を変えられるかぶり物（安全帽・つばの帽子）は、この明るさで役を見分ける */
+const ROLE_TONE: Record<CharacterRole, string> = { new: "#fff", lead: "#222", worker: "#999" };
 
 /**
  * 部位の置き場所（[奥, 手前]）。右を向くと体の右側がこちらを向くので、斜めでは手前の腕と足が画面の左（向きと逆の側）に来る。
@@ -169,18 +175,61 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
     },
   },
 };
-const headB = (view: View, hair: Hair, hatFill?: string) => {
-  const h = HAIR_B[hair][view];
-  const gloss = h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
-  return `${h.back ?? ""}${FACE_B[view]}<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}${hatFill ? hat(hatFill, view) : ""}`;
+/**
+ * かぶり物の表（原点＝首の付け根。顔は y −70〜0、髪の上は −90）。
+ * tone: "role" は役の明るさで塗る、"white" はいつも白（コック帽・衛生キャップ）。
+ * hair: "show" は髪の上に載せて、はみ出した髪がそのまま見える。"hide" は髪を全部しまう（髪を描かない）。
+ * top は頭のいちばん上（地面に置くときに使う）
+ */
+const STROKE = `stroke="#000" stroke-width="5" stroke-linejoin="round"`;
+const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "hide"; top: number; draw: Record<View, string> }> = {
+  helmet: {
+    tone: "role", hair: "show", top: -114,
+    draw: {
+      front: `<path d="M-54 -56C-56 -98 -30 -114 0 -114S56 -98 54 -56Z" FILL ${STROKE}/><path d="M-62 -60H62Q66 -58 64 -52Q62 -48 56 -48H-56Q-62 -48 -64 -52Q-66 -58 -62 -60Z" FILL ${STROKE}/><path d="M0 -112V-62" stroke="#000" stroke-width="3.5"/>`,
+      quarter: `<path d="M-54 -56C-56 -96 -30 -114 4 -114C38 -114 60 -96 58 -60Z" FILL ${STROKE}/><path d="M-60 -60H72Q77 -59 75 -54Q73 -50 67 -50H-58Q-64 -50 -63 -55Q-63 -60 -60 -60Z" FILL ${STROKE}/><path d="M16 -112Q20 -90 18 -62" stroke="#000" stroke-width="3.5" fill="none"/>`,
+      side: `<path d="M-56 -56C-58 -98 -28 -114 0 -114C34 -114 54 -96 54 -60Z" FILL ${STROKE}/><path d="M-62 -60H76Q81 -59 79 -54Q77 -50 71 -50H-60Q-66 -50 -65 -55Q-65 -60 -62 -60Z" FILL ${STROKE}/>`,
+    },
+  },
+  cap: {
+    tone: "role", hair: "show", top: -104,
+    draw: {
+      front: `<path d="M-50 -58Q-52 -104 0 -104Q52 -104 50 -58Z" FILL ${STROKE}/><path d="M-56 -60H56Q54 -48 0 -48Q-54 -48 -56 -60Z" FILL ${STROKE}/>`,
+      quarter: `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" FILL ${STROKE}/>`,
+      side: `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" FILL ${STROKE}/>`,
+    },
+  },
+  chef: {
+    tone: "white", hair: "show", top: -150,
+    draw: Object.fromEntries((["front", "quarter", "side"] as const).map((v) => {
+      const dx = v === "front" ? 0 : v === "quarter" ? 3 : -2;
+      return [v, `<g transform="translate(${dx} 0)"><path d="M-44 -72C-72 -82 -66 -128 -36 -122C-30 -150 30 -150 36 -122C66 -128 72 -82 44 -72Z" FILL ${STROKE}/>` +
+        `<path d="M-18 -76Q-22 -100 -14 -124M18 -76Q22 -100 14 -124" stroke="#000" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+        `<path d="M-48 -74H48V-52Q0 -46 -48 -52Z" FILL ${STROKE}/></g>`];
+    })) as Record<View, string>,
+  },
+  hygiene: {
+    tone: "white", hair: "hide", top: -100,
+    draw: {
+      front: `<path d="M-53 -40C-62 -106 62 -106 53 -40Q47 -36 41 -44Q0 -60 -41 -44Q-47 -36 -53 -40Z" FILL ${STROKE}/><path d="M-44 -50Q0 -66 44 -50" stroke="#000" stroke-width="3" fill="none"/>`,
+      quarter: `<path d="M-57 -24C-70 -104 52 -112 51 -48Q46 -42 39 -48Q16 -62 -14 -56Q-32 -50 -40 -28Q-48 -18 -57 -24Z" FILL ${STROKE}/><path d="M-36 -40Q-24 -62 0 -62Q24 -62 40 -54" stroke="#000" stroke-width="3" fill="none"/>`,
+      side: `<path d="M-60 -16C-74 -104 48 -112 47 -54Q42 -48 34 -54Q10 -64 -12 -56Q-28 -44 -34 -18Q-46 -6 -60 -16Z" FILL ${STROKE}/><path d="M-30 -38Q-16 -60 8 -62Q26 -62 36 -58" stroke="#000" stroke-width="3" fill="none"/>`,
+    },
+  },
+};
+const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole) => {
+  const w = HEADWEAR[kind];
+  return w.draw[view].replaceAll("FILL", `fill="${w.tone === "role" ? ROLE_TONE[role] : "#fff"}"`);
 };
 
-/** かぶり物。つばは前だけ。正面ではつばがこちらを向くので、頭の下の縁に平たい半月として描く */
-const hat = (fill: string, view: View) =>
-  view === "front"
-    ? `<path d="M-50 -58Q-52 -104 0 -104Q52 -104 50 -58Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
-      `<path d="M-56 -60H56Q54 -48 0 -48Q-54 -48 -56 -60Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`
-    : `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`;
+/** b の頭: 髪の後ろ → 顔 → 髪の前 → かぶり物。髪をしまうかぶり物のときは髪を描かない */
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole) => {
+  const h = HAIR_B[hair][view];
+  const showHair = headwear === "none" || HEADWEAR[headwear].hair === "show";
+  const gloss = h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
+  const hairSvg = showHair ? `<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${headwear === "none" ? gloss : ""}` : "";
+  return `${showHair ? (h.back ?? "") : ""}${FACE_B[view]}${hairSvg}${headwear === "none" ? "" : headwearSvg(headwear, view, role)}`;
+};
 
 const ANKLE_MAX = 25;
 
@@ -221,7 +270,7 @@ export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
-function lowest(a: Angles, view: View, look: Look): number {
+function lowest(a: Angles, view: View, look: Look, top: number): number {
   const r = rig(a, view);
   const ys: number[] = [];
   r.legs.forEach((g, i) => {
@@ -238,7 +287,7 @@ function lowest(a: Angles, view: View, look: Look): number {
     ys.push(at(hand, 0, 15));
   });
   const head = mul(mul(mul(torso, T(neckShift(r.neck), -142 - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
-  ys.push(at(head, 0, 0), at(head, 0, -104));
+  ys.push(at(head, 0, 0), at(head, 0, top));
   return Math.max(...ys);
 }
 
@@ -250,7 +299,10 @@ export function characterSvg(c: CharacterSpec): string {
   const cloth = CLOTH[look];
   const k = c.height / UNIT;
   const d = c.facing === "right" ? 1 : -1;
-  const low = lowest(c.angles, view, look);
+  const role = c.role ?? "new";
+  const headwear = c.headwear ?? (look === "a" ? "cap" : "none");
+  const top = headwear === "none" ? -92 : HEADWEAR[headwear].top;
+  const low = lowest(c.angles, view, look, top);
   // 手足は 1 本ごとに 2 回描く: まず全部の段の縁（黒）、次に全部の段の中身（灰色）。
   // 段ごとに縁と中身を描くと、下の段の縁が上の段の中身に重なって関節の線（ロボットのような区切り）が出る。
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
@@ -273,7 +325,7 @@ export function characterSvg(c: CharacterSpec): string {
   };
   const headAt = (inner: string) =>
     `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + hat(HAT[c.role ?? "new"], view) : headB(view, c.hair ?? "bob", c.hat ? HAT[c.role ?? "new"] : undefined));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, c.hair ?? "bob", headwear, role));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(NECK_B) : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
