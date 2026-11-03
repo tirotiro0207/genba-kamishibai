@@ -1,5 +1,6 @@
 // 数えるスクリプトの前半（113）。git と作業の表から、コミット数・テスト数・ファイル数・日ごとの済んだマスを数えて表にする。
-// 現場の確認のデータが要る数（097 の残り）はここでは数えない。
+// 097: 行数（コードのファイル）と、制作記録（docs/build-log.md）の日ごとの行の数も数える。
+// 現場の確認のデータが要る数（docs/failures.md の 3 つの欄）はここでは数えない。
 // 使い方: npx tsx scripts/count.ts（表を標準出力に出す）
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -46,8 +47,26 @@ export interface Counts {
   tests: { node: number; worker: number; e2e: number };
   files: { total: number; byDir: [string, number][] };
   days: { day: string; commits: number; done: string[] }[];
+  /** コードのファイル（CODE_EXT）の行数。空の行も数える */
+  lines: { total: number; byDir: [string, number][] };
+  /** 制作記録の日ごとの行（「→ 」で始まる行）の数 */
+  buildLog: { day: string; entries: number }[];
   /** 作業の表では済みだが、件名の頭にその番号が付いたコミットも、表の「コミット」の欄に当たるコミットも無いマス */
   unlogged: string[];
+}
+
+export const CODE_EXT = /\.(ts|tsx|css|sql|mjs|js|py)$/;
+const lineCount = (s: string) => (s ? s.split(/\r?\n/).length - (s.endsWith("\n") ? 1 : 0) : 0);
+
+/** 制作記録の「## 2026-11-02（1 日目）」の見出しごとに、「→ 」で始まる行を数える */
+export function countBuildLog(md: string): { day: string; entries: number }[] {
+  const out: { day: string; entries: number }[] = [];
+  for (const line of md.split(/\r?\n/)) {
+    const h = line.match(/^## (\d{4}-\d{2}-\d{2})/);
+    if (h) out.push({ day: h[1], entries: 0 });
+    else if (line.startsWith("→ ") && out.length) out[out.length - 1].entries++;
+  }
+  return out;
 }
 
 /** 数える。済んだマスは、その番号が件名の頭に付いた最初のコミットか、表の「コミット」の欄のコミットの、早いほうの日に数える */
@@ -69,9 +88,13 @@ export function count(log: string, plan: string, files: string[], read: (f: stri
   }
   const tests = { node: 0, worker: 0, e2e: 0 };
   const byDir = new Map<string, number>();
+  const linesByDir = new Map<string, number>();
+  let buildLog: Counts["buildLog"] = [];
   for (const f of files) {
     const dir = f.includes("/") ? f.slice(0, f.indexOf("/")) : "（直下）";
     byDir.set(dir, (byDir.get(dir) ?? 0) + 1);
+    if (CODE_EXT.test(f)) linesByDir.set(dir, (linesByDir.get(dir) ?? 0) + lineCount(read(f)));
+    if (f === "docs/build-log.md") buildLog = countBuildLog(read(f));
     if (/^tests\/.*\.test\.ts$/.test(f)) tests.node += countTests(read(f));
     else if (/^src\/worker\/.*\.test\.ts$/.test(f)) tests.worker += countTests(read(f));
     else if (/^e2e\/.*\.spec\.ts$/.test(f)) tests.e2e += countTests(read(f));
@@ -81,6 +104,8 @@ export function count(log: string, plan: string, files: string[], read: (f: stri
     tests,
     files: { total: files.length, byDir: [...byDir].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) },
     days: [...days].map(([day, d]) => ({ day, ...d })),
+    lines: { total: [...linesByDir.values()].reduce((a, b) => a + b, 0), byDir: [...linesByDir].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) },
+    buildLog,
     unlogged: [...done.keys()].filter((id) => !seen.has(id)),
   };
 }
@@ -98,18 +123,20 @@ export function toMarkdown(c: Counts): string {
     `| テスト（単体・worker） | ${t.worker} |`,
     `| テスト（録画） | ${t.e2e} |`,
     `| ファイル（git に入っているもの） | ${c.files.total} |`,
+    `| コードの行（ts・tsx・css・sql・mjs・js・py） | ${c.lines.total} |`,
+    `| 制作記録の行 | ${c.buildLog.reduce((a, d) => a + d.entries, 0)} |`,
     "",
     "## フォルダごとのファイル",
     "",
-    "| フォルダ | ファイル |",
-    "|---|---|",
-    ...c.files.byDir.map(([d, n]) => `| ${d} | ${n} |`),
+    "| フォルダ | ファイル | コードの行 |",
+    "|---|---|---|",
+    ...c.files.byDir.map(([d, n]) => `| ${d} | ${n} | ${c.lines.byDir.find(([x]) => x === d)?.[1] ?? 0} |`),
     "",
     "## 日ごと",
     "",
-    "| 日付 | コミット | 済んだマス | マスの番号 |",
-    "|---|---|---|---|",
-    ...c.days.map((d) => `| ${d.day} | ${d.commits} | ${d.done.length} | ${d.done.join("・") || "—"} |`),
+    "| 日付 | コミット | 済んだマス | 制作記録の行 | マスの番号 |",
+    "|---|---|---|---|---|",
+    ...c.days.map((d) => `| ${d.day} | ${d.commits} | ${d.done.length} | ${c.buildLog.find((b) => b.day === d.day)?.entries ?? 0} | ${d.done.join("・") || "—"} |`),
     "",
     `済みだが、当たるコミットが無いマス（件名の頭の番号・表の「コミット」の欄のどちらにも無い）: ${c.unlogged.join("・") || "無し"}`,
     "",
