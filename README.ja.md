@@ -78,7 +78,13 @@ npm ci
 npm test
 ```
 
-手元でアプリを動かすときは、`.dev.vars` に `SESSION_SECRET`（長い乱数の文字列）と `ANTHROPIC_API_KEY` を書きます。API の鍵が無くてもアプリは起動しますが、Claude の呼び出しは 503 になります。役割ごとに出す名前（`SUPERVISOR_1_NAME`・`SUPERVISOR_2_NAME`・`TRAINER_NAME`・`AUTHOR_NAME`）も `.dev.vars` に書きます。無ければ空欄になります。`scripts/` の Node のスクリプトは、代わりに `.env` を読みます（`.env.example` を参照）。
+手元でアプリを動かすときは、`.dev.vars` に `SESSION_SECRET`（長い乱数の文字列）と `ANTHROPIC_API_KEY` を書きます。`SESSION_SECRET` は必ず要ります。無いと役割で入れません。API の鍵が無くてもアプリは起動して画面は全部開きますが、Claude の呼び出し（取り出し・カードの作成・確かめ）は 503 になります。`SESSION_SECRET` だけで始めるとき:
+
+```bash
+node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .dev.vars
+```
+
+役割ごとに出す名前（`SUPERVISOR_1_NAME`・`SUPERVISOR_2_NAME`・`TRAINER_NAME`・`AUTHOR_NAME`）も `.dev.vars` に書きます。無ければ空欄になります。`scripts/` の Node のスクリプトは、代わりに `.env` を読みます（`.env.example` を参照）。
 
 ```bash
 npx wrangler d1 migrations apply DB --local
@@ -88,10 +94,23 @@ npx wrangler d1 migrations apply DB --local
 npm run dev
 ```
 
-録画のテスト（1 本ずつ流します。手元のデータベースは同時の書き込みを受けません）:
+開いたら http://localhost:8787/#/t/practice/make を開きます（練習用テナント。PIN は要りません）。8787 番が使われているときは `npm run dev -- --port 8799` にします。
+
+録画のテスト（1 本ずつ流します。手元のデータベースは同時の書き込みを受けません）。最初の 1 回だけ、ブラウザを入れます:
+
+```bash
+npx playwright install chromium
+```
+
 
 ```bash
 npx playwright test --workers=1
+```
+
+まっさらな clone では、架空の会社にまだカードがありません。そのため架空の会社の画面（`/` と「自分も試す」）は空の知らせを出し、その 2 本の録画（`demo`・`try`）は落ちます。デモのカードを作るには Claude を呼ぶので、`ANTHROPIC_API_KEY` が要ります（`npm run dev` を動かしたまま）:
+
+```bash
+BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts
 ```
 
 ### ほかの道具から使う（MCP）

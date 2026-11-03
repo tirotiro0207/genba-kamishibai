@@ -78,7 +78,13 @@ npm ci
 npm test
 ```
 
-To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. Without the API key the app still starts, but calls to Claude return 503. The names shown for each role (`SUPERVISOR_1_NAME`, `SUPERVISOR_2_NAME`, `TRAINER_NAME`, `AUTHOR_NAME`) also go in `.dev.vars`; if they are missing, the name is left blank. The local Node scripts in `scripts/` read `.env` instead (see `.env.example`).
+To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. `SESSION_SECRET` is required: without it, signing in with a role fails. Without the API key the app still starts and every screen opens, but calls to Claude (extraction, card making, checking) return 503. To start with only `SESSION_SECRET`:
+
+```bash
+node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .dev.vars
+```
+
+ The names shown for each role (`SUPERVISOR_1_NAME`, `SUPERVISOR_2_NAME`, `TRAINER_NAME`, `AUTHOR_NAME`) also go in `.dev.vars`; if they are missing, the name is left blank. The local Node scripts in `scripts/` read `.env` instead (see `.env.example`).
 
 ```bash
 npx wrangler d1 migrations apply DB --local
@@ -88,10 +94,23 @@ npx wrangler d1 migrations apply DB --local
 npm run dev
 ```
 
-Recorded browser tests (run one at a time; the local database does not take parallel writers):
+Then open http://localhost:8787/#/t/practice/make (the practice tenant: no PIN). If port 8787 is taken, use `npm run dev -- --port 8799`.
+
+Recorded browser tests (run one at a time; the local database does not take parallel writers). The first time, install the browser:
+
+```bash
+npx playwright install chromium
+```
+
 
 ```bash
 npx playwright test --workers=1
+```
+
+On a fresh clone the fictional demo company has no cards yet, so its screens (`/` and "try it yourself") show an empty message and their two recorded tests (`demo`, `try`) fail. Making the demo cards calls Claude, so it needs `ANTHROPIC_API_KEY` (with `npm run dev` running):
+
+```bash
+BASE_URL=http://localhost:8787 npx tsx scripts/demo-cards.ts
 ```
 
 ### Use it from other tools (MCP)
