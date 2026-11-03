@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { audit } from "./audit";
 import { cards } from "./cards";
+import { demo, publicGate } from "./demo";
 import { extract } from "./extract";
 import { files } from "./files";
 import { mcpApp } from "./mcp";
@@ -30,6 +31,9 @@ app.post("/api/t/:tenant/session", async (c) => {
 });
 
 app.use("/api/t/:tenant/*", tenantGuard);
+// 公開デモ（093b）。本番では練習用と架空の会社は見るだけで、作るのは /api/demo/make だけ
+app.use("/api/t/:tenant/*", publicGate);
+app.route("/api/demo", demo);
 // 役割（030b）。署名・停止は監修者だけ、新入社員はカードの API に入れない
 app.use("/api/t/:tenant/*", personGuard);
 // 会社のテナントは、PIN で入ったうえで役割のしるしが要る（052 の続き）

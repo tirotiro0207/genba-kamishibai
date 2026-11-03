@@ -11,4 +11,6 @@ export interface Env {
   SUPERVISOR_2_NAME?: string;
   TRAINER_NAME?: string;
   AUTHOR_NAME?: string;
+  /** 本番の公開の置き場だけ "1"（wrangler.jsonc の env.production の vars）。会社でないテナントを見るだけにし、架空の会社の MCP にも鍵を要る（093b） */
+  PUBLIC_DEMO?: string;
 }

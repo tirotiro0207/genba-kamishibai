@@ -195,8 +195,8 @@ export function mcpApp(inner: Inner) {
   mcp.post("/:tenant", async (c) => {
     const t = await c.env.DB.prepare("SELECT id, kind, name, pin_hash FROM tenants WHERE id = ?").bind(c.req.param("tenant")).first<TenantRow>();
     if (!t) return c.json(rpcError(null, -32001, "テナントが無い"), 404);
-    // 会社ごとの鍵。架空の会社だけは鍵なしで試せる
-    if (t.kind !== "demo") {
+    // 会社ごとの鍵。架空の会社だけは鍵なしで試せる（本番の公開の置き場では架空の会社も鍵が要る・093b）
+    if (t.kind !== "demo" || c.env.PUBLIC_DEMO) {
       const key = (c.req.header("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
       const deny = (msg: string) => c.json(rpcError(null, -32001, msg), 401, { "www-authenticate": 'Bearer realm="genba-kamishibai"' });
       if (!key) return deny("鍵が要ります。会社ごとの MCP の鍵を Authorization: Bearer で渡してください");

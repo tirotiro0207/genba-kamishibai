@@ -1,0 +1,7 @@
+.demo { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin: 0 auto; }
+.demo h1 { margin: 8px 0 0; font-size: 28px; }
+.demo-lead { margin: 0; color: var(--muted); font-size: 18px; }
+.demo-doors { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.demo-doors .big { text-align: center; text-decoration: none; }
+@media (max-width: 480px) { .demo-doors { grid-template-columns: 1fr; } }
+.demo-make p { margin: 0; }
