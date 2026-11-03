@@ -277,17 +277,18 @@ export const cuffSvg = (count: number, lower: number, sleeve: string) =>
 
 /** 耳当て・ヘッドセット（頭の座標）。斜めと真横は見える耳 1 つ */
 const EAR: Record<View, number[]> = { front: [-50, 50], quarter: [-44], side: [-10] };
-export const earSvg = (view: View, kind: "muffs" | "headset") => {
-  const cups = EAR[view].map((x) => `<rect x="${x - 11}" y="-54" width="22" height="30" rx="9" fill="#333" ${S(4)}/>`).join("");
-  const e = EAR[view][0];
+export const earSvg = (view: View, kind: "muffs" | "headset", k = 1) => {
+  const xs = EAR[view].map((x) => Number(n(x * k)));
+  const cups = xs.map((x) => `<rect x="${n(x - 11)}" y="-54" width="22" height="30" rx="9" fill="#333" ${S(4)}/>`).join("");
+  const e = xs[0];
   const mic = kind === "headset" ? `<path d="M${e} -26Q${e + 6} -8 ${e + 34} -12" stroke="#000" stroke-width="4" fill="none"/><circle cx="${e + 36}" cy="-12" r="5" fill="#333" stroke="#000" stroke-width="3"/>` : "";
   return part("ears", cups + mic);
 };
 
 /** 顔の前の覆い（頭の座標）。透明の面は縁と光の線だけ、網の面は格子 */
 const VISOR: Record<View, [number, number]> = { front: [-44, 44], quarter: [-32, 52], side: [4, 60] };
-export const visorSvg = (view: View, kind: "clear" | "mesh") => {
-  const [a, b] = VISOR[view];
+export const visorSvg = (view: View, kind: "clear" | "mesh", k = 1) => {
+  const [a, b] = VISOR[view].map((v) => Number(n(v * k)));
   const frame = `<path d="M${a} -64H${b}V-4Q${(a + b) / 2} 4 ${a} -4Z" fill="none" ${S(4)}/>`;
   const inner = kind === "mesh"
     ? [-50, -36, -22].map((y) => `<path d="M${a + 2} ${y}H${b - 2}" stroke="#444" stroke-width="2"/>`).join("") +
@@ -309,15 +310,17 @@ export const bootSvg = (shin: number, tone: string) =>
  * 斜めは顔のまん中（目と目の間、x 19）へ寄せて少し小さく、真横は顔の前の端に寄せる。
  * 紐は上と下の 2 本で、耳へ向かう。正面は両側、斜めは見える耳と奥の顔の縁、真横は見える耳へ
  */
+// 横の位置は standard の顔（半幅 45）の値。顔の幅が違うときは k（半幅 / 45）を掛ける
 const MASK: Record<View, [number, number, number, number]> = {
   front: [-24, 24, -30, -6],
   quarter: [1, 37, -29, -8],
   side: [17, 43, -29, -8],
 };
 const EAR_AT: Record<View, number[]> = { front: [-44, 44], quarter: [-34, 44], side: [-4] };
-export const maskSvg = (view: View) => {
-  const [l, r, t, b] = MASK[view];
-  const strap = (ear: number) => {
+export const maskSvg = (view: View, k = 1) => {
+  const [l, r, t, b] = MASK[view].map((v, i) => (i < 2 ? Number(n(v * k)) : v));
+  const strap = (ear0: number) => {
+    const ear = Number(n(ear0 * k));
     const edge = ear < l ? l : r;
     return `<path d="M${edge} ${t + 5}L${ear} ${t - 5}M${edge} ${b - 4}L${ear} ${b - 12}" stroke="#000" stroke-width="3"/>`;
   };

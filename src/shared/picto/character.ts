@@ -3,6 +3,7 @@
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
+import { DEFAULT_FACE, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
 import type { Angles } from "./poses";
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
@@ -10,7 +11,8 @@ export type View = "front" | "quarter" | "side";
 export type CharacterRole = "new" | "lead" | "worker";
 /** 絵柄の道。b（作者が Illustrator で描き直した髪・点の鼻の顔）が初めの値。a は 11/3 に仮に決めた丸頭とかぶり物 */
 export type Look = "a" | "b";
-export type Hair = "bob" | "short" | "bun";
+/** 髪形。bob・short・bun が初めからの 3 つ、残りはキャラクターを作る画面で足した 5 つ（製品仕様 §14） */
+export type Hair = "bob" | "short" | "bun" | "long" | "ponytail" | "buzz" | "sidePart" | "curly";
 /**
  * かぶり物の種類。髪とは別の枠で、職場と場面で付け外しする（髪はその人のもので、いつも描く）。
  * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、chefLow＝見習いの低いコック帽、hygiene＝髪をしまう衛生キャップ（食品の工場）
@@ -39,6 +41,8 @@ export interface CharacterSpec {
   headwear?: HeadwearKind | "none";
   /** 職場の服と役の印（outfit.ts。下絵） */
   outfit?: Outfit;
+  /** 顔の部品（avatar.ts。キャラクターを作る画面で選ぶ）。無い部品は初めの値 */
+  face?: Partial<FaceParts>;
 }
 
 const UNIT = 434;
@@ -137,18 +141,33 @@ const HEAD: Record<View, string> = {
  * 線は顔も首も体と同じ 5
  */
 export const FACE_SHAPE = `<path d="M-18 -70H18Q44 -70 44.6 -48L45.4 -30Q45 0 12 0H-12Q-44.6 0.4 -45 -30L-44.4 -48Q-44 -70 -18 -70Z" fill="#fff" stroke="#000" stroke-width="5" stroke-linejoin="round"/>`;
-const eyeB = (cx: number) => `<ellipse cx="${cx}" cy="-37" rx="4.6" ry="5.8"/>`;
-const mouthB = (d: string) => `<path d="${d}" stroke="#000" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
-const FACE_B: Record<View, string> = {
-  front: `${FACE_SHAPE}${eyeB(-14)}${eyeB(14)}<circle cx="0" cy="-25" r="2"/>${mouthB("M-7 -16Q0 -10.5 7 -16")}`,
-  quarter: `${FACE_SHAPE}${eyeB(8)}${eyeB(30)}<circle cx="21" cy="-25" r="2"/>${mouthB("M13.5 -16Q20 -10.5 26.5 -16")}`,
-  side: `${FACE_SHAPE}${eyeB(27)}<circle cx="37" cy="-27" r="2.2"/>${mouthB("M28.5 -16Q32.5 -11.5 36.5 -16")}`,
-};
+// 目・鼻・口は avatar.ts の faceSvg が向きごとの目印から描く（初めの値は今までの絵と同じ文字列）
 /**
  * b の髪（顔の上に重ねる黒い形。内側の縁が生え際になる）。back は顔より後ろに描く分（お団子）、gloss は頭の丸みのつやの線。
  * おかっぱ（bob）は作者の描き直し: まっすぐな前髪を真ん中で分け、分け目は顔の向きへ寄せる。真横は前髪が額の前で高く、後ろへ下がる
  */
-const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: string }>> = {
+/** くせ毛の塊（てっぺん −104 前後・半幅 55）。外形に半径 8 の丸い房を並べる。dx は後ろへ寄せる量、sx は横を詰める倍率。
+ * open は顔の向いた側（右）の横の房を外し、生え際を額の高さ（−64）で前へ抜く（斜め・真横で目と眉を隠さない） */
+function curly(dx: number, sx: number, open = false) {
+  // 前髪の下の縁は眉（y −48）より上の −58〜−64 に止める
+  const base = open
+    ? "M-55 -40C-56 -84 -30 -100 0 -100S52 -88 50 -66Q40 -64 28 -64Q8 -64 -10 -58Q-30 -50 -40 -34Q-50 -28 -55 -40Z"
+    : "M-55 -40C-56 -84 -30 -100 0 -100S56 -84 55 -40Q52 -30 47 -38Q38 -58 18 -62Q0 -64 -18 -62Q-38 -58 -47 -38Q-52 -30 -55 -40Z";
+  const bumps = (open ? [190, 206, 222, 238, 254, 270, 286, 302, 318] : [190, 206, 222, 238, 254, 270, 286, 302, 318, 334, 350]).map((a) => {
+    const r = (a * Math.PI) / 180;
+    return `<circle cx="${Math.round(50 * Math.cos(r))}" cy="${Math.round(-58 + 38 * Math.sin(r))}" r="8"/>`;
+  }).join("") + `<circle cx="-53" cy="-46" r="7"/>` + (open
+    ? [334, 350].map((a) => `<circle cx="${Math.round(45 * Math.cos((a * Math.PI) / 180))}" cy="${Math.round(-58 + 34 * Math.sin((a * Math.PI) / 180))}" r="5"/>`).join("")
+    : `<circle cx="53" cy="-46" r="7"/>`);
+  return `<g transform="translate(${dx} 0)${sx === 1 ? "" : ` scale(${sx} 1)`}" fill="HAIRFILL" stroke="#000" stroke-width="4.5" stroke-linejoin="round"><path d="${base}"/>${bumps}</g>`;
+}
+/** 髪の塗り。坊主は地肌が透けるので明るめ */
+const HAIR_FILL: Partial<Record<Hair, string>> = { buzz: "#444" };
+/** かぶり物をかぶったとき、ほかの形に押し込む髪（くせ毛は short の形になる） */
+const UNDER_HAT: Partial<Record<Hair, Hair>> = { curly: "short" };
+/** かぶらないときの頭のいちばん上（地面に置くのに使う）。無い髪は −92 */
+const HAIR_TOP: Partial<Record<Hair, number>> = { curly: -108 };
+const HAIR_B: Record<Hair, Record<View, { back?: string; behind?: string; front: string; gloss?: string }>> = {
   bob: {
     front: {
       front: "M-49 -16v-36c0-21 22-38 49-38s49 17 49 38v36c0 4.67-2 6.83-6 6.5c-3-.33-4.5-2.5-4.5-6.5v-41.41c-12.33 4-23.17 4.67-32.5 2L2 -68.3l-5 12.89c-11.33 3-23.17 2.33-35.5-2V-16c0 4-1.5 6.17-4.5 6.5C-47 -9.17-49 -11.33-49 -16Z",
@@ -169,6 +188,7 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
     quarter: { front: "M-51 -32L-51 -52C-51 -76 -28 -92 -2 -92C25 -92 51 -76 49 -34Q44 -38 42 -50Q39 -57 32 -57Q21 -57 12.5 -66Q4 -56 -10 -57Q-14 -46 -20 -38Q-34 -26 -51 -32Z" },
     side: { front: "M-52 -32L-52 -52C-52 -76 -28 -92 -2 -92C28 -92 48 -80 47 -64Q30 -54 6 -58Q4 -44 -6 -36Q-28 -24 -52 -32Z" },
   },
+  // お団子の斜め・真横は 11/3 に正面と同じてっぺん（−92）・同じ組み立てに描き直した（てっぺんが 10 高く、別の髪形に見えるおそれがあった）
   bun: {
     front: {
       back: `<circle cx="0" cy="-100" r="17" fill="#000" stroke="#000" stroke-width="4.5"/>`,
@@ -176,12 +196,71 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
     },
     quarter: {
       back: `<circle cx="-36" cy="-94" r="17" fill="#000" stroke="#000" stroke-width="4.5"/>`,
-      front: "M48 -55C50 -96 16 -104 -10 -102C-46 -98 -58 -72 -54 -40Q-50 -22 -40 -18Q-36 -40 -30 -52C-16 -70 16 -72 36 -62Q43 -59 48 -55Z",
+      front: "M-51 -30L-51 -52C-51 -76 -28 -92 -2 -92C25 -92 51 -76 49 -36Q45 -40 43 -50Q38 -60 28 -62Q18 -64 10.5 -68Q-4 -62 -14 -58Q-22 -50 -24 -40Q-36 -26 -51 -30Z",
     },
     side: {
       back: `<circle cx="-40" cy="-90" r="17" fill="#000" stroke="#000" stroke-width="4.5"/>`,
-      front: "M46 -58C46 -94 18 -104 -10 -102C-46 -98 -58 -72 -54 -40Q-48 -20 -36 -18Q-30 -40 -20 -54C-4 -70 24 -70 46 -58Z",
+      front: "M-52 -30L-52 -52C-52 -76 -28 -92 -2 -92C28 -92 48 -80 47 -64Q30 -66 12 -64Q-2 -58 -8 -46Q-14 -32 -26 -28Q-40 -24 -52 -30Z",
     },
+  },
+  // ここから下はキャラクターを作る画面で足した髪形。3 つの向きは同じ作り（てっぺんと丈の高さは同じ、分け目は正面 → 斜め +10.5 → 真横は顔の前の端、
+  // 後ろの量は斜め・真横で後ろへ寄せる）から組み立てた下絵で、作者が Illustrator で直す。behind は胴より後ろに描く後ろ髪
+  long: {
+    front: {
+      front: "M-49 30V-52c0-21 22-38 49-38s49 17 49 38V30q0 6-5.5 6q-5 0-5-6V-57.4c-12.33 4-23.17 4.67-32.5 2L2 -68.3l-5 12.89c-11.33 3-23.17 2.33-35.5-2V30q0 6-5 6Q-49 36 -49 30Z",
+      behind: "M-54 -40Q-54 44 -40 44H40Q54 44 54 -40Z",
+      gloss: "M-30 -64c2-8 7.67-13.33 17-16",
+    },
+    quarter: {
+      front: "M-51 30L-51 -52C-51 -73 -29 -90 -2 -90C25 -90 50 -73 50 -52L49.5 30Q48.5 36 43 36Q39 36 39 30L39 -57.4C30 -54.5 22.5 -54 17 -55.4L12.5 -68.3L8 -55.4C0 -53.5 -7 -54 -14 -57.4L-28 -55.4L-28 30Q-28.5 36 -34 36L-43 36Q-51.5 36 -51 30Z",
+      behind: "M-56 -40Q-58 44 -40 44H24Q30 44 30 -40Z",
+      gloss: "M-34 -62Q-31 -76 -16 -80",
+    },
+    side: {
+      front: "M-52 -16L-52 -52C-52 -73 -28 -90 -2 -90C28 -90 48 -80 47 -67Q30 -53 5 -57L4.5 -16Q4 -9 -4 -9L-43 -9.4Q-52 -9.6 -52 -16Z",
+      behind: "M-56 -50Q-60 44 -40 44H-12Q-6 44 -8 -50Z",
+      gloss: "M-36 -64Q-32 -77 -16 -82",
+    },
+  },
+  ponytail: {
+    // 前は bun と同じ（額を出してなでつける）。結び目は低い位置（かぶり物の縁より下）に置き、尾は背中の後ろへ垂らす。正面では尾は頭の真後ろに隠れる
+    front: { front: "M-49 -34C-50 -76 -26 -92 0 -92S50 -76 49 -34Q44 -38 42 -50Q38 -60 30 -60Q14 -62 0 -68Q-14 -62 -30 -60Q-38 -60 -42 -50Q-44 -38 -49 -34Z" },
+    quarter: {
+      front: "M-51 -30L-51 -52C-51 -76 -28 -92 -2 -92C25 -92 51 -76 49 -36Q45 -40 43 -50Q38 -60 28 -62Q18 -64 10.5 -68Q-4 -62 -14 -58Q-22 -50 -24 -40Q-36 -26 -51 -30Z",
+      behind: "M-50 -54Q-66 -20 -58 20Q-56 30 -48 26Q-42 -10 -42 -52Z",
+    },
+    side: {
+      front: "M-52 -30L-52 -52C-52 -76 -28 -92 -2 -92C28 -92 48 -80 47 -64Q30 -66 12 -64Q-2 -58 -8 -46Q-14 -32 -26 -28Q-40 -24 -52 -30Z",
+      behind: "M-54 -52Q-72 -16 -64 24Q-62 34 -52 30Q-46 -8 -46 -50Z",
+    },
+  },
+  buzz: {
+    // 坊主。頭に沿う薄い形（てっぺん −80）で、地肌が透けるのを明るさ（HAIR_FILL）で表す。額は広く出す。浮かせると帽子に見える
+    front: { front: "M-47 -34C-48 -70 -26 -80 0 -80S48 -70 47 -34Q44 -48 40 -58Q24 -64 0 -64Q-24 -64 -40 -58Q-44 -48 -47 -34Z" },
+    quarter: { front: "M-49 -32L-49 -50C-49 -70 -26 -80 0 -80C26 -80 49 -70 48 -40Q44 -52 36 -60Q14 -65 -8 -62Q-22 -56 -30 -44Q-40 -30 -49 -32Z" },
+    side: { front: "M-50 -38L-50 -50C-50 -70 -26 -80 0 -80C28 -80 46 -72 45 -62Q30 -62 12 -58Q0 -52 -10 -46Q-30 -34 -50 -38Z" },
+  },
+  sidePart: {
+    // 七三。分け目を顔の向く側（正面 x 12、斜め 22.5）に置き、前髪を反対側へ流す。真横は分け目が顔の前の端に溶けるので、
+    // 流した前髪の先を額の前へ垂らして short と見分ける
+    front: {
+      front: "M-49 -30C-50 -74 -26 -92 0 -92S50 -76 49 -34Q45 -40 42 -52Q36 -60 26 -60Q20 -60 12 -66Q-6 -54 -26 -56Q-38 -56 -42 -46Q-46 -36 -49 -30Z",
+      gloss: "M-30 -66Q-26 -78 -10 -82",
+    },
+    quarter: {
+      front: "M-51 -30L-51 -52C-51 -76 -28 -92 -2 -92C25 -92 50 -76 49 -36Q45 -42 42 -54Q38 -60 30 -60L22.5 -66Q6 -54 -14 -56Q-20 -48 -26 -38Q-38 -26 -51 -30Z",
+      gloss: "M-34 -64Q-30 -77 -14 -82",
+    },
+    side: {
+      front: "M-52 -30L-52 -52C-52 -76 -28 -92 -2 -92C28 -92 49 -82 48 -60Q44 -53 37 -55Q22 -57 8 -58Q2 -46 -8 -36Q-28 -24 -52 -30Z",
+      gloss: "M-36 -64Q-32 -77 -16 -82",
+    },
+  },
+  curly: {
+    // くせ毛。丸く大きな塊で、縁に丸い房を並べる。かぶり物をかぶると short の形に押し込む（UNDER_HAT）
+    front: { front: curly(0, 1) },
+    quarter: { front: curly(-2, 1, true) },
+    side: { front: curly(-6, 0.96, true) },
   },
 };
 /**
@@ -322,18 +401,28 @@ export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole)
 
 /** b の頭: 髪の後ろ → 顔 → 髪の前 → かぶり物。髪をしまうかぶり物のときは髪を描かない */
 /** 髪の SVG。かぶり物をかぶると、お団子（back）とつやの線は描かない（お団子はかぶり物の中にしまう） */
-export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none") => {
-  if (headwear !== "none" && HEADWEAR[headwear].hair === "hide") return { back: "", front: "" };
-  const h = HAIR_B[hair][view];
+// behind（後ろ髪・ポニーテールの尾）は胴より後ろに描くので、頭とは別に返す。縁より下に垂れる髪なので、髪を見せるかぶり物では残す。
+// sx は顔の幅に合わせた髪の横の倍率（avatar.ts の hairScale）。1 のときは今までと同じ文字列
+export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1) => {
+  if (headwear !== "none" && HEADWEAR[headwear].hair === "hide") return { back: "", front: "", behind: "" };
   const bare = headwear === "none";
+  const h = HAIR_B[bare ? hair : (UNDER_HAT[hair] ?? hair)][view];
+  const fill = HAIR_FILL[hair] ?? "#000";
   const gloss = bare && h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
-  return { back: bare ? (h.back ?? "") : "", front: `<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}` };
+  const body = h.front.startsWith("<") ? h.front.replaceAll("HAIRFILL", fill) : `<path d="${h.front}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>`;
+  const front = body + gloss;
+  const behindSrc = HAIR_B[hair][view].behind;
+  const behind = behindSrc ? `<path d="${behindSrc}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : "";
+  const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
+  return { back: fit(bare ? (h.back ?? "") : ""), front: fit(front), behind: fit(behind) };
 };
-const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit) => {
-  const h = hairSvg(view, hair, headwear);
+// 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts) => {
+  const h = hairSvg(view, hair, headwear, hairScale(f.face));
+  const k = faceHalfWidth(f.face) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
-  return `${h.back}${FACE_B[view]}${o.mask ? maskSvg(view) : ""}${h.front}${hat}${o.ears ? earSvg(view, o.ears) : ""}${o.visor ? visorSvg(view, o.visor) : ""}`;
+  return `${h.back}${faceSvg(view, f)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f)}${h.front}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
 const ANKLE_MAX = 25;
@@ -372,6 +461,7 @@ const NECK_PIVOT = 30;
 /** b は頭を少し持ち上げて、あごと胴の間に短い首を見せる（a は首なし） */
 export const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
 export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="5"/>`;
+const neckB = (skin: string) => (skin === "#fff" ? NECK_B : NECK_B.replace('fill="#fff"', `fill="${skin}"`));
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
 /**
  * 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える）。
@@ -413,7 +503,10 @@ export function characterSvg(c: CharacterSpec): string {
   const d = c.facing === "right" ? 1 : -1;
   const role = c.role ?? "new";
   const headwear = c.headwear ?? (look === "a" ? "cap" : "none");
-  const top = headwear === "none" ? -92 : HEADWEAR[headwear].top;
+  const hair = c.hair ?? "bob";
+  const f: FaceParts = { ...DEFAULT_FACE, ...c.face };
+  const skin = SKIN_TONE[f.skin];
+  const top = headwear === "none" ? (HAIR_TOP[hair] ?? -92) : HEADWEAR[headwear].top;
   const low = lowest(c.angles, view, look, top);
   const o = c.outfit ?? {};
   const sleeve = o.sleeve ?? cloth.arm;
@@ -435,19 +528,21 @@ export function characterSvg(c: CharacterSpec): string {
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, L.lowerArm, sleeve) : ""}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${o.gloves ?? cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, L.lowerArm, sleeve) : ""}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${o.gloves ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const headAt = (inner: string) =>
     `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, c.hair ?? "bob", headwear, role, o));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
-  const neck = look === "b" ? headAt(NECK_B) : "";
+  const neck = look === "b" ? headAt(neckB(skin)) : "";
+  // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
+  const behind = look === "b" ? hairSvg(view, hair, headwear).behind : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = torso(view, look) + outfitTorso(view, o);
   const front = view === "front";
-  const upper = `${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
+  const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }
