@@ -87,16 +87,22 @@ export function shoeFront(i: number, ankle: number): string {
     `<path d="M${x(-19)} 25H${x(14)}" stroke="#000" stroke-width="6" stroke-linecap="round"/></g>`;
 }
 
-/** 胴（原点＝腰。斜めと正面はふつうの幅、真横は細く、ベストの V を前寄りに） */
+/**
+ * ベストの V（襟の開き）。正面はまん中で左右同じ。斜めは胸が向く側へ寄せ、手前の辺は長く、奥の辺は縮めて立てる
+ * （奥の襟は体の丸みで回り込んで見える）。真横はさらに前へ寄せる
+ */
+const VEST_V: Record<View, string> = {
+  front: "-20 -142L0 -100L20 -142",
+  quarter: "-12 -142L10 -100L24 -142",
+  side: "-8 -142L10 -100L28 -142",
+};
+/** 胴（原点＝腰。斜めと正面はふつうの幅、真横は細く） */
 export const torso = (view: View, look: Look) => {
   const c = CLOTH[look];
-  return view !== "side"
-    ? `<rect x="-46" y="-142" width="92" height="162" rx="30" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
-        `<path d="M-46 -110Q-46 -142 -20 -142L0 -100L20 -142Q46 -142 46 -110V18H-46Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
-        `<path d="M-43 -40H43" stroke="#333" stroke-width="12"/>`
-    : `<rect x="-30" y="-142" width="60" height="162" rx="20" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
-        `<path d="M-30 -110Q-30 -142 -8 -142L10 -100L28 -142Q30 -142 30 -110V18H-30Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
-        `<path d="M-27 -40H27" stroke="#333" stroke-width="12"/>`;
+  const w = view === "side" ? 30 : 46;
+  return `<rect x="${-w}" y="-142" width="${w * 2}" height="162" rx="${view === "side" ? 20 : 30}" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
+    `<path d="M${-w} -110Q${-w} -142 ${VEST_V[view]}Q${w} -142 ${w} -110V18H${-w}Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
+    `<path d="M${-w + 3} -40H${w - 3}" stroke="#333" stroke-width="12"/>`;
 };
 
 /** 頭（原点＝首の付け根。目は半径 6、真横は目 1 つで鼻なし）とかぶり物（つばは前だけ） */
