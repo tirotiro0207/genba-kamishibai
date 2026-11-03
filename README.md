@@ -131,6 +131,8 @@ What existed before the build period (2026-11-02) and what was made during it.
 
 The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer is recorded by the app itself (append-only — no edits, no deletions), and the answers of those who agree to publication are published anonymously in `docs/answers.csv`.
 
+The author intends to offer this as a hosted service in the future (MCP access uses a separate key for each company).
+
 ## Who it is for
 
 TBD — one paragraph: who pays (companies that hire workers from abroad, starting with electrical work), what they pay for (turning their own manuals into signed picture cards, with an audit trail), and what stays free.
@@ -165,4 +167,8 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 
 ## License
 
-TBD. The candidates are listed in [docs/readme-draft.md](docs/readme-draft.md).
+- Code: **GNU Affero General Public License v3.0 (AGPL-3.0)**. Full text: [LICENSE](LICENSE).
+- Documents in `docs/`, and pictures exported from the pictogram parts list (PNG / SVG): **Creative Commons Attribution 4.0 (CC BY 4.0)** — https://creativecommons.org/licenses/by/4.0/
+- The name "genba-kamishibai" and its logo are not covered by either license.
+
+Why: this is a tool that touches safety on site. If someone improves it and runs it as a service, AGPL makes those improvements public too, so they come back to everyone. The parts and the documents are CC BY so that people in other industries can reuse them freely.
