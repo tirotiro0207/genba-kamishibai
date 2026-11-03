@@ -23,3 +23,15 @@ describe.each(["README.md", "README.ja.md"])("%s の骨組み（111）", (file) 
     expect(s).toContain("1923");
   });
 });
+
+// 107（途中）: 日本語版は英語版と同じ節を同じ順に持つ。見出しは「英語の節の名前（日本語）」
+describe("README の日英の節の対応（107）", () => {
+  const h2 = (file: string) => (readFileSync(file, "utf-8").match(/^## .+$/gm) ?? []).map((h) => h.slice(3));
+  it("日本語版の見出しの英語の部分が、英語版の見出しと同じ順に並ぶ", () => {
+    expect(h2("README.ja.md").map((h) => h.replace(/（.+）$/, ""))).toEqual(h2("README.md"));
+  });
+  it("TBD の数がそろう", () => {
+    const n = (file: string) => (readFileSync(file, "utf-8").match(/TBD/g) ?? []).length;
+    expect(n("README.ja.md")).toBe(n("README.md"));
+  });
+});
