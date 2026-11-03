@@ -1,7 +1,7 @@
 // 会社のテナントに PIN で入る小さな部品（038）。入ったしるしを sessionStorage の token:<テナント> に残し、
 // ほかの画面（req）がそれを付けて API を呼ぶ。PIN そのものはどこにも残さない。
 // 会社のテナントは、テナントの PIN のあとに役割の PIN でも入る（052 の続き）。役割のしるしは role:<テナント> に残す。
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import "./pin.css";
 
 export const tokenKey = (tenant: string) => `token:${tenant}`;
@@ -9,6 +9,36 @@ export const roleKey = (tenant: string) => `role:${tenant}`;
 
 /** API の返したことばが「PIN で入ってください」「役割で入ってください」なら true（tenantGuard の 401・roleRequiredGate の 403） */
 export const needsPin = (message: string) => message.includes("PIN で入って") || message.includes("役割で入って");
+
+/** 監修者と教育担当（発行・監査の画面）、監修者だけ（署名の画面） */
+export const REVIEWERS = [
+  { value: "supervisor.1", label: "監修者 1" },
+  { value: "supervisor.2", label: "監修者 2" },
+  { value: "trainer.1", label: "教育担当" },
+] as const;
+export const SUPERVISORS = REVIEWERS.slice(0, 2);
+
+/**
+ * テナントの PIN が要るか（会社のテナントで、入ったしるしが無いか期限切れ）を /me で調べる。
+ * 発行・署名・監査の画面は、要るときだけ下の 2 段の部品を出し、要らなければ今までの役を選ぶ欄を出す（088 の続き）
+ */
+export function useNeedsTenantPin(tenant: string): [boolean | null, () => void] {
+  const [need, setNeed] = useState<boolean | null>(null);
+  const check = useCallback(() => {
+    const h: Record<string, string> = {};
+    try {
+      const tok = sessionStorage.getItem(tokenKey(tenant));
+      if (tok) h.authorization = `Bearer ${tok}`;
+    } catch {
+      // 保存が使えない端末では、しるし無しで調べる
+    }
+    fetch(`/api/t/${encodeURIComponent(tenant)}/me`, { headers: h })
+      .then(async (r) => setNeed(!r.ok && needsPin(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "")))
+      .catch(() => setNeed(false));
+  }, [tenant]);
+  useEffect(check, [check]);
+  return [need, check];
+}
 
 /** 画面で選べる役割。新入社員は閲覧の画面から入る */
 export const STAFF = [

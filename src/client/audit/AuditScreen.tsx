@@ -1,6 +1,7 @@
 // 監査の記録の画面（041）。1 枚のカードの記録を ①元の文 → ②作成 → ③確かめ → ④人の直し → ⑤署名 の順に追う。
 // 監修者と教育担当の役で開く（役のしるしは sessionStorage の role:<テナント>。ほかの画面と同じ）
 import { useCallback, useEffect, useState } from "react";
+import { REVIEWERS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 
 const STEPS: Record<number, string> = { 1: "① 元の文", 2: "② 作成", 3: "③ 確かめ", 4: "④ 人の直し", 5: "⑤ 署名" };
 const KIND: Record<string, string> = { source: "元の文", make: "作成", verify: "確かめ", edit: "直し", sign: "署名", status: "状態", ai_draft: "AI 下書き", erase: "消した" };
@@ -47,6 +48,8 @@ function headers(tenant: string, role: string | null): Record<string, string> {
 
 /** 監修者か教育担当の役で入る */
 function RolePick({ tenant, onDone }: { tenant: string; onDone: (token: string) => void }) {
+  // 会社のテナントで入ったしるしが無ければ、テナントの PIN → 役割の PIN の 2 段で入る
+  const [needPin] = useNeedsTenantPin(tenant);
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
   const go = async (key: string) => {
@@ -57,6 +60,8 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: (token: string) 
     store.set(`role:${tenant}`, b.token);
     onDone(b.token);
   };
+  if (needPin === null) return <p>読み込み中…</p>;
+  if (needPin) return <TenantPin tenant={tenant} roles={REVIEWERS} onDone={() => onDone(store.get(`role:${tenant}`) ?? "")} />;
   return (
     <div className="audit-pick" data-testid="audit-pick">
       <p>監査の記録は、監修者か教育担当の役で開きます</p>

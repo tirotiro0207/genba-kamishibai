@@ -3,6 +3,7 @@
 // 役のしるしは sessionStorage の role:<テナント>（ほかの画面と同じ）。回収の知らせは版と署名の日付つきで印刷できる
 import { useCallback, useEffect, useState } from "react";
 import { req } from "../make/MakeScreen";
+import { REVIEWERS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./issue.css";
 
 const ROLE_LABEL: Record<string, string> = { "supervisor:1": "監修者 1", "supervisor:2": "監修者 2", "trainer:1": "教育担当" };
@@ -55,6 +56,8 @@ interface Sample {
 }
 
 function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
+  // 会社のテナントで入ったしるしが無ければ、テナントの PIN → 役割の PIN の 2 段で入る
+  const [needPin] = useNeedsTenantPin(tenant);
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
   const go = async (key: string) => {
@@ -68,6 +71,8 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
       setErr((e as Error).message);
     }
   };
+  if (needPin === null) return <p>読み込み中…</p>;
+  if (needPin) return <TenantPin tenant={tenant} roles={REVIEWERS} onDone={onDone} />;
   return (
     <section className="issue-pick" data-testid="issue-pick">
       <p>発行の画面は、監修者か教育担当の役で開きます</p>

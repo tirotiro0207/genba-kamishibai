@@ -7,6 +7,7 @@ import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card"
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
+import { SUPERVISORS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./sign.css";
 
 interface CardView {
@@ -30,6 +31,8 @@ const today = () => {
 
 /** 監修者の役で入る（会社のテナントは役割の PIN が要る） */
 function SupervisorPick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
+  // 会社のテナントで入ったしるしが無ければ、テナントの PIN → 監修者の PIN の 2 段で入る
+  const [needPin] = useNeedsTenantPin(tenant);
   const [people, setPeople] = useState<{ role: string; slot: number; name: string }[]>([]);
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
@@ -49,6 +52,8 @@ function SupervisorPick({ tenant, onDone }: { tenant: string; onDone: () => void
       setErr((e as Error).message);
     }
   };
+  if (needPin === null) return <p>読み込み中…</p>;
+  if (needPin) return <TenantPin tenant={tenant} roles={SUPERVISORS} onDone={onDone} />;
   return (
     <section className="sign-pick" data-testid="sign-pick">
       <h1>署名は監修者の役で行います</h1>
