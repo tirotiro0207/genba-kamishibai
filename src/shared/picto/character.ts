@@ -95,6 +95,19 @@ function rig(a: Angles) {
   return { torso: a.torso, neck: a.neck, legs, arms };
 }
 
+/**
+ * 斜めの絵の腕の置き場所。腕は胴の左右に付くので、前の置き場所の腕を後ろへ振ると胴を横切る。
+ * そこで、前へ大きく振っている腕を前の置き場所（胴の上に描く）、もう一方を奥の置き場所にする。
+ * 返すのは [奥に描く腕, 前に描く腕] の番号（0 が far、1 が near）
+ */
+function armOrder(a: Angles, view: View): [number, number] {
+  return view === "quarter" && a.arm_far_upper > a.arm_near_upper ? [1, 0] : [0, 1];
+}
+
+/** 首は頭の下の方（首の付け根から 30 上）を軸に回し、うつむくほど少し前へ出す。胴の上の端で回すと頭が胴の前へずれる */
+const NECK_PIVOT = 30;
+const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
+
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
 function lowest(a: Angles, view: View): number {
   const r = rig(a);
@@ -107,12 +120,13 @@ function lowest(a: Angles, view: View): number {
     ys.push(at(knee, 0, 20), ...[-22, 38].map((x) => at(foot, x, L.sole)));
   });
   const torso = R(r.torso);
-  r.arms.forEach((g, i) => {
-    const sh = mul(mul(torso, T(SPOT[view].arm[i], -142 + L.shoulderDrop)), R(g.upper));
+  armOrder(a, view).forEach((idx, spot) => {
+    const g = r.arms[idx];
+    const sh = mul(mul(torso, T(SPOT[view].arm[spot], -142 + L.shoulderDrop)), R(g.upper));
     const hand = mul(mul(mul(sh, T(0, L.upperArm)), R(g.lower)), T(0, L.lowerArm));
     ys.push(at(hand, 0, 15));
   });
-  const head = mul(mul(torso, T(0, -142 - L.headUp)), R(r.neck));
+  const head = mul(mul(mul(torso, T(neckShift(r.neck), -142 - L.headUp - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
   ys.push(at(head, 0, 0), at(head, 0, -104));
   return Math.max(...ys);
 }
@@ -133,16 +147,18 @@ export function characterSvg(c: CharacterSpec): string {
       `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})${rot(g.ankle)}">${SHOE}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const arm = (i: number) => {
-    const g = r.arms[i];
+  const order = armOrder(c.angles, view);
+  /** spot: 0 が奥の置き場所、1 が前の置き場所 */
+  const arm = (spot: number) => {
+    const g = r.arms[order[spot]];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[i]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="#ccc" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="#ccc" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const head = `<g transform="translate(0 ${-142 - L.headUp})${rot(r.neck)}">${HEAD[view]}${hat(HAT[c.role ?? "new"])}</g>`;
+  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${HEAD[view]}${hat(HAT[c.role ?? "new"])}</g>`;
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 胴 → 頭 → 手前の腕。
   // 手前の腕を頭より上へ挙げるとき（胴に対して 100° を超える）は、腕を頭の後ろへ回し、顔に重ねない
-  const behind = c.angles.arm_near_upper > 100;
+  const behind = c.angles[order[1] === 1 ? "arm_near_upper" : "arm_far_upper"] > 100;
   const upper = behind ? `${TORSO[view]}${arm(1)}${head}` : `${TORSO[view]}${head}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
