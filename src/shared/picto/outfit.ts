@@ -315,7 +315,8 @@ export const bootSvg = (shin: number, tone: string) =>
 const MASK: Record<View, [number, number, number, number]> = {
   front: [-24, 24, -30, -6],
   quarter: [1, 37, -29, -8],
-  side: [17, 43, -29, -8],
+  // 真横は前の端を顔の輪郭（x 45）より外へ出し、鼻と口ごと横顔の線を覆う（布が顔の前を回って裏へ行く）
+  side: [17, 45, -31, -5],
 };
 export const maskSvg = (view: View, k = 1) => {
   const [l, r, t, b] = MASK[view].map((v, i) => (i < 2 ? Number(n(v * k)) : v));
@@ -325,7 +326,11 @@ export const maskSvg = (view: View, k = 1) => {
     // 紐は耳の上と下の端の少し内側へ（耳を後から描くので、紐の先は耳の裏に入って掛かって見える）
     return `<path d="M${edge} ${t + 5}L${ear} ${EAR_TOP + 4}M${edge} ${b - 4}L${ear} ${EAR_BOTTOM - 4}" stroke="#000" stroke-width="3"/>`;
   };
-  return part("mask", EAR_MARK[view].map(strap).join("") + `<rect x="${l}" y="${t}" width="${r - l}" height="${b - t}" rx="9" fill="#fff" ${S(4)}/>`);
+  const body = view === "side"
+    // 前の端は横顔の線（あごへ回り込む曲線）から 4.5 外を沿わせる
+    ? `<path d="M${n(l + 9)} ${t}H${n(r + 1.5)}Q${n(r + 4.5)} ${t} ${n(r + 4.5)} -28Q${n(r + 4.5)} -9 ${n(r - 6)} ${b}H${n(l + 9)}Q${l} ${b} ${l} ${b - 9}V${t + 9}Q${l} ${t} ${n(l + 9)} ${t}Z" fill="#fff" ${S(4)}/>`
+    : `<rect x="${l}" y="${t}" width="${r - l}" height="${b - t}" rx="9" fill="#fff" ${S(4)}/>`;
+  return part("mask", EAR_MARK[view].map(strap).join("") + body);
 };
 
 /** かぶり物の線（横に回る帯）。[左の端, 右の端, 高さ] を本数ぶん */
