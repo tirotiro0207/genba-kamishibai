@@ -156,14 +156,14 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
     },
   },
   short: {
-    front: { front: "M-49 -46C-50 -76 -26 -92 0 -92S50 -76 49 -46Q42 -58 30 -58Q14 -56 2 -66Q-12 -56 -30 -58Q-42 -58 -49 -46Z" },
+    front: { front: "M-49 -34C-50 -76 -26 -92 0 -92S50 -76 49 -34Q44 -38 42 -50Q38 -58 30 -58Q14 -56 2 -66Q-12 -56 -30 -58Q-38 -58 -42 -50Q-44 -38 -49 -34Z" },
     quarter: { front: "M47 -57C49 -96 16 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-48 -32 -40 -27Q-37 -44 -30 -53C-16 -68 16 -72 34 -64Q41 -61 47 -57Z" },
     side: { front: "M46 -60C46 -94 18 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-46 -30 -34 -26Q-30 -44 -20 -54C-4 -68 24 -70 46 -60Z" },
   },
   bun: {
     front: {
       back: `<circle cx="0" cy="-100" r="17" fill="#000" stroke="#000" stroke-width="4.5"/>`,
-      front: "M-49 -40C-50 -76 -26 -92 0 -92S50 -76 49 -40Q44 -56 30 -60Q14 -62 0 -68Q-14 -62 -30 -60Q-44 -56 -49 -40Z",
+      front: "M-49 -34C-50 -76 -26 -92 0 -92S50 -76 49 -34Q44 -38 42 -50Q38 -60 30 -60Q14 -62 0 -68Q-14 -62 -30 -60Q-38 -60 -42 -50Q-44 -38 -49 -34Z",
     },
     quarter: {
       back: `<circle cx="-36" cy="-94" r="17" fill="#000" stroke="#000" stroke-width="4.5"/>`,
@@ -176,40 +176,40 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
   },
 };
 /**
- * かぶり物の表（原点＝首の付け根。顔は y −70〜0、髪の上は −90）。
+ * かぶり物の表（原点＝首の付け根。顔は y −70〜0、髪は横に ±54・上に −106 まで、お団子は −111 まで）。
+ * かぶり物は髪に覆いかぶさる大きさにする: 縁は髪の横幅より外へ、てっぺんは髪より上へ。髪が見えてよいのは、縁より下だけ。
  * tone: "role" は役の明るさで塗る、"white" はいつも白（コック帽・衛生キャップ）。
- * hair: "show" は髪の上に載せて、はみ出した髪がそのまま見える。"hide" は髪を全部しまう（髪を描かない）。
- * top は頭のいちばん上（地面に置くときに使う）
+ * hair: "show" は髪の上に載せて、縁より下の髪がそのまま見える。"hide" は髪を全部しまう（髪を描かない）。
+ * top は頭のいちばん上（地面に置くときに使う）、bottom は縁の下の端（ここより上の髪は全部かぶり物の中に入る）
  */
 const STROKE = `stroke="#000" stroke-width="5" stroke-linejoin="round"`;
-const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "hide"; top: number; draw: Record<View, string> }> = {
+const chef = (dx: number) =>
+  `<g transform="translate(${dx} 0)"><path d="M-50 -76C-82 -86 -76 -136 -40 -128C-34 -158 34 -158 40 -128C76 -136 82 -86 50 -76Z" FILL ${STROKE}/>` +
+  `<path d="M-20 -80Q-24 -104 -16 -130M20 -80Q24 -104 16 -130" stroke="#000" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+  `<path d="M-58 -78H58V-52Q0 -45 -58 -52Z" FILL ${STROKE}/></g>`;
+export const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "hide"; top: number; bottom: number; draw: Record<View, string> }> = {
   helmet: {
-    tone: "role", hair: "show", top: -114,
+    tone: "role", hair: "show", top: -116, bottom: -50,
     draw: {
-      front: `<path d="M-54 -56C-56 -98 -30 -114 0 -114S56 -98 54 -56Z" FILL ${STROKE}/><path d="M-62 -60H62Q66 -58 64 -52Q62 -48 56 -48H-56Q-62 -48 -64 -52Q-66 -58 -62 -60Z" FILL ${STROKE}/><path d="M0 -112V-62" stroke="#000" stroke-width="3.5"/>`,
-      quarter: `<path d="M-54 -56C-56 -96 -30 -114 4 -114C38 -114 60 -96 58 -60Z" FILL ${STROKE}/><path d="M-60 -60H72Q77 -59 75 -54Q73 -50 67 -50H-58Q-64 -50 -63 -55Q-63 -60 -60 -60Z" FILL ${STROKE}/><path d="M16 -112Q20 -90 18 -62" stroke="#000" stroke-width="3.5" fill="none"/>`,
-      side: `<path d="M-56 -56C-58 -98 -28 -114 0 -114C34 -114 54 -96 54 -60Z" FILL ${STROKE}/><path d="M-62 -60H76Q81 -59 79 -54Q77 -50 71 -50H-60Q-66 -50 -65 -55Q-65 -60 -62 -60Z" FILL ${STROKE}/>`,
+      front: `<path d="M-58 -56C-60 -100 -32 -116 0 -116S60 -100 58 -56Z" FILL ${STROKE}/><path d="M-66 -60H66Q70 -58 68 -52Q66 -48 60 -48H-60Q-66 -48 -68 -52Q-70 -58 -66 -60Z" FILL ${STROKE}/><path d="M0 -114V-62" stroke="#000" stroke-width="3.5"/>`,
+      quarter: `<path d="M-60 -56C-62 -98 -32 -116 4 -116C40 -116 62 -98 60 -60Z" FILL ${STROKE}/><path d="M-66 -60H76Q81 -59 79 -54Q77 -50 71 -50H-64Q-70 -50 -69 -55Q-69 -60 -66 -60Z" FILL ${STROKE}/><path d="M16 -114Q20 -90 18 -62" stroke="#000" stroke-width="3.5" fill="none"/>`,
+      side: `<path d="M-62 -56C-64 -100 -30 -116 0 -116C36 -116 56 -98 56 -60Z" FILL ${STROKE}/><path d="M-68 -60H80Q85 -59 83 -54Q81 -50 75 -50H-66Q-72 -50 -71 -55Q-71 -60 -68 -60Z" FILL ${STROKE}/>`,
     },
   },
   cap: {
-    tone: "role", hair: "show", top: -104,
+    tone: "role", hair: "show", top: -112, bottom: -50,
     draw: {
-      front: `<path d="M-50 -58Q-52 -104 0 -104Q52 -104 50 -58Z" FILL ${STROKE}/><path d="M-56 -60H56Q54 -48 0 -48Q-54 -48 -56 -60Z" FILL ${STROKE}/>`,
-      quarter: `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" FILL ${STROKE}/>`,
-      side: `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" FILL ${STROKE}/>`,
+      front: `<path d="M-58 -58Q-60 -112 0 -112Q60 -112 58 -58Z" FILL ${STROKE}/><path d="M-62 -60H62Q60 -48 0 -48Q-60 -48 -62 -60Z" FILL ${STROKE}/>`,
+      quarter: `<path d="M-60 -50Q-62 -112 -2 -112Q52 -112 58 -62H94V-50H-60Z" FILL ${STROKE}/>`,
+      side: `<path d="M-62 -50Q-64 -112 -4 -112Q50 -112 56 -62H92V-50H-62Z" FILL ${STROKE}/>`,
     },
   },
   chef: {
-    tone: "white", hair: "show", top: -150,
-    draw: Object.fromEntries((["front", "quarter", "side"] as const).map((v) => {
-      const dx = v === "front" ? 0 : v === "quarter" ? 3 : -2;
-      return [v, `<g transform="translate(${dx} 0)"><path d="M-44 -72C-72 -82 -66 -128 -36 -122C-30 -150 30 -150 36 -122C66 -128 72 -82 44 -72Z" FILL ${STROKE}/>` +
-        `<path d="M-18 -76Q-22 -100 -14 -124M18 -76Q22 -100 14 -124" stroke="#000" stroke-width="3" fill="none" stroke-linecap="round"/>` +
-        `<path d="M-48 -74H48V-52Q0 -46 -48 -52Z" FILL ${STROKE}/></g>`];
-    })) as Record<View, string>,
+    tone: "white", hair: "show", top: -158, bottom: -52,
+    draw: { front: chef(0), quarter: chef(-1), side: chef(-4) },
   },
   hygiene: {
-    tone: "white", hair: "hide", top: -100,
+    tone: "white", hair: "hide", top: -100, bottom: 0,
     draw: {
       front: `<path d="M-53 -40C-62 -106 62 -106 53 -40Q47 -36 41 -44Q0 -60 -41 -44Q-47 -36 -53 -40Z" FILL ${STROKE}/><path d="M-44 -50Q0 -66 44 -50" stroke="#000" stroke-width="3" fill="none"/>`,
       quarter: `<path d="M-57 -24C-70 -104 52 -112 51 -48Q46 -42 39 -48Q16 -62 -14 -56Q-32 -50 -40 -28Q-48 -18 -57 -24Z" FILL ${STROKE}/><path d="M-36 -40Q-24 -62 0 -62Q24 -62 40 -54" stroke="#000" stroke-width="3" fill="none"/>`,
@@ -217,18 +217,23 @@ const HEADWEAR: Record<HeadwearKind, { tone: "role" | "white"; hair: "show" | "h
     },
   },
 };
-const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole) => {
+export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole) => {
   const w = HEADWEAR[kind];
   return w.draw[view].replaceAll("FILL", `fill="${w.tone === "role" ? ROLE_TONE[role] : "#fff"}"`);
 };
 
 /** b の頭: 髪の後ろ → 顔 → 髪の前 → かぶり物。髪をしまうかぶり物のときは髪を描かない */
-const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole) => {
+/** 髪の SVG。かぶり物をかぶると、お団子（back）とつやの線は描かない（お団子はかぶり物の中にしまう） */
+export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none") => {
+  if (headwear !== "none" && HEADWEAR[headwear].hair === "hide") return { back: "", front: "" };
   const h = HAIR_B[hair][view];
-  const showHair = headwear === "none" || HEADWEAR[headwear].hair === "show";
-  const gloss = h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
-  const hairSvg = showHair ? `<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${headwear === "none" ? gloss : ""}` : "";
-  return `${showHair ? (h.back ?? "") : ""}${FACE_B[view]}${hairSvg}${headwear === "none" ? "" : headwearSvg(headwear, view, role)}`;
+  const bare = headwear === "none";
+  const gloss = bare && h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
+  return { back: bare ? (h.back ?? "") : "", front: `<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}` };
+};
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole) => {
+  const h = hairSvg(view, hair, headwear);
+  return `${h.back}${FACE_B[view]}${h.front}${headwear === "none" ? "" : headwearSvg(headwear, view, role)}`;
 };
 
 const ANKLE_MAX = 25;
