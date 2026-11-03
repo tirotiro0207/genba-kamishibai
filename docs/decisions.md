@@ -220,3 +220,12 @@
 - 残したこと: 新入社員の役割は番号が 1 つなので、見た人は個人までは分からない（役割のしるしで記録）。個人まで出すなら名前か社員番号を入れる入口が要る
 - 残したこと: 抜き取りの「見直した」の印はまだ無い（見直す一覧だけ）
 - 残したこと: 新入社員の閲覧画面は入ったしるしを送っていないので、会社のテナントでは読めないはず。会社のテナントで新入社員に配る前に直す
+
+## 2026-11-03 本番の置き場は wrangler の env で分ける（028b）
+
+- 本番は `wrangler.jsonc` の `env.production` に分け、`--env production` で出す。手元とテストの DB の番号（全部 0）は変えない。変えると手元の D1 の置き場が変わり、手元のデータが見えなくなるため
+- 本番の D1 と R2 は手元と別に作る（`genba-kamishibai-prod`・`genba-kamishibai-prod-files`）。どちらも無料枠
+- 本番は、作業中の未コミットの変更が混ざらないよう、HEAD から作った別の作業ツリーで組み立てて出す
+- 本番の会社のテナントの PIN は手元と別に作り、git に入らない置き場（`private/tenants/<テナント>.production.json`）にだけ置く。`scripts/add-company.ts --remote` が作る
+- 鍵（`SESSION_SECRET`・`ANTHROPIC_API_KEY`）は `wrangler secret put --env production` で入れる。`SESSION_SECRET` は乱数をそのまま流し込み、値は誰も見ない。役割の名前は、公開の同意をもらうまで本番では空欄
+- 本番の軽い動作確認は `scripts/smoke-prod.ts`（書き込みなし。PIN で入るだけ）

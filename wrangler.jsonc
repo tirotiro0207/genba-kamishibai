@@ -9,9 +9,19 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/mcp/*"]
   },
-  // 本番の DB と置き場は 028b で作り、番号を差し替える。手元とテストはこのままで動く
+  // 手元とテストの DB と置き場。本番は下の env.production（--env production で出す）
   "d1_databases": [
     { "binding": "DB", "database_name": "genba-kamishibai", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
   ],
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "genba-kamishibai-files" }]
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "genba-kamishibai-files" }],
+  // 本番（028b）。DB と置き場を手元と分ける。鍵と役割の名前は wrangler secret put --env production で入れる
+  "env": {
+    "production": {
+      "name": "genba-kamishibai",
+      "d1_databases": [
+        { "binding": "DB", "database_name": "genba-kamishibai-prod", "database_id": "251a60b5-672b-4082-9cd9-3e936d0f6ba6", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "genba-kamishibai-prod-files" }]
+    }
+  }
 }

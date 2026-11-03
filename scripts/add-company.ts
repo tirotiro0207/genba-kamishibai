@@ -4,6 +4,7 @@
 //
 //   npx tsx scripts/add-company.ts [テナント]      （既定は company。名前は「会社」）
 //   npx tsx scripts/add-company.ts company --new  # PIN を作り直す
+//   npx tsx scripts/add-company.ts company --remote  # 本番の D1 に入れる（028b）。PIN は手元と別で private/tenants/<テナント>.production.json
 import { execSync } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,7 +29,7 @@ export interface Pins {
 }
 
 const digits = (n: number) => Array.from({ length: n }, () => randomInt(10)).join("");
-export const pinsPath = (tenant: string) => privatePath("tenants", `${tenant}.json`);
+export const pinsPath = (tenant: string, remote = false) => privatePath("tenants", `${tenant}${remote ? ".production" : ""}.json`);
 
 export function newPins(tenant: string): Pins {
   return { tenant, pin: digits(8), people: Object.fromEntries(PEOPLE.map((p) => [`${p.role}${p.slot}`, digits(6)])) };
@@ -52,15 +53,17 @@ async function main() {
   const args = process.argv.slice(2);
   const tenant = args.find((a) => !a.startsWith("--")) ?? "company";
   if (!/^[a-z][a-z0-9-]{1,30}$/.test(tenant)) throw new Error("テナントの名前は英小文字・数字・-");
-  const path = pinsPath(tenant);
+  const remote = args.includes("--remote");
+  const path = pinsPath(tenant, remote);
   const pins = !args.includes("--new") && existsSync(path) ? (JSON.parse(readFileSync(path, "utf-8")) as Pins) : newPins(tenant);
   mkdirSync(privatePath("tenants"), { recursive: true });
   writeFileSync(path, JSON.stringify(pins, null, 2) + "\n", "utf-8");
   const sql = privatePath("tmp", `add-${tenant}.sql`);
   mkdirSync(privatePath("tmp"), { recursive: true });
   writeFileSync(sql, await companySql(pins, "会社"), "utf-8");
-  execSync(`npx wrangler d1 execute DB --local --file "${sql}"`, { cwd: join(import.meta.dirname, ".."), stdio: "ignore" });
-  console.log(`手元の D1 に会社のテナント ${tenant} と役割 ${PEOPLE.length} つを入れた。PIN は ${path} にある`);
+  const where = remote ? "--remote --env production" : "--local";
+  execSync(`npx wrangler d1 execute DB ${where} --file "${sql}"`, { cwd: join(import.meta.dirname, ".."), stdio: "ignore" });
+  console.log(`${remote ? "本番" : "手元"}の D1 に会社のテナント ${tenant} と役割 ${PEOPLE.length} つを入れた。PIN は ${path} にある`);
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
