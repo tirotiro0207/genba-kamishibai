@@ -1,39 +1,37 @@
 // 夜間の走り手（023）。資料を 1 ページずつ仕分け、ページごとの進み具合を D1 の night_pages に置く。
 // 強制終了して走らせ直すと、済んだページは飛ばし、途中だったページ（running）はもう一度やる。ページは 1 行だけなので二重にならない。
 // SQL は D1 に送る関数（Sql）を通す。手元・本番は wrangler の d1 execute、テストは node:sqlite で同じ SQL を流す。
-import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { wranglerExec } from "./d1-node";
+import { privatePath } from "./private-dir";
 import type { SortResult } from "../shared/sort/page";
 
 export type Sql = (sql: string) => Promise<Record<string, unknown>[]>;
 
 const lit = (v: unknown) => (v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : typeof v === "boolean" ? (v ? "1" : "0") : `'${String(v).replaceAll("'", "''")}'`);
 
-/** wrangler の d1 execute で D1 に SQL を送る（--local か --remote --env production） */
+/** wrangler の d1 execute で D1 に SQL を送る（--local か --remote --env production）。行だけを返す */
 export function d1Sql(where: "local" | "remote"): Sql {
-  const root = join(import.meta.dirname, "..", "..");
-  const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
-  return async (sql) => {
-    // シェルを通さず node で wrangler を直に呼ぶので、SQL の引用符を気にせず --command で渡せる
-    // （--file は本番だと取り込みの進み具合の行が JSON の前に出て読めない）
-    const where_ = where === "local" ? ["--local"] : ["--remote", "--env", "production", "-y"];
-    let out: string;
-    try {
-      out = execFileSync(process.execPath, [wrangler, "d1", "execute", "DB", ...where_, "--json", "--command", sql], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
-    } catch (e) {
-      // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
-      const x = e as { stdout?: string; stderr?: string };
-      throw new Error(`D1 に送れなかった: ${(x.stdout || x.stderr || String(e)).slice(-600)}`);
-    }
-    // JSON の前に案内の行が付いても読めるよう、最初の [ から読む
-    const parsed = JSON.parse(out.slice(out.indexOf("["))) as { results?: Record<string, unknown>[] }[];
-    return parsed.flatMap((r) => r.results ?? []);
-  };
+  const exec = wranglerExec(where);
+  return async (sql) => (await exec(sql)).results;
 }
 
 export interface NightPage {
   page: number;
   text: string;
+}
+
+/** private/pdf/<資料の名前>/pNNN.json のページの文（031b の行の文字）。range は「1-5」の形 */
+export function readPages(doc: string, range?: string): NightPage[] {
+  const dir = privatePath("pdf", doc);
+  if (!existsSync(dir)) throw new Error(`ページの文が無い: ${dir}（先に scripts/pdf-pages.ts）`);
+  const [from, to] = range ? range.split("-").map(Number) : [1, Infinity];
+  return readdirSync(dir)
+    .filter((f) => /^p\d{3}\.json$/.test(f))
+    .map((f) => JSON.parse(readFileSync(`${dir}/${f}`, "utf-8")) as { page: number; lines: { text: string }[] })
+    .filter((p) => p.page >= from && p.page <= (to ?? from))
+    .sort((a, b) => a.page - b.page)
+    .map((p) => ({ page: p.page, text: p.lines.map((l) => l.text).join("\n") }));
 }
 
 export type SortPage = (text: string) => Promise<SortResult & { usd: number | null; ms: number; session_id?: string }>;
