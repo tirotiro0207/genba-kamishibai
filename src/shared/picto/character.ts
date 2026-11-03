@@ -2,7 +2,7 @@
 // 長さと太さは新しい絵柄のまま（胴 142・もも 85・すね 77・上腕 70・前腕 52、単位は背の高さ 434 の中の値）、
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
-import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
+import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
 import type { Angles } from "./poses";
 
@@ -119,7 +119,7 @@ export const torso = (view: View, look: Look) => {
   const c = CLOTH[look];
   const w = view === "side" ? 30 : 46;
   return `<rect x="${-w}" y="-142" width="${w * 2}" height="162" rx="${view === "side" ? 20 : 30}" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
-    `<path d="M${-w} -110Q${-w} -142 ${VEST_V[view]}Q${w} -142 ${w} -110V18H${-w}Z" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
+    `<path d="M${-w} -110Q${-w} -142 ${VEST_V[view]}Q${w} -142 ${w} -110${hem(w, 18, view)}" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
     `<path d="M${-w + 3} -40H${w - 3}" stroke="#333" stroke-width="12"/>`;
 };
 

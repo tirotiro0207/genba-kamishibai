@@ -80,6 +80,14 @@ const SPAN: Record<View, number> = { front: 1, quarter: 1, side: 0.5 };
 /** 手前の腰（斜めは画面の左、真横は胴のまん中） */
 const NEAR_HIP: Record<View, number> = { front: -26, quarter: -30, side: -4 };
 
+/**
+ * 胴に重ねる服の裾（右の脇の V から、裾、左の脇まで）。胴は角の丸い四角（半径 30、真横は 20。下の端は y 20）なので、
+ * 裾の角も胴の丸みに合わせて丸める。四角いままだと、胴の丸い角の外へ服の角がはみ出して箱に見える
+ */
+export const hem = (w: number, b: number, view: View) => {
+  const r = Math.max(0, (view === "side" ? 20 : 30) - (20 - b));
+  return r ? `V${n(b - r)}A${r} ${r} 0 0 1 ${n(w - r)} ${b}H${n(-w + r)}A${r} ${r} 0 0 1 ${-w} ${n(b - r)}Z` : `V${b}H${-w}Z`;
+};
 const fullTop = (w: number, tone: string, bottom = 20) =>
   `<rect x="${-w}" y="-142" width="${w * 2}" height="${bottom + 142}" rx="${w === 30 ? 20 : 30}" fill="${tone}" ${S(6)}/>`;
 
@@ -185,7 +193,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return `<path d="M${-w} -110Q${-w} -142 ${x(-22)} -142L${x(0)} -84L${x(22)} -142Q${w} -142 ${w} -110V14H${-w}Z" fill="${t}" ${S(6)}/>` +
+      return `<path d="M${-w} -110Q${-w} -142 ${x(-22)} -142L${x(0)} -84L${x(22)} -142Q${w} -142 ${w} -110${hem(w, 14, v)}" fill="${t}" ${S(6)}/>` +
         [-74, -54, -34].map((y) => `<circle cx="${x(0)}" cy="${y}" r="3" fill="${ink(t)}"/>`).join("");
     },
   },
@@ -194,7 +202,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return `<path d="M${-w} -110Q${-w} -142 ${x(-20)} -142L${x(0)} -100L${x(20)} -142Q${w} -142 ${w} -110V4H${-w}Z" fill="${t}" ${S(6)}/>` +
+      return `<path d="M${-w} -110Q${-w} -142 ${x(-20)} -142L${x(0)} -100L${x(20)} -142Q${w} -142 ${w} -110${hem(w, 4, v)}" fill="${t}" ${S(6)}/>` +
         [-70, -30].map((y) => `<rect x="${-w + 3}" y="${y}" width="${w * 2 - 6}" height="9" fill="#fff"/>`).join("");
     },
   },
