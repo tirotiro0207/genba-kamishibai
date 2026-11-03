@@ -172,7 +172,7 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
 const headB = (view: View, hair: Hair, hatFill?: string) => {
   const h = HAIR_B[hair][view];
   const gloss = h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
-  return `${h.back ?? ""}${NECK_B}${FACE_B[view]}<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}${hatFill ? hat(hatFill, view) : ""}`;
+  return `${h.back ?? ""}${FACE_B[view]}<path d="${h.front}" fill="#000" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${gloss}${hatFill ? hat(hatFill, view) : ""}`;
 };
 
 /** かぶり物。つばは前だけ。正面ではつばがこちらを向くので、頭の下の縁に平たい半月として描く */
@@ -267,15 +267,16 @@ export function characterSvg(c: CharacterSpec): string {
       `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, cloth.arm)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, cloth.arm)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${
-    look === "a" ? HEAD[view] + hat(HAT[c.role ?? "new"], view) : headB(view, c.hair ?? "bob", c.hat ? HAT[c.role ?? "new"] : undefined)
-  }</g>`;
-  // 描く順: 奥の腕 → 奥の足 → 手前の足 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
-  // 手前の腕を頭より上へ挙げるとき（胴に対して 100° を超える）は、腕を頭の後ろへ回し、顔に重ねない
-  const behind = c.angles.arm_near_upper > 100;
+  const headAt = (inner: string) =>
+    `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
+  const head = headAt(look === "a" ? HEAD[view] + hat(HAT[c.role ?? "new"], view) : headB(view, c.hair ?? "bob", c.hat ? HAT[c.role ?? "new"] : undefined));
+  // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
+  const neck = look === "b" ? headAt(NECK_B) : "";
+  // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
+  // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = torso(view, look);
   const front = view === "front";
-  const upper = behind ? `${body0}${arm(1)}${head}` : `${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
+  const upper = `${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }
