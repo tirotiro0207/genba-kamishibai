@@ -1,10 +1,11 @@
 // カードの画面（037）。3〜4 コマを紙芝居のように 1 コマずつ送る。絵の面は文字 0 字で、番号や帯は面の外に置く。
 // 絵をタップすると「守ること・なぜ・言葉」が出る。署名の前は「未承認の下書き」、元の文に無い理由を足した枚は「AI 下書き」の帯を出す。
-// 作る人が「監修者に確認」の印を付けた枚は、その理由を帯の下に出す（039）。
+// 作る人が「監修者に確認」の印を付けた枚は、その理由を帯の下に出す（039）。同じ会社の前の修正を手本にした下書きは、その日付と誰（役割）を出す（087）。
 // 確かめる AI の証拠が無いうちは「確認待ち」で OK を押せない（047・Check.tsx）。
 // コマを送るときは、同じ動きの JSON をコマの間だけ 0.35 秒で再生する（076a）。「動きを減らす」設定では飛ぶ。
 import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
+import { type UsedExemplar, usedLine } from "../../shared/exemplars";
 import { cutFrames, frameAt, type MotionJson } from "../../shared/picto/motion";
 import { type Frame, renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
@@ -41,6 +42,23 @@ function Ask({ card }: { card: CardView }) {
     <p className="card-ask" data-testid="card-ask">
       <strong>監修者に確認</strong>
       <span>{card.ask}</span>
+    </p>
+  );
+}
+
+/** 手本にしたもの（087・§5 L7）。この下書きを作るときに渡した、同じ会社の前の修正か署名済みのカードの日付と誰（役割） */
+function Used({ tenant, card }: { tenant: string; card: CardView }) {
+  const [used, setUsed] = useState<UsedExemplar[]>([]);
+  useEffect(() => {
+    req<{ used: UsedExemplar[] }>(tenant, `/cards/${encodeURIComponent(card.id)}/exemplars`)
+      .then((r) => setUsed(r.used))
+      .catch(() => setUsed([]));
+  }, [tenant, card.id]);
+  const line = usedLine(used);
+  if (!line || card.status === "signed" || card.status === "stopped") return null;
+  return (
+    <p className="card-ask" data-testid="card-used" data-count={used.length}>
+      <span>{line}</span>
     </p>
   );
 }
@@ -110,6 +128,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
     <article className="card" data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
       <Ask card={card} />
+      <Used tenant={tenant} card={card} />
       {card.verify?.dangerous && card.status !== "signed" && card.status !== "stopped" && (
         // 危険の印（048）は絵の面の外に置く。絵の面は 0 字のまま
         <p className="card-danger" data-testid="card-danger" role="alert">

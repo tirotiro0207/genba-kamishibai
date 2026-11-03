@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MOTION, sampleCard } from "../../tests/fixtures/card";
-import { categoryOf, exemplarText } from "../shared/exemplars";
+import { categoryOf, exemplarText, usedLine, whoLabel } from "../shared/exemplars";
 import { setClientFactory } from "./claude-client";
 import { addCardSession, cleanupCardSessions, gatherExemplars, setSessionDeleter } from "./exemplars";
 import { signRole } from "./people";
@@ -188,5 +188,15 @@ describe("手本の渡し方（086・§5 L3・L6）", () => {
     ]);
     // 消す鍵が無いときは、消さずに残す
     expect(await cleanupCardSessions(env.DB, a, id, null)).toEqual({ deleted: 0, failed: 0, left: 1 });
+  });
+});
+
+describe("手本にしたものの 1 行（087）", () => {
+  it("直しを先に、日本時間の日付と役割で出す。名前は出さない", () => {
+    const at = "2026-11-02T16:30:00.000Z"; // 日本時間 11 月 3 日 1 時半
+    expect(usedLine([{ kind: "card", src_card_id: "c", by: "supervisor.2", at }, { kind: "edit", src_card_id: "e", by: "supervisor.1", at }])).toBe("前回の修正（11月3日・監修者 1）を手本にしました");
+    expect(usedLine([{ kind: "card", src_card_id: "c", by: "trainer.1", at: "2026-11-03 02:00:00" }])).toBe("署名済みのカード（11月3日・教育担当）を手本にしました");
+    expect(usedLine([])).toBeNull();
+    expect(whoLabel("author.1")).toBe("作者");
   });
 });

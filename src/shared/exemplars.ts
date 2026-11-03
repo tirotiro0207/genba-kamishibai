@@ -108,3 +108,27 @@ export function usedOf(ex: Exemplars): UsedExemplar[] {
     ...ex.cards.map((c) => ({ kind: "card" as const, src_card_id: c.card_id, by: c.by, at: c.at })),
   ];
 }
+
+const ROLE_NAME: Record<string, string> = { supervisor: "監修者", trainer: "教育担当", author: "作者", newhire: "新入社員" };
+
+/** 役割と番号（supervisor.1）を「監修者 1」にする。教育担当と作者は 1 人なので番号を付けない */
+export function whoLabel(by: string): string {
+  const [role, slot] = by.split(/[.:]/);
+  const name = ROLE_NAME[role];
+  if (!name) return by;
+  return role === "supervisor" && slot ? `${name} ${slot}` : name;
+}
+
+/** 日付を日本時間の「11月3日」にする */
+export function dayLabel(at: string): string {
+  const d = new Date(Date.parse(at.includes("T") ? at : `${at.replace(" ", "T")}Z`) + 9 * 3600_000);
+  return Number.isNaN(d.getTime()) ? at : `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+}
+
+/** 下書きの横に出す 1 行（087・§5 L7）。直しを先に、無ければ署名済みのカード */
+export function usedLine(used: UsedExemplar[]): string | null {
+  const e = used.find((u) => u.kind === "edit");
+  if (e) return `前回の修正（${dayLabel(e.at)}・${whoLabel(e.by)}）を手本にしました`;
+  const c = used.find((u) => u.kind === "card");
+  return c ? `署名済みのカード（${dayLabel(c.at)}・${whoLabel(c.by)}）を手本にしました` : null;
+}
