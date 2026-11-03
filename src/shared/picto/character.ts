@@ -140,7 +140,7 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string }>> = {
 };
 const headB = (view: View, hair: Hair, hatFill?: string) => {
   const h = HAIR_B[hair][view];
-  return `${h.back ?? ""}${FACE_B[view]}<path d="${h.front}" fill="#111" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${hatFill ? hat(hatFill) : ""}`;
+  return `${h.back ?? ""}${NECK_B}${FACE_B[view]}<path d="${h.front}" fill="#111" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>${hatFill ? hat(hatFill) : ""}`;
 };
 
 const hat = (fill: string) => `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`;
@@ -184,10 +184,13 @@ function armOrder(a: Angles, view: View): [number, number] {
 
 /** 首は頭の下の方（首の付け根から 30 上）を軸に回し、うつむくほど少し前へ出す。胴の上の端で回すと頭が胴の前へずれる */
 const NECK_PIVOT = 30;
+/** b は頭を少し持ち上げて、あごと胴の間に短い首を見せる（a は首なし） */
+const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
+const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
-function lowest(a: Angles, view: View): number {
+function lowest(a: Angles, view: View, look: Look): number {
   const r = rig(a);
   const ys: number[] = [];
   r.legs.forEach((g, i) => {
@@ -204,7 +207,7 @@ function lowest(a: Angles, view: View): number {
     const hand = mul(mul(mul(sh, T(0, L.upperArm)), R(g.lower)), T(0, L.lowerArm));
     ys.push(at(hand, 0, 15));
   });
-  const head = mul(mul(mul(torso, T(neckShift(r.neck), -142 - L.headUp - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
+  const head = mul(mul(mul(torso, T(neckShift(r.neck), -142 - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
   ys.push(at(head, 0, 0), at(head, 0, -104));
   return Math.max(...ys);
 }
@@ -217,7 +220,7 @@ export function characterSvg(c: CharacterSpec): string {
   const cloth = CLOTH[look];
   const k = c.height / UNIT;
   const d = c.facing === "right" ? 1 : -1;
-  const low = lowest(c.angles, view);
+  const low = lowest(c.angles, view, c.look ?? "a");
   // 手足は 1 本ごとに 2 回描く: まず全部の段の縁（黒）、次に全部の段の中身（灰色）。
   // 段ごとに縁と中身を描くと、下の段の縁が上の段の中身に重なって関節の線（ロボットのような区切り）が出る。
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
@@ -235,7 +238,7 @@ export function characterSvg(c: CharacterSpec): string {
       `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, cloth.arm)}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, cloth.arm)}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${cloth.hand}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${
+  const head = `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${
     look === "a" ? HEAD[view] + hat(HAT[c.role ?? "new"]) : headB(view, c.hair ?? "bob", c.hat ? HAT[c.role ?? "new"] : undefined)
   }</g>`;
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 胴 → 頭 → 手前の腕。
