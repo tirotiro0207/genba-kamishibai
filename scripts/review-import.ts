@@ -1,7 +1,8 @@
 // 060: 監修者の確認表を取り込む。命令 1 つで、調整用の 20 項目を直した版に差し替え、差分を eval/review-history.md に足す。
-// 確認用の 10 項目は画面に出さない。ハッシュが変わらないことを確かめ、変わっていれば番号だけを出して止まる（--rehash で作り直す）。
+// 確認用の 10 項目は読まない。直した版の 10 項目を確認用と同じ形にしてハッシュだけを比べ、変わっていれば番号だけを出して止まる。
+// 作り直すときは --rehash <書き出し先>: 新しい確認用をその場所に書き（置き場へは作者が移す）、ハッシュの表を作り直す。
 //
-//   npx tsx scripts/review-import.ts <直した 30 項目の JSON> [--marks <印の CSV>] [--rehash] [--dry]
+//   npx tsx scripts/review-import.ts <直した 30 項目の JSON> [--marks <印の CSV>] [--rehash <書き出し先>] [--dry]
 //
 // 印の CSV は見出し `no,mark,note`（mark は ○ △ ×）。直した版の項目に mark の欄があれば、それも読む。
 // 取り込んだあとは、フックを確定版で流す（API を使うので、流すかは作者が決める）: npx tsx scripts/eval-hook.ts --force
@@ -13,7 +14,6 @@ import { historyEntry, type ImportResult, importReview, type Item, readMarks, to
 const ROOT = join(import.meta.dirname, "..");
 export const PATHS = {
   tune: "eval/items_tune_v1r8.json",
-  holdout: "eval/holdout/items_holdout_v1r8.json",
   hashes: "eval/holdout_hashes_v1r8.json",
   history: "eval/review-history.md",
 };
@@ -42,7 +42,8 @@ const listOf = (v: unknown): Item[] => (Array.isArray(v) ? v : (v as { items: It
 
 export interface RunOptions {
   marks?: string;
-  rehash?: boolean;
+  /** 新しい確認用の書き出し先。あれば作り直す */
+  rehash?: string;
   dry?: boolean;
   root?: string;
   now?: Date;
@@ -54,11 +55,12 @@ export function run(nextPath: string, o: RunOptions = {}): { result: ImportResul
   const next = listOf(JSON.parse(readFileSync(nextPath, "utf-8")));
   const tune = listOf(readJson(root, PATHS.tune));
   const hashes = readJson<Hashes>(root, PATHS.hashes);
-  const holdout = existsSync(join(root, PATHS.holdout)) ? listOf(readJson(root, PATHS.holdout)) : [];
-  const holdoutByNo = new Map(holdout.map((i) => [i.no, i]));
   const marks = o.marks ? readMarks(readFileSync(o.marks, "utf-8")) : undefined;
-  // 確認用は、今の確認用の項目と同じ形（担当者の欄は役割）にしてからハッシュを比べる
-  const hashOf = (i: Item) => sha(stable(toTune(i, holdoutByNo.get(i.no))));
+  // 担当者の名前 → 役割を、調整用の 20 項目の組から作る（確認用は読まない）。確認用も同じ形にしてからハッシュを比べる
+  const nextByNo = new Map(next.map((i) => [i.no, i]));
+  const role = new Map(tune.map((t) => [String(nextByNo.get(t.no)?.reviewer ?? ""), t.reviewer]));
+  const asHoldout = (i: Item) => toTune(i, { no: i.no, reviewer: role.get(String(i.reviewer)) ?? i.reviewer });
+  const hashOf = (i: Item) => sha(stable(asHoldout(i)));
   const result = importReview(next, tune, new Map(hashes.items.map((h) => [h.no, h.sha256])), hashOf, marks);
   const wrote: string[] = [];
   const stopped = result.holdoutChanged.length > 0 && !o.rehash;
@@ -73,13 +75,12 @@ export function run(nextPath: string, o: RunOptions = {}): { result: ImportResul
   appendFileSync(hist, `\n${historyEntry(at, basename(nextPath), result)}`);
   wrote.push(PATHS.history);
   if (o.rehash && result.holdoutChanged.length) {
-    const nextByNo = new Map(next.map((i) => [i.no, i]));
-    const items = holdout.map((h) => toTune(nextByNo.get(h.no) ?? h, h));
+    const items = hashes.items.map((h) => nextByNo.get(h.no)).filter((i): i is Item => !!i).map(asHoldout);
     const body = `${JSON.stringify(items, null, 2)}\n`;
-    writeFileSync(join(root, PATHS.holdout), body);
+    writeFileSync(o.rehash, body);
     const fresh: Hashes = { ...hashes, file_sha256: sha(body), items: items.map((i) => ({ no: i.no, sha256: sha(stable(i)) })) };
     writeFileSync(join(root, PATHS.hashes), `${JSON.stringify(fresh, null, 1)}\n`);
-    wrote.push(PATHS.holdout, PATHS.hashes);
+    wrote.push(o.rehash, PATHS.hashes);
   }
   return { result, wrote, stopped };
 }
@@ -87,15 +88,15 @@ export function run(nextPath: string, o: RunOptions = {}): { result: ImportResul
 function main() {
   const a = process.argv.slice(2);
   const opt = (k: string) => (a.includes(k) ? a[a.indexOf(k) + 1] : undefined);
-  const file = a.find((x, i) => !x.startsWith("--") && a[i - 1] !== "--marks");
-  if (!file) throw new Error("使い方: npx tsx scripts/review-import.ts <直した 30 項目の JSON> [--marks <CSV>] [--rehash] [--dry]");
-  const { result: r, wrote, stopped } = run(file, { marks: opt("--marks"), rehash: a.includes("--rehash"), dry: a.includes("--dry") });
+  const file = a.find((x, i) => !x.startsWith("--") && a[i - 1] !== "--marks" && a[i - 1] !== "--rehash");
+  if (!file) throw new Error("使い方: npx tsx scripts/review-import.ts <直した 30 項目の JSON> [--marks <CSV>] [--rehash <書き出し先>] [--dry]");
+  const { result: r, wrote, stopped } = run(file, { marks: opt("--marks"), rehash: opt("--rehash"), dry: a.includes("--dry") });
   console.log(`直した項目（調整用）: ${r.changes.filter((c) => c.diffs.length).map((c) => c.no).join("・") || "無し"}`);
   console.log(`確認用でハッシュが変わったもの: ${r.holdoutChanged.join("・") || "無し"}`);
   if (r.missing.length) console.log(`直した版に無かった番号: ${r.missing.join("・")}`);
   if (r.dropped.length) console.log(`落とした欄: ${r.dropped.join("・")}`);
   if (stopped) {
-    console.log("確認用の項目が変わっているので止めた。作り直すなら --rehash を付けて流し直す");
+    console.log("確認用の項目が変わっているので止めた。作り直すなら --rehash <書き出し先> を付けて流し直す");
     process.exitCode = 1;
   } else if (wrote.length) console.log(`書いた: ${wrote.join("・")}\n次（API を使う）: npx tsx scripts/eval-hook.ts --force`);
 }

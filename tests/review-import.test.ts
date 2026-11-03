@@ -12,15 +12,14 @@ const tune = [
 ];
 const hold = { no: 3, reviewer: "安全の監修者", source: "規則 3", url: "u3", text: "文 3", do: [{ text: "する 3" }], dont: [], why: [] };
 // 監修者に送った版は担当者の名前と下書きのメモが入っている（ここでは作りもの）
-const sent = (i: typeof hold) => ({ ...i, reviewer: "作りものの名前", decision: "メモ" });
+const NAME: Record<string, string> = { 安全の監修者: "作りものの名前 A", 規程の監修者: "作りものの名前 B" };
+const sent = (i: typeof hold) => ({ ...i, reviewer: NAME[i.reviewer], decision: "メモ" });
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), "gk-060-"));
-  mkdirSync(join(root, "eval/holdout"), { recursive: true });
+  mkdirSync(join(root, "eval"), { recursive: true });
   writeFileSync(join(root, PATHS.tune), JSON.stringify(tune, null, 2));
-  const body = JSON.stringify([hold], null, 2);
-  writeFileSync(join(root, PATHS.holdout), body);
-  writeFileSync(join(root, PATHS.hashes), JSON.stringify({ version: "x", algorithm: "a", file_sha256: sha(body), items: [{ no: 3, sha256: sha(stable(hold)) }] }));
+  writeFileSync(join(root, PATHS.hashes), JSON.stringify({ version: "x", algorithm: "a", file_sha256: sha(JSON.stringify([hold], null, 2)), items: [{ no: 3, sha256: sha(stable(hold)) }] }));
   const next = [sent(tune[0] as never), { ...sent(tune[1] as never), dont: [{ text: "しない 2（直した）" }], mark: "△" }, sent(hold)];
   const nextPath = join(root, "items_next.json");
   writeFileSync(nextPath, JSON.stringify(next));
@@ -74,17 +73,19 @@ describe("監修者の確認表の取り込み（060）", () => {
     expect(read(s.root, PATHS.tune)).toBe(tuneBefore);
   });
 
-  it("--rehash なら確認用を書き直し、ハッシュを作り直す", () => {
+  it("--rehash <書き出し先> なら新しい確認用をそこに書き、ハッシュを作り直す（担当者は役割にする）", () => {
     const s = setup();
     s.next[2] = { ...s.next[2], do: [{ text: "する 3（直した）" }] };
     writeFileSync(s.nextPath, JSON.stringify(s.next));
-    const { wrote } = run(s.nextPath, { root: s.root, rehash: true });
-    expect(wrote).toContain(PATHS.hashes);
-    const items = JSON.parse(read(s.root, PATHS.holdout));
+    const out = join(s.root, "holdout-next.json");
+    const { wrote } = run(s.nextPath, { root: s.root, rehash: out });
+    expect(wrote).toEqual([PATHS.tune, PATHS.history, out, PATHS.hashes]);
+    const items = JSON.parse(readFileSync(out, "utf-8"));
     const hashes = JSON.parse(read(s.root, PATHS.hashes));
     expect(items[0].reviewer).toBe("安全の監修者");
+    expect(Object.keys(items[0])).not.toContain("decision");
     expect(hashes.items[0].sha256).toBe(sha(stable(items[0])));
-    expect(hashes.file_sha256).toBe(sha(read(s.root, PATHS.holdout)));
+    expect(hashes.file_sha256).toBe(sha(readFileSync(out, "utf-8")));
   });
 
   it("--dry は何も書かない", () => {
