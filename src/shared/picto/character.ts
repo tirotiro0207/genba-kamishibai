@@ -107,8 +107,9 @@ export function shoeFront(i: number, ankle: number, fill = "#222"): string {
 const VEST_V: Record<View, string> = {
   front: "-20 -142L0 -100L20 -142",
   quarter: "-12 -142L10 -100L24 -142",
-  side: "-8 -142L10 -100L28 -142",
+  side: "-6 -142L8 -100L18 -142",
 };
+// 真横の V は胴の角の丸み（rx 20）の内側で止める。28 まで開くと、角の外へベストの角が突き出て、首元が前へ「ぽこっ」と出て見えた
 /** 胴（原点＝腰。斜めと正面はふつうの幅、真横は細く） */
 export const torso = (view: View, look: Look) => {
   const c = CLOTH[look];
@@ -164,8 +165,9 @@ const HAIR_B: Record<Hair, Record<View, { back?: string; front: string; gloss?: 
   },
   short: {
     front: { front: "M-49 -34C-50 -76 -26 -92 0 -92S50 -76 49 -34Q44 -38 42 -50Q38 -58 30 -58Q14 -56 2 -66Q-12 -56 -30 -58Q-38 -58 -42 -50Q-44 -38 -49 -34Z" },
-    quarter: { front: "M47 -57C49 -96 16 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-48 -32 -40 -27Q-37 -44 -30 -53C-16 -68 16 -72 34 -64Q41 -61 47 -57Z" },
-    side: { front: "M46 -60C46 -94 18 -104 -10 -102C-44 -98 -54 -74 -50 -44Q-46 -30 -34 -26Q-30 -44 -20 -54C-4 -68 24 -70 46 -60Z" },
+    // 斜めと真横は正面と同じ髪型に見えるよう、おかっぱの斜め・真横と同じ組み立て（分け目を顔の向きへ寄せる）で、丈を耳の上までにした
+    quarter: { front: "M-51 -32L-51 -52C-51 -76 -28 -92 -2 -92C25 -92 51 -76 49 -34Q44 -38 42 -50Q39 -57 32 -57Q21 -57 12.5 -66Q4 -56 -10 -57Q-14 -46 -20 -38Q-34 -26 -51 -32Z" },
+    side: { front: "M-52 -32L-52 -52C-52 -76 -28 -92 -2 -92C28 -92 48 -80 47 -64Q30 -54 6 -58Q4 -44 -6 -36Q-28 -24 -52 -32Z" },
   },
   bun: {
     front: {
@@ -371,6 +373,8 @@ const NECK_PIVOT = 30;
 export const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
 export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="5"/>`;
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
+/** 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える） */
+const NECK_X: Record<View, number> = { front: 0, quarter: 10, side: 0 };
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
 function lowest(a: Angles, view: View, look: Look, top: number): number {
@@ -389,7 +393,7 @@ function lowest(a: Angles, view: View, look: Look, top: number): number {
     const hand = mul(mul(mul(sh, T(0, L.upperArm)), R(g.lower)), T(0, L.lowerArm));
     ys.push(at(hand, 0, 15));
   });
-  const head = mul(mul(mul(torso, T(neckShift(r.neck), -142 - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
+  const head = mul(mul(mul(torso, T(NECK_X[view] + neckShift(r.neck), -142 - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
   ys.push(at(head, 0, 0), at(head, 0, top));
   return Math.max(...ys);
 }
@@ -430,7 +434,7 @@ export function characterSvg(c: CharacterSpec): string {
     return chain("edge") + chain("fill");
   };
   const headAt = (inner: string) =>
-    `<g transform="translate(${n(neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
+    `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
   const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, c.hair ?? "bob", headwear, role, o));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(NECK_B) : "";

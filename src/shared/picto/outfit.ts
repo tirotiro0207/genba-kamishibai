@@ -71,6 +71,8 @@ export const farTone = (tone: string) => {
 /** 胴の幅（片側）と、襟の V のまん中（胸の向く側へ寄る） */
 const W = (view: View) => (view === "side" ? 30 : 46);
 const CX: Record<View, number> = { front: 0, quarter: 10, side: 12 };
+/** 襟まわりの横の広がり。真横は胸の前の端が近いので半分に縮め、胴の幅（片側 30）からはみ出さないようにする */
+const SPAN: Record<View, number> = { front: 1, quarter: 1, side: 0.5 };
 /** 手前の腰（斜めは画面の左、真横は胴のまん中） */
 const NEAR_HIP: Record<View, number> = { front: -26, quarter: -30, side: -4 };
 
@@ -82,33 +84,37 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     tone: "#333",
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
-      return fullTop(w, t, 26) + `<path d="M${c - 16} -142L${c} -118L${c + 16} -142Z" fill="#fff" ${S(4)}/>` +
-        `<path d="M${c - 5} -136H${c + 5}L${c + 6} -112L${c} -106L${c - 6} -112Z" fill="#222" ${S(3)}/>` +
-        [-96, -72, -48, -24].map((y) => `<circle cx="${c}" cy="${y}" r="3.5" fill="${k === "#fff" ? "#ccc" : "#555"}"/>`).join("") +
-        `<rect x="${c - 34}" y="-106" width="20" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return fullTop(w, t, 26) + `<path d="M${x(-16)} -142L${x(0)} -118L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
+        `<path d="M${x(-5)} -136H${x(5)}L${x(6)} -112L${x(0)} -106L${x(-6)} -112Z" fill="#222" ${S(3)}/>` +
+        [-96, -72, -48, -24].map((y) => `<circle cx="${x(0)}" cy="${y}" r="3.5" fill="${k === "#fff" ? "#ccc" : "#555"}"/>`).join("") +
+        `<rect x="${x(-34)}" y="-106" width="20" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
     },
   },
   coverall: {
     tone: "#777",
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
-      return fullTop(w, t) + `<path d="M${c - 20} -142L${c - 4} -124L${c} -136L${c + 4} -124L${c + 20} -142" fill="${t}" ${S(4)}/>` +
-        `<path d="M${c} -136V20" stroke="${k}" stroke-width="3"/><path d="M${-w + 3} -40H${w - 3}" stroke="${k}" stroke-width="5"/>`;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return fullTop(w, t) + `<path d="M${x(-20)} -142L${x(-4)} -124L${x(0)} -136L${x(4)} -124L${x(20)} -142" fill="${t}" ${S(4)}/>` +
+        `<path d="M${x(0)} -136V20" stroke="${k}" stroke-width="3"/><path d="M${-w + 3} -40H${w - 3}" stroke="${k}" stroke-width="5"/>`;
     },
   },
   tunic: {
     tone: "#fff",
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
-      return fullTop(w, t, 30) + `<path d="M${c - 18} -142Q${c} -122 ${c + 18} -142" fill="none" stroke="${k}" stroke-width="3"/><path d="M${c - 4} -130V-80" stroke="${k}" stroke-width="3"/>`;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return fullTop(w, t, 30) + `<path d="M${x(-18)} -142Q${x(0)} -122 ${x(18)} -142" fill="none" stroke="${k}" stroke-width="3"/><path d="M${x(-4)} -130V-80" stroke="${k}" stroke-width="3"/>`;
     },
   },
   lifeJacket: {
     tone: "#777",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
-      return `<path d="M${-w} -108Q${-w} -142 ${c - 18} -142L${c - 6} -100V-20H${-w}Z" fill="${t}" ${S(5)}/>` +
-        `<path d="M${w} -108Q${w} -142 ${c + 18} -142L${c + 6} -100V-20H${w}Z" fill="${t}" ${S(5)}/>` +
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return `<path d="M${-w} -108Q${-w} -142 ${x(-18)} -142L${x(-6)} -100V-20H${-w}Z" fill="${t}" ${S(5)}/>` +
+        `<path d="M${w} -108Q${w} -142 ${x(18)} -142L${x(6)} -100V-20H${w}Z" fill="${t}" ${S(5)}/>` +
         `<path d="M${-w + 2} -60H${w - 2}" stroke="#000" stroke-width="6"/>`;
     },
   },
@@ -116,67 +122,75 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     tone: "#bbb",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
+      const x = (d: number) => n(c + d * SPAN[v]);
       const grid = [-110, -80, -50, -20].map((y) => `<path d="M${-w + 4} ${y}H${w - 4}" stroke="#666" stroke-width="3"/>`).join("") +
         [-24, 0, 24].filter((x) => Math.abs(x) < w - 6).map((x) => `<path d="M${x} -132V16" stroke="#666" stroke-width="3"/>`).join("");
-      return fullTop(w, t) + grid + `<path d="M${c - 20} -142L${c - 4} -126L${c - 2} -142ZM${c + 20} -142L${c + 4} -126L${c + 2} -142Z" fill="${t}" ${S(4)}/>`;
+      return fullTop(w, t) + grid + `<path d="M${x(-20)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(20)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>`;
     },
   },
   jacket: {
     tone: "#ccc",
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
+      const x = (d: number) => n(c + d * SPAN[v]);
       return fullTop(w, t) +
-        `<path d="M${c - 24} -142L${c - 6} -122L${c} -136L${c + 6} -122L${c + 24} -142" fill="${t}" ${S(4)}/>` +
-        `<path d="M${c} -136V14" stroke="${k}" stroke-width="3"/><rect x="${c - 30}" y="-108" width="18" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
+        `<path d="M${x(-24)} -142L${x(-6)} -122L${x(0)} -136L${x(6)} -122L${x(24)} -142" fill="${t}" ${S(4)}/>` +
+        `<path d="M${x(0)} -136V14" stroke="${k}" stroke-width="3"/><rect x="${x(-30)}" y="-108" width="18" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
     },
   },
   polo: {
     tone: "#fff",
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
+      const x = (d: number) => n(c + d * SPAN[v]);
       return fullTop(w, t) +
-        `<path d="M${c - 22} -142L${c - 4} -126L${c - 2} -142ZM${c + 22} -142L${c + 4} -126L${c + 2} -142Z" fill="${t}" ${S(4)}/>` +
-        `<path d="M${c} -130V-104" stroke="${k}" stroke-width="3"/><circle cx="${c}" cy="-118" r="2.5" fill="${k}"/><circle cx="${c}" cy="-108" r="2.5" fill="${k}"/>`;
+        `<path d="M${x(-22)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(22)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>` +
+        `<path d="M${x(0)} -130V-104" stroke="${k}" stroke-width="3"/><circle cx="${x(0)}" cy="-118" r="2.5" fill="${k}"/><circle cx="${x(0)}" cy="-108" r="2.5" fill="${k}"/>`;
     },
   },
   chefJacket: {
     tone: "#fff",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
-      const dots = [-122, -102, -82, -62].flatMap((y) => [c - 12, c + 12].map((x) => `<circle cx="${x}" cy="${y}" r="3.5" fill="${ink(t)}"/>`)).join("");
-      return fullTop(w, t) + `<rect x="${c - 20}" y="-142" width="40" height="10" fill="${t}" ${S(4)}/>` + dots;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      const dots = [-122, -102, -82, -62].flatMap((y) => [x(-12), x(12)].map((cx) => `<circle cx="${cx}" cy="${y}" r="3.5" fill="${ink(t)}"/>`)).join("");
+      return fullTop(w, t) + `<rect x="${x(-20)}" y="-142" width="${40 * SPAN[v]}" height="10" fill="${t}" ${S(4)}/>` + dots;
     },
   },
   coat: {
     tone: "#fff",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
+      const x = (d: number) => n(c + d * SPAN[v]);
       return `<path d="M${-w} -112Q${-w} -142 ${-w + 30} -142H${w - 30}Q${w} -142 ${w} -112L${w + 6} 104H${-w - 6}Z" fill="${t}" ${S(6)}/>` +
-        `<path d="M${c - 18} -142L${c} -112L${c + 18} -142M${c} -112V104" stroke="${ink(t)}" stroke-width="3" fill="none"/>`;
+        `<path d="M${x(-18)} -142L${x(0)} -112L${x(18)} -142M${x(0)} -112V104" stroke="${ink(t)}" stroke-width="3" fill="none"/>`;
     },
   },
   suit: {
     tone: "#222",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
-      return fullTop(w, t, 30) + `<path d="M${c - 16} -142L${c} -96L${c + 16} -142Z" fill="#fff" ${S(4)}/>` +
-        `<path d="M${c - 26} -142L${c - 4} -90M${c + 26} -142L${c + 4} -90" stroke="#777" stroke-width="3"/>` +
-        `<circle cx="${c}" cy="-60" r="3.5" fill="#777"/><circle cx="${c}" cy="-36" r="3.5" fill="#777"/>`;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return fullTop(w, t, 30) + `<path d="M${x(-16)} -142L${x(0)} -96L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
+        `<path d="M${x(-26)} -142L${x(-4)} -90M${x(26)} -142L${x(4)} -90" stroke="#777" stroke-width="3"/>` +
+        `<circle cx="${x(0)}" cy="-60" r="3.5" fill="#777"/><circle cx="${x(0)}" cy="-36" r="3.5" fill="#777"/>`;
     },
   },
   waiterVest: {
     tone: "#222",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
-      return `<path d="M${-w} -110Q${-w} -142 ${c - 22} -142L${c} -84L${c + 22} -142Q${w} -142 ${w} -110V14H${-w}Z" fill="${t}" ${S(6)}/>` +
-        [-74, -54, -34].map((y) => `<circle cx="${c}" cy="${y}" r="3" fill="${ink(t)}"/>`).join("");
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return `<path d="M${-w} -110Q${-w} -142 ${x(-22)} -142L${x(0)} -84L${x(22)} -142Q${w} -142 ${w} -110V14H${-w}Z" fill="${t}" ${S(6)}/>` +
+        [-74, -54, -34].map((y) => `<circle cx="${x(0)}" cy="${y}" r="3" fill="${ink(t)}"/>`).join("");
     },
   },
   hivis: {
     tone: "#555",
     draw: (v, t) => {
       const w = W(v), c = CX[v];
-      return `<path d="M${-w} -110Q${-w} -142 ${c - 20} -142L${c} -100L${c + 20} -142Q${w} -142 ${w} -110V4H${-w}Z" fill="${t}" ${S(6)}/>` +
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return `<path d="M${-w} -110Q${-w} -142 ${x(-20)} -142L${x(0)} -100L${x(20)} -142Q${w} -142 ${w} -110V4H${-w}Z" fill="${t}" ${S(6)}/>` +
         [-70, -30].map((y) => `<rect x="${-w + 3}" y="${y}" width="${w * 2 - 6}" height="9" fill="#fff"/>`).join("");
     },
   },
@@ -206,8 +220,9 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     tone: "#555",
     draw: (v, t) => {
       const w = W(v) - 2, c = CX[v];
-      return `<path d="M${c - 20} -112H${c + 20}V-62H${w}V56H${-w}V-62H${c - 20}Z" fill="${t}" ${S(5)}/>` +
-        `<path d="M${c - 20} -112L${c - 12} -142M${c + 20} -112L${c + 12} -142" stroke="#000" stroke-width="4"/>`;
+      const x = (d: number) => n(c + d * SPAN[v]);
+      return `<path d="M${x(-20)} -112H${x(20)}V-62H${w}V56H${-w}V-62H${x(-20)}Z" fill="${t}" ${S(5)}/>` +
+        `<path d="M${x(-20)} -112L${x(-12)} -142M${x(20)} -112L${x(12)} -142" stroke="#000" stroke-width="4"/>`;
     },
   },
 };
@@ -215,21 +230,23 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
 /** 首まわり・胸・腰の小物 */
 const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
   const c = CX[view], w = W(view);
+  const x = (d: number) => n(c + d * SPAN[view]);
   if (kind === "towel")
-    return `<path d="M${-w + 6} -142Q${c} -124 ${w - 6} -142V-130Q${c} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
-      `<path d="M${c - 22} -132V-86H${c - 10}V-128ZM${c + 10} -128V-86H${c + 22}V-132Z" fill="#fff" ${S(4)}/>`;
+    return `<path d="M${-w + 6} -142Q${x(0)} -124 ${w - 6} -142V-130Q${x(0)} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
+      `<path d="M${x(-22)} -132V-86H${x(-10)}V-128ZM${x(10)} -128V-86H${x(22)}V-132Z" fill="#fff" ${S(4)}/>`;
   return kind === "tie"
-    ? `<path d="M${c - 5} -132H${c + 5}L${c + 7} -74L${c} -64L${c - 7} -74Z" fill="#222" ${S(3)}/><rect x="${c - 6}" y="-140" width="12" height="9" fill="#222" ${S(3)}/>`
-    : `<path d="M${c - 24} -142H${c + 24}L${c + 2} -112Z" fill="#222" ${S(4)}/><path d="M${c} -116L${c - 12} -90L${c + 8} -94Z" fill="#222" ${S(4)}/>`;
+    ? `<path d="M${x(-5)} -132H${x(5)}L${x(7)} -74L${x(0)} -64L${x(-7)} -74Z" fill="#222" ${S(3)}/><rect x="${x(-6)}" y="-140" width="12" height="9" fill="#222" ${S(3)}/>`
+    : `<path d="M${x(-24)} -142H${x(24)}L${x(2)} -112Z" fill="#222" ${S(4)}/><path d="M${x(0)} -116L${x(-12)} -90L${x(8)} -94Z" fill="#222" ${S(4)}/>`;
 };
 const tagSvg = (view: View, kind: "clip" | "lanyard") => {
   const c = CX[view];
+  const x = (d: number) => n(c + d * SPAN[view]);
   if (kind === "clip") {
     const x = view === "side" ? c - 4 : c + 14;
     return `<rect x="${x}" y="-114" width="22" height="14" fill="#fff" ${S(3)}/><path d="M${x + 5} -107H${x + 17}" stroke="#000" stroke-width="2.5"/>`;
   }
-  return `<path d="M${c - 18} -140L${c} -96L${c + 18} -140" stroke="#444" stroke-width="4" fill="none"/>` +
-    `<rect x="${c - 11}" y="-98" width="22" height="16" fill="#fff" ${S(3)}/><path d="M${c - 6} -90H${c + 6}" stroke="#000" stroke-width="2.5"/>`;
+  return `<path d="M${x(-18)} -140L${x(0)} -96L${x(18)} -140" stroke="#444" stroke-width="4" fill="none"/>` +
+    `<rect x="${x(-11)}" y="-98" width="22" height="16" fill="#fff" ${S(3)}/><path d="M${x(-6)} -90H${x(6)}" stroke="#000" stroke-width="2.5"/>`;
 };
 const toolBeltSvg = (view: View) => {
   const x = NEAR_HIP[view];
