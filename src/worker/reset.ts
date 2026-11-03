@@ -7,7 +7,7 @@ import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
 
 /** 消す表（子から順に） */
-export const RESET_TABLES = ["grades", "responses", "forecasts", "picture_answers", "trial_items", "trial_cards", "trials", "extraction_oks", "extractions", "glossary", "company_words", "card_pairs", "card_views", "recall_notices", "weekly_samples", "cards"] as const;
+export const RESET_TABLES = ["grades", "responses", "forecasts", "picture_answers", "trial_items", "trial_cards", "trials", "extraction_oks", "extractions", "glossary", "company_words", "card_pairs", "card_views", "card_exemplars", "recall_notices", "weekly_samples", "cards"] as const;
 
 export async function resetTenant(db: D1Database, tenantId: string) {
   const counts = await db.batch(RESET_TABLES.map((t) => db.prepare(`SELECT count(*) AS n FROM ${t} WHERE tenant_id = ?`).bind(tenantId)));

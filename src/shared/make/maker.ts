@@ -54,7 +54,8 @@ export const SCENE_TEXT: Record<Scene, string> = {
   bad: "この 1 枚は ○× の組の × の側。まちがったやり方をしている場面にし、最後のコマに ×（cross_mark）を置く。禁止の印（prohibit）は使わない。",
 };
 
-export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string, scene?: Scene): Anthropic.MessageCreateParamsNonStreaming {
+/** examples は同じ会社・同じカテゴリの手本の文（086・exemplarText）。無ければ空 */
+export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string, scene?: Scene, examples?: string): Anthropic.MessageCreateParamsNonStreaming {
   const why = statements.filter((s) => s.field === "why").map((s) => s.text).join("。");
   const base = drawParams(MAKER_MODEL, "motion", rule.kind === "dont" ? `${rule.text}（してはいけないこと）` : rule.text, why || undefined);
   const lines = statements.map((s) => `${s.id}（${s.field === "rule" ? "守ること" : "なぜ"}）: ${s.text}`).join("\n");
@@ -65,7 +66,7 @@ ${scene ? `${SCENE_TEXT[scene]}
 どのカードの文（statement に s1 などの番号）から描いたかと、なぜそう描いたか（reason。短く）を書く。経路の無い部品は置かない。
 ${why ? "" : "元の文に理由が無いので、新入社員に伝える理由を why に 1 文で書く（文から分かる危険だけ。元の文に無い数字や決まりは足さない）。\n"}`;
   const again = feedback ? `\n\n前の絵の結果: ${feedback}\n絵だけで伝わるように、姿勢・小物・吹き出しを直してください。` : "";
-  const content = `カードの文:\n${lines}${again}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
+  const content = `${examples ? `${examples}\n\n` : ""}カードの文:\n${lines}${again}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
   return {
     ...base,
     system,
@@ -101,12 +102,12 @@ export function checklistErrors(rule: OkRule, motion: MotionJson): string[] {
 }
 
 /** 1 項目から未承認の下書き 1 枚の中身を作る（保存は呼ぶ側）。feedback は前の絵を確かめる AI がどう読んだか */
-export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate, feedback?: string, scene?: Scene): Promise<Made> {
+export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate, feedback?: string, scene?: Scene, examples?: string): Promise<Made> {
   const base = assign(rule, locate);
   const messages: Anthropic.Message[] = [];
   let fix: string | undefined;
   for (let i = 0; i < 2; i++) {
-    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix, feedback, scene) });
+    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix, feedback, scene, examples) });
     messages.push(msg);
     const out = JSON.parse(textOf(msg)) as { motion: MotionJson; parts: { type: "figure" | "prop"; index: number; statement: string; reason: string }[]; why: string | null };
     const statements = base.slice();

@@ -3,12 +3,14 @@
 import { Hono } from "hono";
 import { guardedCall } from "../shared/claude";
 import { parseRules, rulesParams } from "../shared/extract/rules";
+import { exemplarText } from "../shared/exemplars";
 import { type Locate, makeCard, type OkRule, SCENE_TEXT, type Scene } from "../shared/make/maker";
 import { makeWords } from "../shared/make/words";
 import { D1CallLog } from "./api-log";
 import { addTerms, cardView, createCard, readAsk } from "./cards";
 import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
+import { gatherExemplars, recordExemplars } from "./exemplars";
 import type { PeopleVars } from "./people";
 
 export const MAX_INPUT_CHARS = 20_000;
@@ -101,11 +103,14 @@ extract.post("/:id/make", async (c) => {
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const rule = x.rules[item as number] as OkRule;
   const deps = { client, log: new D1CallLog(c.env.DB) };
-  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined);
+  // 手本（086）: 同じ会社・同じカテゴリの直近の直し・署名済みのカード・会社の言葉。ほかの会社のものは集めない
+  const ex = await gatherExemplars(c.env.DB, c.var.tenant.id, rule.text);
+  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined, exemplarText(ex));
   // 言葉の欄（036）: やさしい日本語とベトナム語。出てきた現場の言葉は用語表に積む
   const words = await makeWords(deps, "app", made.card);
   const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words }, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)], ask);
   await addTerms(c.env.DB, c.var.tenant.id, row.id, words.terms);
+  await recordExemplars(c.env.DB, c.var.tenant.id, row.id, ex);
   return c.json(cardView(row), 201);
 });
 

@@ -15,6 +15,7 @@ import { claudeClient } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import type { PeopleVars } from "./people";
 import { createRecall, readReason } from "./recall";
+import { cleanupCardSessions, listUsedExemplars, sessionDeleter } from "./exemplars";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
 import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
@@ -159,8 +160,16 @@ cards.post("/:id/sign", async (c) => {
   const b = await c.req.json<{ version?: unknown; mark?: unknown }>().catch(() => ({}) as { version?: unknown; mark?: unknown });
   const res = await signCard(c.env.DB, c.var.tenant.id, c.req.param("id"), (c.var as PeopleVars).person, b.version, b.mark);
   if (!res.ok) return c.json({ error: res.error }, res.status);
+  // 後片付け（086・§5 L4）: 署名済みになったカードの Managed Agents のセッションを消し、消した時刻を残す
+  const sessions = await cleanupCardSessions(c.env.DB, c.var.tenant.id, c.req.param("id"), sessionDeleter(c.env));
   const { mark, ...rest } = res.payload;
-  return c.json({ signed: true, ...rest, mark: { kind: mark.kind, sha256: mark.sha256 } });
+  return c.json({ signed: true, ...rest, mark: { kind: mark.kind, sha256: mark.sha256 }, sessions });
+});
+
+// 手本にしたもの（087）: このカードを作るときに渡した、同じ会社の前の直しと署名済みのカード（日付・誰〈役割〉）
+cards.get("/:id/exemplars", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  return r ? c.json({ used: await listUsedExemplars(c.env.DB, c.var.tenant.id, r.id) }) : c.json({ error: "カードが無い" }, 404);
 });
 
 cards.get("/:id/signature", async (c) => {
