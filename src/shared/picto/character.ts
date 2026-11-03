@@ -93,19 +93,21 @@ const HEAD: Record<View, string> = {
     `<path d="M28 -20Q36 -14 42 -24" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/>`,
 };
 /**
- * b の顔（原点＝首の付け根、顔は中心 0,-45 半径 45 の白い丸）。
+ * b の顔（原点＝首の付け根、顔は 0,-45 を中心にした角の丸い白い四角）。
  * 目は縦長の小さな楕円に、外側の上へ短いまつ毛を 1 本。鼻は小さな点。口は笑顔と真顔の間のゆるい線。
  * 線はスケッチのペンに寄せて、体より少し細い 4.5
  */
 const eyeB = (cx: number, out: number) =>
   `<ellipse cx="${cx}" cy="-37" rx="4.3" ry="5.6"/>` +
   `<path d="M${cx + out * 2.8} -41l${out * 3.6} -1.6M${cx + out * 0.8} -42.4l${out * 1.4} -3.6" stroke="#000" stroke-width="2.2" stroke-linecap="round"/>`;
+/** 顔の形: 丸ではなく、四角に寄せて角を大きく取る（幅 90・高さ 90、角の半径 26） */
+const FACE_SHAPE = `<rect x="-45" y="-90" width="90" height="90" rx="26" fill="#fff" stroke="#000" stroke-width="4.5"/>`;
 const FACE_B: Record<View, string> = {
   quarter:
-    `<circle cy="-45" r="45" fill="#fff" stroke="#000" stroke-width="4.5"/>${eyeB(8, -1)}${eyeB(30, 1)}` +
+    `${FACE_SHAPE}${eyeB(8, -1)}${eyeB(30, 1)}` +
     `<circle cx="21" cy="-25" r="2.6"/><path d="M14 -15Q20 -13 26 -15" stroke="#000" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
   side:
-    `<circle cy="-45" r="45" fill="#fff" stroke="#000" stroke-width="4.5"/>${eyeB(27, 1)}` +
+    `${FACE_SHAPE}${eyeB(27, 1)}` +
     `<circle cx="37" cy="-27" r="2.6"/><path d="M29 -15Q33 -13.5 37 -15" stroke="#000" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
 };
 /**
