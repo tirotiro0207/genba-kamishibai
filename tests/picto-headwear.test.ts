@@ -35,7 +35,8 @@ describe("かぶり物と髪", () => {
   it("髪をしまうかぶり物は髪を描かず、かぶり物をかぶるとお団子とつやの線を描かない", () => {
     expect(hairSvg("quarter", "bob", "hygiene")).toEqual({ back: "", front: "", behind: "" });
     expect(hairSvg("side", "bun", "helmet").back).toBe("");
-    expect(hairSvg("side", "bun", "none").back).not.toBe("");
+    // かぶらないときのお団子は参考絵から取った形で、団子も前の層に入る
+    expect(hairSvg("side", "bun", "none").front).not.toBe(hairSvg("side", "bun", "helmet").front);
     expect(hairSvg("front", "bob", "chef").front).not.toContain("#777");
   });
 

@@ -4,6 +4,7 @@
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
+import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
 import type { Angles } from "./poses";
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
@@ -12,7 +13,10 @@ export type CharacterRole = "new" | "lead" | "worker";
 /** 絵柄の道。b（作者が Illustrator で描き直した髪・点の鼻の顔）が初めの値。a は 11/3 に仮に決めた丸頭とかぶり物 */
 export type Look = "a" | "b";
 /** 髪形。bob・short・bun が初めからの 3 つ、残りはキャラクターを作る画面で足した 5 つ（製品仕様 §14） */
-export type Hair = "bob" | "short" | "bun" | "long" | "ponytail" | "buzz" | "sidePart" | "curly";
+/** 手で描いた髪（おかっぱと、かぶり物の下に押し込む形） */
+type HandHair = "bob" | "short" | "bun" | "long" | "ponytail" | "buzz" | "sidePart" | "curly";
+/** 髪形 20。かぶらないときは、おかっぱ以外は参考絵から取り出した形（hair-traced.ts）。かぶると手で描いた形に押し込む */
+export type Hair = HandHair | TracedHair;
 /**
  * かぶり物の種類。髪とは別の枠で、職場と場面で付け外しする（髪はその人のもので、いつも描く）。
  * helmet＝安全帽（電気・建設）、cap＝つばの帽子、chef＝コック帽（厨房・製菓）、chefLow＝見習いの低いコック帽、hygiene＝髪をしまう衛生キャップ（食品の工場）
@@ -164,12 +168,17 @@ function curly(dx: number, sx: number, open = false) {
 /** 髪の塗り。坊主は地肌が透けるので明るめ */
 const HAIR_FILL: Partial<Record<Hair, string>> = { buzz: "#444" };
 /** かぶり物をかぶったとき、ほかの形に押し込む髪（くせ毛は short の形になる） */
-const UNDER_HAT: Partial<Record<Hair, Hair>> = { curly: "short" };
+const UNDER_HAT: Partial<Record<Hair, HandHair>> = {
+  curly: "short",
+  // 参考絵から取り出した髪は縁の下の形が無いので、近い手描きの髪に押し込む（スキンヘッドは何も描かない）
+  twoBlock: "short", mash: "bob", centerPart: "long", slickBack: "short", shortBob: "bob", braids: "long",
+  twinTails: "ponytail", softMohawk: "buzz", wolf: "long", halfUp: "long",
+};
 /** 耳を覆う髪（耳を描かない） */
-const HIDES_EARS = new Set<Hair>(["bob", "long", "curly"]);
+const HIDES_EARS = new Set<Hair>(["bob", "long", "curly", "shortBob"]);
 /** かぶらないときの頭のいちばん上（地面に置くのに使う）。無い髪は −92 */
-const HAIR_TOP: Partial<Record<Hair, number>> = { curly: -108 };
-const HAIR_B: Record<Hair, Record<View, { back?: string; behind?: string; front: string; gloss?: string }>> = {
+const HAIR_TOP: Partial<Record<Hair, number>> = TRACED_TOP;
+const HAIR_B: Record<HandHair, Record<View, { back?: string; behind?: string; front: string; gloss?: string }>> = {
   bob: {
     front: {
       front: "M-49 -16v-36c0-21 22-38 49-38s49 17 49 38v36c0 4.67-2 6.83-6 6.5c-3-.33-4.5-2.5-4.5-6.5v-41.41c-12.33 4-23.17 4.67-32.5 2L2 -68.3l-5 12.89c-11.33 3-23.17 2.33-35.5-2V-16c0 4-1.5 6.17-4.5 6.5C-47 -9.17-49 -11.33-49 -16Z",
@@ -405,22 +414,24 @@ export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole)
 /** 髪の SVG。かぶり物をかぶると、お団子（back）とつやの線は描かない（お団子はかぶり物の中にしまう） */
 // behind（後ろ髪・ポニーテールの尾）は胴より後ろに描くので、頭とは別に返す。縁より下に垂れる髪なので、髪を見せるかぶり物では残す。
 // sx は顔の幅に合わせた髪の横の倍率（avatar.ts の hairScale）。1 のときは今までと同じ文字列
-export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1) => {
-  if (headwear !== "none" && HEADWEAR[headwear].hair === "hide") return { back: "", front: "", behind: "" };
+// skin はスキンヘッドとソフトモヒカンの頭の丸みの色
+export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1, skin = "#fff") => {
+  if (headwear !== "none" && (HEADWEAR[headwear].hair === "hide" || hair === "skinhead")) return { back: "", front: "", behind: "" };
   const bare = headwear === "none";
-  const h = HAIR_B[bare ? hair : (UNDER_HAT[hair] ?? hair)][view];
+  const traced = bare && hair !== "bob" ? TRACED[hair][view] : undefined;
+  const h: { back?: string; front: string; gloss?: string } = traced ?? HAIR_B[(bare ? hair : (UNDER_HAT[hair] ?? hair)) as HandHair][view];
   const fill = HAIR_FILL[hair] ?? "#000";
   const gloss = bare && h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
-  const body = h.front.startsWith("<") ? h.front.replaceAll("HAIRFILL", fill) : `<path d="${h.front}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>`;
+  const body = h.front.startsWith("<") ? h.front.replaceAll("HAIRFILL", fill).replaceAll("SKINFILL", skin) : `<path d="${h.front}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>`;
   const front = body + gloss;
-  const behindSrc = HAIR_B[hair][view].behind;
+  const behindSrc = (hair === "bob" ? HAIR_B.bob : TRACED[hair])[view].behind;
   const behind = behindSrc ? `<path d="${behindSrc}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : "";
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
   return { back: fit(bare ? (h.back ?? "") : ""), front: fit(front), behind: fit(behind) };
 };
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
 const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts) => {
-  const h = hairSvg(view, hair, headwear, hairScale(f.face));
+  const h = hairSvg(view, hair, headwear, hairScale(f.face), SKIN_TONE[f.skin]);
   const k = faceHalfWidth(f.face) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));

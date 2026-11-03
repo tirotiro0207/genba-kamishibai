@@ -4,11 +4,14 @@ import { Resvg } from "@resvg/resvg-js";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FACE, FACE_OPTIONS, type FaceParts, faceHalfWidth, faceOutline, faceSvg, glassesSvg, hairScale } from "../src/shared/picto/avatar";
 import { characterSvg, type Hair, HEADWEAR, type HeadwearKind, hairSvg, headwearSvg, type View } from "../src/shared/picto/character";
+import { TRACED_HAIRS } from "../src/shared/picto/hair-traced";
 import { A_POSE } from "../src/shared/picto/poses";
 
 // キャラクターを作る画面の顔と髪（製品仕様 §14）。どの組み合わせでも、正面・斜め・真横で崩れないことを画素で確かめる
 const VIEWS: View[] = ["front", "quarter", "side"];
-const HAIRS: Hair[] = ["bob", "short", "bun", "long", "ponytail", "buzz", "sidePart", "curly"];
+const HAIRS: Hair[] = ["bob", ...TRACED_HAIRS];
+// 作者が手で塗り直した髪（TRACED_HAIRS）は作者の絵が正しい（前髪が眉に掛かる・真横で前へ出る・向きでてっぺんが違う）ので、形の決まりは手で描いた形だけに当てる
+const HAND_HAIRS: Hair[] = ["bob"];
 
 /** 頭だけを 1 倍で描き、塗られた所を取り出す。原点（首の付け根）は (100, 180) */
 const paint = (body: string) => {
@@ -69,7 +72,7 @@ describe("キャラクターを作る画面の顔と髪", () => {
     const bad: string[] = [];
     for (const face of FACE_OPTIONS.face)
       for (const brows of ["flat", "arch", "angled"] as const)
-        for (const hair of HAIRS)
+        for (const hair of HAND_HAIRS)
           for (const view of VIEWS) {
             const f = { ...DEFAULT_FACE, face, brows };
             const browOnly = faceSvg(view, f).replace(faceSvg(view, { ...f, brows: "none" }).replace(/<circle[\s\S]*$/, ""), "");
@@ -99,7 +102,7 @@ describe("キャラクターを作る画面の顔と髪", () => {
     const bad: string[] = [];
     for (const face of FACE_OPTIONS.face) {
       const lim = faceHalfWidth(face) + 6;
-      for (const hair of HAIRS) {
+      for (const hair of HAND_HAIRS) {
         const xs = points(paint(hairSvg("side", hair, "none", hairScale(face)).front)).map(([x]) => x);
         if (Math.max(...xs) > lim) bad.push(`髪 ${hair}・${face}: ${Math.max(...xs)}`);
       }
@@ -115,7 +118,7 @@ describe("キャラクターを作る画面の顔と髪", () => {
   // 斜めと真横は後ろ頭の髪が見えるので、正面より多くなるのが正しい
   it("髪の量とてっぺんの高さが、向きで変わりすぎない（別の髪形に見えない）", () => {
     const bad: string[] = [];
-    for (const hair of HAIRS) {
+    for (const hair of HAND_HAIRS) {
       const p = VIEWS.map((v) => points(paint(hairSvg(v, hair, "none").back + hairSvg(v, hair, "none").front)));
       const [front, quarter, side] = p.map((q) => q.length);
       const top = VIEWS.map((v) => Math.min(...points(paint(hairSvg(v, hair, "none").front)).map(([, y]) => y)));

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 import { DEFAULT_FACE, FACE_OPTIONS, type FaceParts } from "../src/shared/picto/avatar";
 import { type CharacterSpec, characterSvg, type Hair, type HeadwearKind, type View } from "../src/shared/picto/character";
+import { TRACED_HAIRS } from "../src/shared/picto/hair-traced";
 import { A_POSE } from "../src/shared/picto/poses";
 
 const out = privateDir();
@@ -18,7 +19,7 @@ function privateDir() {
 const png = (s: string, w: number) =>
   new Resvg(s, { fitTo: { mode: "width", value: w }, background: "#ffffff", font: { loadSystemFonts: true, defaultFontFamily: "Yu Gothic" } }).render().asPng();
 const VIEWS: View[] = ["front", "quarter", "side"];
-const HAIRS: Hair[] = ["bob", "short", "bun", "long", "ponytail", "buzz", "sidePart", "curly"];
+const HAIRS: Hair[] = ["bob", ...TRACED_HAIRS];
 const C = 170; // 1 枠（胸から上）
 const LBL = 150;
 const text = (x: number, y: number, s: string, size = 18) =>
