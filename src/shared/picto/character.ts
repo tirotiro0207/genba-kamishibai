@@ -54,10 +54,10 @@ const seg = (len: number, w: number, pass: Pass, fill = "#666") =>
     ? `<path d="M0 0V${len}" stroke="#000" stroke-width="${w}" stroke-linecap="round"/>`
     : `<path d="M0 0V${len}" stroke="${fill}" stroke-width="${w - 12}" stroke-linecap="round"/>`;
 
-/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、手、胴、ベスト） */
-const CLOTH: Record<Look, { arm: string; leg: string; hand: string; shirt: string; vest: string }> = {
-  a: { arm: "#666", leg: "#666", hand: "#ccc", shirt: "#666", vest: "#999" },
-  b: { arm: "#fff", leg: "#555", hand: "#fff", shirt: "#fff", vest: "#ccc" },
+/** 絵柄ごとの服の色（腕＝袖、足＝ズボン、legFar＝奥の足、手、胴、ベスト）。奥の足は 1 段明るくして、重なっても 2 本に見せる（本番の描画と同じ決まり） */
+const CLOTH: Record<Look, { arm: string; leg: string; legFar: string; hand: string; shirt: string; vest: string }> = {
+  a: { arm: "#666", leg: "#666", legFar: "#7d7d7d", hand: "#ccc", shirt: "#666", vest: "#999" },
+  b: { arm: "#fff", leg: "#555", legFar: "#6e6e6e", hand: "#fff", shirt: "#fff", vest: "#ccc" },
 };
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
@@ -256,8 +256,9 @@ export function characterSvg(c: CharacterSpec): string {
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
   const leg = (i: number) => {
     const g = r.legs[i];
+    const fill = i === 0 ? cloth.legFar : cloth.leg;
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, cloth.leg)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, cloth.leg)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle) : shoe(g.ankle)}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle) : shoe(g.ankle)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
