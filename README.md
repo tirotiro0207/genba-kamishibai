@@ -4,7 +4,14 @@
 
 English | [日本語](README.ja.md)
 
-Work in progress. This is a skeleton; the final text comes later. How it is being built: [docs/progress.md](docs/progress.md) (progress) and [docs/plan.md](docs/plan.md) (task list). Anything marked **not built** does not exist yet.
+> **Draft.** This README is being written. Numbers marked **TBD** are filled in at the end from the counting script. Anything marked **not built** does not exist yet. Progress: [docs/progress.md](docs/progress.md) · task list: [docs/plan.md](docs/plan.md).
+
+## Try it
+
+- Public demo: **https://genba-kamishibai.ikjshare.workers.dev** — opens on the fictional demo company. No sign-in, no PIN.
+  - Look at the signed cards one by one, open the route from a picture back to its source sentence, and make a card from a short rule of your own (the demo has a daily cap).
+  - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only" (**not deployed yet** — on the next deploy).
+- Company tenants are private. They open with two PINs: the tenant PIN, then the PIN of your role (author, supervisor, trainer or new hire).
 
 ## The Problem
 
@@ -22,34 +29,26 @@ Work in progress. This is a skeleton; the final text comes later. How it is bein
 
 Turns a rule written in Japanese (or spoken by a veteran) into a picture card — pictograms that show *what to do* and *why* — that can be read without Japanese text. Only cards that a supervisor has corrected and signed reach new hires.
 
-Built so far:
+The flow (details in [docs/flow.md](docs/flow.md)):
 
-- Input: paste text, or attach a PDF. A local script turns the PDF into page images and numbered lines, read from the PDF's text layer; Claude reads only pages that have no text layer (an attached PDF is stored, and the script is run separately for now)
-- Extraction: pick out the rules from the text (what to do, what not to do, why), each with its place in the source
-- Card making: lay out the card's text and the keyframes of the pictogram figure; every part of the picture keeps a **route** back to the sentence it came from
-- Checking: a second Claude call grades the frames of the card and sends it back for another try if it is red. For now this runs from a local script, not from the making screen
-- Roles: author, two supervisors, trainer, new hire. Only supervisors can stop a card. New hires only see signed cards
-- Audit log: append-only, hash-chained record of each card (source → making → checking → human edits → signature), with a screen for supervisors and trainers. The checking and signature entries are not written yet
-- Answer recording app: records new hires' answers, grades them, and exports anonymized answers as CSV
-- Reader panel: profiles of 24 simulated readers (country of origin × Japanese reading level × background) and the template that grades their answers and counts misreadings. Not run on cards yet
+1. **Input** — paste or speak a rule, or attach a PDF of a manual (pages become images and numbered lines).
+2. **Extraction** — Claude picks out the rules (what to do, what not to do, why), each tied to its line in the source. A person approves which ones become cards.
+3. **Card making** — Claude writes the card's text and the keyframes of the pictogram figures as numbers; the app draws the picture. Every part of the picture keeps a **route** back to the sentence it came from.
+4. **Checking** — a second Claude call looks only at the frames, guesses the meaning, and grades the card red / yellow / green. Red cards go to the top of the review queue.
+5. **Human fixes** — a supervisor draws a box on the part that is wrong and says what to change; only that card is remade. Joints and props can also be moved by hand.
+6. **Signature** — a supervisor signs with a finger or a stamp. There is a daily cap per supervisor, and the server refuses to hand out unsigned cards.
+7. **Issue** — signed cards reach new hires one at a time, kamishibai-style. A card can be stopped (with a reason); new hires who saw it get a recall notice.
 
-Not built yet:
+Also built:
 
-- Signature record and signature input — **not built**
-- Route screen (tap a part of the picture to see the source sentence) — **not built**
-- Kamishibai-style transition between cards — **not built**
-- Overnight batch of draft cards — **not built**
-- PNG / SVG export, public deployment — **not built**
-
-### Hand-drawn sketches (`docs/sketches/`)
-
-Reference drawings made by hand by the author. The pictogram parts (figure, helmet, speech bubble, tools) were adjusted to match them.
-
-- `mayottara_1.jpg`–`mayottara_3.jpg`: three frames of "when unsure, don't decide alone — ask the person above you" (unsure and thinking → points and asks → the person above answers)
-- `alpha_concent.jpg`: telling what you checked with a speech bubble (outlet → ✓)
-- `shinro.jpg`: a redrawing of the route map ([docs/compass.md](docs/compass.md))
-- 1–3 and α were drawn by hand by the author on 11/2, looking at a quick style test made with Claude Code before the event. That test code and its images are not in this repository
-- Photos had metadata removed and were resized to 1,600 px on the long side.
+- Roles: author, two supervisors, trainer, new hire. Company tenants need a tenant PIN and a role PIN.
+- Audit log: append-only, hash-chained record of each card (source → making → checking → human edits → signature), with a screen for supervisors and trainers.
+- Folding screen: shows the source pages stacking up and folding into one card with no text.
+- Answer recording app for the on-site check: timing (card vs. text), free answers, two graders, anonymized CSV export, erasing a participant who withdraws, and the trainer's forecast per card written before any answer comes in.
+- Overnight sorting of a whole manual (which pages hold rules a worker must follow), with a supervisor screen to swap the answers.
+- Reader panel: 24 simulated readers (country of origin × Japanese reading level × background), each a Claude Code subagent, used to find pictures that do not get through before the real check. Results: [docs/readers.md](docs/readers.md).
+- MCP server: other tools can ask for cards; it can only make **unapproved drafts**.
+- PNG / SVG export with version, signature date and frame number on each picture.
 
 ## How Claude is used
 
@@ -58,22 +57,14 @@ Reference drawings made by hand by the author. The pictogram parts (figure, helm
 | PDF → text | Claude Opus 5.5 | Reads the page image only for pages with no text layer, and writes the text with line positions |
 | Extraction | Claude Opus 5.5 | Picks out rules (what to do / not to do / why) with their source positions |
 | Card making | Claude Opus 5.5 | Writes the keyframes and a route for every part of the picture, as numbers (it does not draw the picture directly) |
-| Checking | Claude Opus 5.5 | Grades the card's frames; red cards are remade, up to a limit per use |
+| Checking | Claude Opus 5.5 | Looks only at the frames and grades the card; it never sees the card's text |
 | Word field | Claude Opus 5.5 | Writes short plain-Japanese and Vietnamese lines from the card's text only |
-| Joint angles | Claude Sonnet 5.5 | Provisional pipeline only: turns a described pose into joint angles (the formal pipeline uses the keyframes above) |
+| Overnight sorting | Claude Managed Agents | Reads a whole manual page by page and says which pages hold rules a worker must follow; resumable |
 | Grading the extraction | Claude Sonnet 5.5 | Compares extracted rules with the evaluation answers |
 | Reader panel | Claude Code subagents (Sonnet 5.5 by default) | Each simulated reader is one subagent; the model ID is kept with every answer |
 
-- Every API call is logged with its cost, and each use has a spending cap.
-- Building the app itself was done with Claude Code.
-
-### Evaluation data (`eval/`)
-
-Made before the event. The source sentences come from Japanese occupational-safety law and public materials of the Ministry of Health, Labour and Welfare; the source is on each line.
-
-- `eval/items_tune_v1r8.json`: 20 items used for tuning. Waiting for review by two supervisors; will be replaced when finalized.
-- `eval/holdout_hashes_v1r8.json`: hashes of 10 items used only for the final check. The items are added at the final check and their hashes shown to match.
-- None of the 30 answers is in any prompt or example.
+- Every API call is logged with its cost, and each use has a spending cap (per call, per day, in total).
+- The app itself was built with Claude Code.
 
 ## Quick Start
 
@@ -97,25 +88,81 @@ npx wrangler d1 migrations apply DB --local
 npm run dev
 ```
 
+Recorded browser tests (run one at a time; the local database does not take parallel writers):
+
+```bash
+npx playwright test --workers=1
+```
+
 ### Use it from other tools (MCP)
 
-The Worker is also an MCP server (Streamable HTTP) at `/mcp/<tenant>`. Ask "turn this document into cards" and the same pipeline runs: extraction → approval of the chosen rules → card making. It can only make **unapproved drafts**; there is no tool for signing, approving or stopping, and calls that try are refused. A supervisor signs on the screen.
+The Worker is also an MCP server (Streamable HTTP) at `/mcp/<tenant>`. Ask "turn this document into cards" and the same pipeline runs: extraction → approval of the chosen rules → card making. There is no tool for signing, approving or stopping, and calls that try are refused. A supervisor signs on the screen.
 
-- Each company tenant needs its own key, sent as `Authorization: Bearer <key>`. Calls without a valid key get 401. Only the fictional demo company works without a key.
+- Each company tenant needs its own key, sent as `Authorization: Bearer <key>`. Only the fictional demo company works without a key.
 - Make a key for a local tenant (the key is written only to `private/tenants/<tenant>-mcp.json`; the database keeps its hash):
 
 ```bash
 npx tsx scripts/add-mcp-key.ts practice
 ```
 
-- Tools: `list_documents`, `doc_to_cards`, `extract_rules`, `make_drafts`, `get_card`.
-
 ```bash
 claude mcp add --transport http genba http://localhost:8787/mcp/demo
 ```
 
-Public demo — **not built**.
+- Tools: `list_documents`, `doc_to_cards`, `extract_rules`, `make_drafts`, `get_card`.
+
+## Before / During
+
+What existed before the build period (2026-11-02) and what was made during it.
+
+**Before**
+
+- Evaluation data (`eval/`): 30 source sentences chosen by the author from Japanese occupational-safety law and public materials of the Ministry of Health, Labour and Welfare; the source is on each line. The answers were drafted by the author with AI assistance and are being reviewed by two site supervisors. 20 items are used for tuning; 10 are kept apart for the final check (only their hashes are in the repository). None of the 30 answers is in any prompt or example.
+- Hand-drawn sketches (`docs/sketches/`), drawn by the author. The pictogram parts were adjusted to match them.
+- The pilot company's safety manual. It is the company's document, so it is not in this repository; cards made from it live only in that company's private tenant.
+
+**During**
+
+- All code was written from scratch. No code or HTML made before the build period was brought in.
+- All production prompts were written from scratch.
+- The Vietnamese in each card's word field was translated by Claude and collected in a small glossary (Japanese · Vietnamese · which card uses it), which a Vietnamese speaker is checking.
+
+## Disclosure
+
+The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer is recorded by the app itself (append-only — no edits, no deletions), and the answers of those who agree to publication are published anonymously in `docs/answers.csv`.
+
+## Who it is for
+
+TBD — one paragraph: who pays (companies that hire workers from abroad, starting with electrical work), what they pay for (turning their own manuals into signed picture cards, with an audit trail), and what stays free.
+
+## Numbers
+
+| | |
+|---|---|
+| First commit | 2026-11-02 13:21 (JST) |
+| Commits | TBD |
+| Tests | TBD |
+| Pictures understood by new hires (picture only) | TBD |
+| Dangerous misreadings | TBD |
+| Time to understand: card vs. text | TBD |
+
+Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
+
+## Not built
+
+- Results of the on-site check with new hires — **not built** (after the check day)
+- The 2-minute and 3-minute videos — **not built**
+- Navigation between the maker screens (today they are opened by address) — **not built** (see [docs/audit.md](docs/audit.md))
+
+## Appendix
+
+- How it works, step by step: [docs/flow.md](docs/flow.md)
+- Decisions and why: [docs/decisions.md](docs/decisions.md)
+- Reader panel: [docs/readers.md](docs/readers.md)
+- Measured numbers: [docs/numbers.md](docs/numbers.md)
+- Build log: [docs/build-log.md](docs/build-log.md)
+- Screen check list: [docs/audit.md](docs/audit.md)
 
 ## License
 
-Not decided yet. The candidates are listed in [docs/readme-draft.md](docs/readme-draft.md).
+TBD. The candidates are listed in [docs/readme-draft.md](docs/readme-draft.md).
