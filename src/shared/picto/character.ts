@@ -42,10 +42,20 @@ const seg = (len: number, w: number, pass: Pass) =>
     : `<path d="M0 0V${len}" stroke="#666" stroke-width="${w - 12}" stroke-linecap="round"/>`;
 const rot = (deg: number) => (deg ? ` rotate(${n(deg)})` : "");
 
-/** 靴（原点＝足首。かかとは足の後ろの縁、つま先は前へ。靴底の下端は足首から 25 下） */
-const SHOE =
-  `<path d="M-18 -8L-22 16Q-22 25 -13 25H30Q38 25 38 17Q38 10 30 9L16 -2Q15 -5 14 -8Z" fill="#222" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
-  `<path d="M-20 25H38" stroke="#000" stroke-width="6" stroke-linecap="round"/>`;
+/**
+ * 靴（原点＝足首、すねの向きの座標で描く）。
+ * 靴の口（足を入れる上の辺）はすねに直角のまま、すねと一緒に傾く。かかと・靴底・つま先は床と平行に置く（ankle だけ回した向き）。
+ * 2 つの向きの点を 1 つの形でつなぐので、すねが傾いても口が足からずれず、靴底は床に乗る。
+ * ankle は靴底を床と平行に戻す回転（度）。靴底の下端は足首から 25 下
+ */
+function shoe(ankle: number): string {
+  const r = (ankle * Math.PI) / 180;
+  const f = (x: number, y: number) => `${n(x * Math.cos(r) - y * Math.sin(r))} ${n(x * Math.sin(r) + y * Math.cos(r))}`;
+  const body =
+    `M-18 -8L${f(-22, 16)}Q${f(-22, 25)} ${f(-13, 25)}L${f(30, 25)}Q${f(38, 25)} ${f(38, 17)}Q${f(38, 10)} ${f(30, 9)}L${f(16, -2)}Q15 -5 14 -8Z`;
+  return `<path d="${body}" fill="#222" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
+    `<path d="M${f(-20, 25)}L${f(38, 25)}" stroke="#000" stroke-width="6" stroke-linecap="round"/>`;
+}
 
 /** 胴（原点＝腰。斜めはふつうの幅、真横は細く、ベストの V を前寄りに） */
 const TORSO: Record<View, string> = {
@@ -70,6 +80,8 @@ const HEAD: Record<View, string> = {
 };
 const hat = (fill: string) => `<path d="M-50 -52Q-52 -104 0 -104Q44 -104 50 -62H88V-50H-50Z" fill="${fill}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`;
 
+const ANKLE_MAX = 25;
+
 type M = [number, number, number, number, number, number];
 const mul = (a: M, b: M): M => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
 const T = (x: number, y: number): M => [1, 0, 0, 1, x, y];
@@ -89,7 +101,8 @@ function rig(a: Angles) {
   const legs = (["far", "near"] as const).map((s) => {
     const thigh = -a[`leg_${s}_upper`];
     const shin = -a[`leg_${s}_lower`];
-    return { s, thigh, shin, ankle: -(thigh + shin) };
+    // 靴底を床と平行に戻す回転。戻しすぎると靴の口と靴底の向きの差で靴の形がねじれるので ±25° までにし、残りは靴ごと傾ける（しゃがむとかかとが上がる）
+    return { s, thigh, shin, ankle: Math.max(-ANKLE_MAX, Math.min(ANKLE_MAX, -(thigh + shin))) };
   });
   const arms = (["far", "near"] as const).map((s) => ({ s, upper: -a[`arm_${s}_upper`], lower: -a[`arm_${s}_lower`] }));
   return { torso: a.torso, neck: a.neck, legs, arms };
@@ -144,7 +157,7 @@ export function characterSvg(c: CharacterSpec): string {
   const leg = (i: number) => {
     const g = r.legs[i];
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})${rot(g.ankle)}">${SHOE}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass)}${pass === "fill" ? `<g transform="translate(0 ${L.shin})">${shoe(g.ankle)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const order = armOrder(c.angles, view);

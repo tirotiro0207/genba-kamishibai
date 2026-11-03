@@ -63,3 +63,16 @@ const video = join(out, "poses.mp4");
 execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", String(FPS), "-i", join(frames, "f%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", video]);
 rmSync(frames, { recursive: true, force: true });
 console.log(`動画 ${video}（${(f / FPS).toFixed(1)} 秒）`);
+
+// 足元の拡大: すねの傾きがいろいろな姿で、靴の口がすねに付いているかを見る
+const FEET: Partial<Angles>[] = [
+  POSES.stand, POSES.walk, POSES.squat, POSES.fall,
+  { leg_near_upper: 40, leg_near_lower: -10, leg_far_upper: -30, leg_far_lower: -40 },
+  { leg_near_upper: 60, leg_near_lower: -100, leg_far_upper: 0 },
+];
+const FW = 500;
+const feet = FEET.map((a, i) =>
+  `<g transform="translate(${i * FW} 0)"><svg x="0" y="0" width="${FW}" height="420" viewBox="0 0 ${FW} 420"><rect width="${FW}" height="420" fill="#fff" stroke="#000" stroke-width="6"/><path d="M0 380H${FW}" stroke="#000" stroke-width="4"/>` +
+  characterSvg({ angles: { ...STANDING, ...a }, x: FW * 0.45, groundY: 380, height: 760, facing: "right", view: "side" }) + "</svg></g>");
+writeFileSync(join(out, "feet.png"), svgToPng(`<svg xmlns="http://www.w3.org/2000/svg" width="${FW * FEET.length}" height="420"><rect width="100%" height="100%" fill="#fff"/>${feet.join("")}</svg>`, FW * FEET.length));
+console.log(`足元 ${join(out, "feet.png")}`);
