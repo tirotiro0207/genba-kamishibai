@@ -178,7 +178,8 @@ FIX = {
     ("curly", "front"): {"front_all": True},
     # くせ毛の斜めは、あごより下の房を首より後ろに回す（前の層のままだと、手前の房が首の線を塗りつぶす。作者の指示で首を上にする）。
     # pockets: 髪と顔の線の間に閉じこめられた白（半径 r より細い所）を、顔の後ろの層で埋める（あごの後ろの白いくさび）
-    ("curly", "quarter"): {"pockets": 4},
+    # neck: 首（x ±13.5）とその外 w までの幅で、あごの線の外の縁（y 2.5）より下にある前と顔の後ろの層の髪を、首より後ろの層へ回す（首を髪の前に出す）
+    ("curly", "quarter"): {"pockets": 4, "neck": 17},
     # 三つ編みの斜め: 耳の下の髪の塊は顔の線の後ろ（見本の一覧で顔の線が手前）。耳より下で顔（線の外の端まで）に重なる所を顔の後ろの層へ移す
     ("braids", "quarter"): {"under_face": -22},
 }
@@ -412,6 +413,14 @@ for no, name in enumerate(NEW, 2):
             pocket = hull & ~hair & ~face_s & ndi.binary_dilation(face_s, iterations=round(6 / sv))
             # 顔の中へも 4 広げる（顔の後ろなので隠れる。細い顔は輪郭が内へ入るので、広げないと白いすじが残る）。髪と顔を閉じた形の外へは出さない
             under |= ndi.binary_dilation(pocket, iterations=round(4 / sv)) & (hull | face_s)
+        if "neck" in fix:
+            # 顔の後ろの層は首より上に描くので、あごの下へ垂れた所が首の線に掛かる。首の幅の所は首より後ろの層へ回す（首の外は見え方が変わらない）
+            xx = (np.arange(W)[None, :] - ox) * sv
+            band = (np.abs(xx) <= fix["neck"]) & (yy > 2.5)
+            moved = (front | under) & band
+            front &= ~moved
+            under &= ~moved
+            lower |= moved
         # 小さな切れ端は捨てる。ただし切れ目（y 1）に接する塊は前の層の続き（尾の先など）なので残す
         lower = components(lower, lambda sl, n: n * sv * sv > 150 or (sl[0].start - oy) * sv < 2)
         # 首のまわり: 後ろ髪の端と首の線の間に白いすき間が残ると、首の線が二重に見える（元の絵では髪が首の線に付いている）。
