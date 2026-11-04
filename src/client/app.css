@@ -13,6 +13,10 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .material { min-height: 240px; display: grid; place-items: center; border: 2px dashed var(--line); border-radius: 8px; font-size: 20px; }
 .material.filled { border-style: solid; display: block; padding: 8px; }
 .material-page { width: 100%; height: auto; display: block; }
+/* ① の表紙（11/5 作者）。紙芝居をめくるように上へ抜ける。長さは SelfScreen の LIFT_MS と同じ。カードの側も文の側も同じ動き */
+.stage { position: relative; min-height: 240px; overflow: hidden; }
+.cover { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: var(--bg); border: 2px solid var(--line); border-radius: 8px; transition: transform 350ms ease-in; }
+.cover.lift { transform: translateY(-105%); }
 .clock { font-size: 40px; font-variant-numeric: tabular-nums; text-align: center; margin: 0; }
 .saved { color: var(--accent); margin: 0; }
 .err { color: var(--err); }

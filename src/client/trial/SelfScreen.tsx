@@ -1,7 +1,8 @@
 // ① を自分で受ける画面（11/5 作者）。参加者が 1 人 1 台の iPad で、項目 A・B を 1 つずつ受ける。
 // 組のとおりに、片方はカード、もう片方は元のページ（日本語の原文の画像）。
-// 会場の回線に左右されないように、2 問分の絵と画像を最初に全部読み込み、終わるまで「見る」を押せない。
-// 時間は絵か画像が画面に出た時から「分かった」まで、端末の中の時計で数える。答えは端末の中に置いてから送り、届くまで送り直す
+// 見せるものの上に表紙を重ね、中身が全部読み込み終わるまで「はじめる」を押せない。押すと表紙が紙芝居をめくるように上へ抜け、
+// 抜けきった時から「分かった」まで、端末の中の時計で数える。「分かった」のあとは中身を隠して答えを書く。
+// 答えは端末の中に置いてから送り、届くまで送り直す
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { type AnswerFields, canSend, packAnswer } from "../../shared/answer-fields";
 import { AnswerBoxes } from "./AnswerBoxes";
@@ -12,6 +13,8 @@ import { useOutbox } from "./outbox";
 type Out = { item: "A" | "B"; ms: number; answer: string };
 const sameItem = (a: Out, b: Out) => a.item === b.item;
 const blank: AnswerFields = { ja: "", own: "" };
+/** 表紙が抜ける長さ。カードの側も文の側も同じ（app.css の .cover と合わせる） */
+export const LIFT_MS = 350;
 
 /** 文の側のページの画像を、先に全部読み込んで描ける形にしておく */
 async function preload(tenant: string, items: MaterialItem[]) {
@@ -27,12 +30,48 @@ async function preload(tenant: string, items: MaterialItem[]) {
   return urls;
 }
 
+/** 表紙と、その下の見せるもの。onStart は表紙が抜けきった時の時計の値 */
+function Stage({ cur, tenant, src, onStart }: { cur: MaterialItem; tenant: string; src?: string; onStart: (t0: number) => void }) {
+  const [ready, setReady] = useState(false);
+  const [lift, setLift] = useState(false);
+  const [gone, setGone] = useState<number | null>(null);
+  const started = useRef(false);
+  const start = useCallback(() => {
+    if (started.current) return;
+    started.current = true;
+    // 抜けきった次の描画の時から数える
+    requestAnimationFrame(() => {
+      const t = performance.now();
+      setGone(t);
+      onStart(t);
+    });
+  }, [onStart]);
+  useEffect(() => {
+    if (!lift) return;
+    // transitionend が来ないとき（動きを止める設定など）は、長さが過ぎた時に始める
+    const t = setTimeout(start, LIFT_MS + 50);
+    return () => clearTimeout(t);
+  }, [lift, start]);
+  return (
+    // data-t0 は数え始めた時計の値（画面の通しで、表紙が抜けきった時から数えているかを見る）
+    <div className="stage" data-testid="stage" data-started={gone === null ? "false" : "true"} data-t0={gone ?? ""}>
+      <Material shown={cur.shown} item={cur.item} tenant={tenant} content={cur} src={src} onShown={() => setReady(true)} />
+      {gone === null && (
+        <div className={lift ? "cover lift" : "cover"} onTransitionEnd={(e) => e.target === e.currentTarget && start()} data-testid="self-cover">
+          <button type="button" className="big" disabled={!ready || lift} onClick={() => setLift(true)} data-testid="self-start">
+            {ready ? "はじめる" : "じゅんびちゅう"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SelfScreen({ tenant, id, participant }: { tenant: string; id: string; participant: string }) {
   const [trial, setTrial] = useState<Trial | null>(null);
   const [items, setItems] = useState<MaterialItem[] | null>(null);
   const [urls, setUrls] = useState<Record<string, string> | null>(null);
   const [sent, setSent] = useState<Set<string> | null>(null);
-  const [showing, setShowing] = useState(false);
   const [shownAt, setShownAt] = useState<number | null>(null);
   const [ms, setMs] = useState<number | null>(null);
   const [text, setText] = useState<AnswerFields>(blank);
@@ -65,6 +104,10 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
     [tenant, id, participant],
   );
   const out = useOutbox<Out>(`gk-out:${tenant}:${id}:${participant}`, send, sameItem);
+  const onStart = useCallback((t: number) => {
+    t0.current = t;
+    setShownAt(t);
+  }, []);
 
   if (err) return <p className="err">{err}</p>;
   if (!trial || !items || !sent) return <p>読み込み中…</p>;
@@ -95,7 +138,6 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
     e.preventDefault();
     if (ms === null || !canSend(text)) return;
     out.add({ item: cur.item, ms, answer: packAnswer(text) });
-    setShowing(false);
     setShownAt(null);
     setMs(null);
     setText(blank);
@@ -108,36 +150,30 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
       <p className="who">
         {n} / {items.length}
       </p>
-      {!showing ? (
-        <button type="button" className="big" disabled={!urls} onClick={() => setShowing(true)} data-testid="self-show">
-          {urls ? "見る" : "じゅんびちゅう"}
-        </button>
-      ) : (
+      {ms === null ? (
         <>
-          <Material
-            key={cur.item}
-            shown={cur.shown}
-            item={cur.item}
-            tenant={tenant}
-            content={cur}
-            src={urls?.[cur.item]}
-            onShown={() => {
-              t0.current = performance.now();
-              setShownAt(t0.current);
-            }}
-          />
-          {ms === null ? (
-            <button type="button" className="big go" disabled={shownAt === null} onClick={got} data-testid="self-got">
-              分かった
-            </button>
+          {urls ? (
+            <Stage key={cur.item} cur={cur} tenant={tenant} src={urls[cur.item]} onStart={onStart} />
           ) : (
-            <>
-              <AnswerBoxes value={text} onChange={setText} testid="self-text" />
-              <button className="big" disabled={!canSend(text)} data-testid="self-submit">
-                おくる
-              </button>
-            </>
+            <div className="stage" data-testid="stage" data-started="false">
+              <div className="cover" data-testid="self-cover">
+                <button type="button" className="big" disabled data-testid="self-start">
+                  じゅんびちゅう
+                </button>
+              </div>
+            </div>
           )}
+          <button type="button" className="big go" disabled={shownAt === null} onClick={got} data-testid="self-got">
+            分かった
+          </button>
+        </>
+      ) : (
+        // 答えは中身を見ずに書く（文の側で原文を写せないように。カードの側と同じ条件）
+        <>
+          <AnswerBoxes value={text} onChange={setText} testid="self-text" />
+          <button className="big" disabled={!canSend(text)} data-testid="self-submit">
+            おくる
+          </button>
         </>
       )}
     </form>

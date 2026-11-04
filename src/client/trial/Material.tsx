@@ -1,6 +1,6 @@
 // 見せるもの（カードか文）。① の交差の回（11/5 作者）では、カードの側はカードの絵とやさしい日本語、文の側は元のページの画像（日本語の原文のまま）。
 // 中身が渡されないとき（前からの回）は枠だけ。src に先に読み込んだ画像を渡すと、ここでは読み込まない。
-// onShown は絵か画像が画面に出た時（画像は decode のあと、次の描画の時）に 1 回呼ぶ。分かるまでの時間はここから数える
+// onShown は絵か画像が描ける形になった時（画像は decode のあと、次の描画の時）に 1 回呼ぶ。① ではこれまで表紙の「はじめる」を押せない
 import { useEffect, useRef, useState } from "react";
 import { Frames } from "../read/ReadScreen";
 import { fileUrl, type MaterialItem, type Shown } from "./api";
