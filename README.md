@@ -187,6 +187,8 @@ What existed before the build period (2026-11-02) and what was made during it.
 
 The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer is recorded by the app itself (append-only — no edits, no deletions), and the answers of those who agree to publication are published anonymously in `docs/answers.csv`.
 
+This product deliberately has no translation feature, so that nothing a supervisor cannot read and check reaches the new hires.
+
 The author intends to offer this as a hosted service in the future (MCP access uses a separate key for each company).
 
 ## Who it is for
