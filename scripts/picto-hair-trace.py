@@ -76,8 +76,16 @@ def head_frame(rgb, s_front):
     run = lambda line: int(np.argmin(line)) if not line.all() else len(line)
     half_x = run(black[row, xr - 3 * K:]) / 2 - 3 * K
     half_y = run(black[yb - 3 * K:, int(round((xl + xr) / 2))]) / 2 - 3 * K
-    ox = (xl + xr) / 2 if s_front is None else xr + half_x - 45 / sv
-    return sv, ox, yb + half_y
+    oy = yb + half_y
+    if s_front is None:
+        return sv, (xl + xr) / 2, oy
+    # 斜め・真横は、あごから 30 上の行の顔の前の線（いちばん右の黒）の真ん中を、こちらの顔の線（x 45.4）に合わせる
+    r = black[int(round(oy - 30 / sv))]
+    e = int(np.nonzero(r)[0].max())
+    b = e
+    while b > 0 and r[b - 1]:
+        b -= 1
+    return sv, (b + e) / 2 - 45.4 / sv, oy
 
 def corr(a, b):
     """b を a の上で動かして一番重なる位置 (dy, dx)（a[y+dy, x+dx] ~ b[y, x]）"""
@@ -156,24 +164,14 @@ def smooth(mask, sigma):
 # 参考絵の頭は丸く、こちらの頭（顔の輪郭）は角の丸い四角なので、斜め・真横では後頭部の角が髪からはみ出たり、
 # 前髪が顔より前へ出すぎたりする。髪の形（パスにする前の塗り）を頭の座標の上で直してから、パスにする。
 FACE = "M-18 -70H18Q44 -70 44.6 -48L45.4 -30Q45 0 12 0H-12Q-44.6 0.4 -45 -30L-44.4 -48Q-44 -70 -18 -70Z"  # avatar.ts の faceOutline("standard")
-DOME = "M-44.6 -46C-46 -86 -24 -100 0 -100S46 -86 44.6 -46"  # 頭の上の丸み（スキンヘッド。3 つの向きで同じ）
+DOME = "M-44.6 -46C-47 -87 -11 -91.6 0 -91.6S47 -87 44.6 -46"  # 頭の上の丸み（スキンヘッド。3 つの向きで同じ）
 FIX = {
     # wrap: 後頭部の角（顔の輪郭の線の外の端まで）を髪で包む。fitx: (行の y, 後ろの端, 前の端) へ髪を横に伸び縮みさせる
     # clip: 頭の輪郭（線の外の端）より外の髪を落とす（とさかは残す）。shift: 顔の右の髪の塊を顔の輪郭に寄せる
     # front_all: 胴より後ろに回さない（肩に掛かる髪）。tail_back: 真横のツインテールの尾を後ろへずらす量
     # nape: (x, y) 耳の後ろの x より後ろ・y より上の頭を髪で埋める
-    ("braids", "side"): {"wrap": True},
-    ("buzz", "quarter"): {"clip": True, "wrap": True},
-    ("buzz", "side"): {"clip": True, "wrap": True},
     ("mash", "side"): {"fitx": (-50, None, 46.5)},
-    ("sidePart", "side"): {"fitx": (-50, -50, 46.5), "wrap": True},
-    ("softMohawk", "front"): {"clip": True},
-    ("softMohawk", "quarter"): {"clip": True, "wrap": True},
-    ("softMohawk", "side"): {"clip": True, "wrap": True},
-    ("twinTails", "quarter"): {"shift": True},
-    ("twinTails", "side"): {"nape": (-4, -24), "wrap": -24, "tail_back": 4},
-    ("twoBlock", "quarter"): {"wrap": True},
-    ("twoBlock", "side"): {"wrap": True},
+    ("sidePart", "side"): {"fitx": (-50, None, 46.5)},
     ("curly", "front"): {"front_all": True},
     ("curly", "quarter"): {"front_all": True},
 }
@@ -332,6 +330,9 @@ for no, name in enumerate(NEW, 2):
             hair, gray, dark = apply_fix(fix, hair, gray, dark, sv, ox, oy)
         skin = np.zeros_like(hair)
         if name == "softMohawk":
+            # とさかの丸い下の端が剃った所の上に乗ると、頭から離れた背びれに見える。頭の輪郭の線より内のとさかは剃った所の灰にし、とさかが線から立つようにする
+            in_head = ndi.distance_transform_edt(region(FACE, sv, ox, oy, hair.shape) | region(DOME + "Z", sv, ox, oy, hair.shape)) * sv
+            gray |= hair & (in_head > 3) & (yy < -60)
             # 剃った頭の内側（輪郭の線の内）は肌の色。頭の丸みの線は髪の縁の黒がかねる（二重の線にしない）
             inside = ndi.binary_fill_holes(hair | region(FACE, sv, ox, oy, hair.shape))
             skin = smooth(ndi.binary_dilation(inside & ~hair & (yy < -66), iterations=3) & inside & (yy < -60), 0.4 * u)
@@ -358,7 +359,7 @@ json.dump(result, open(OUT, "w", encoding="utf-8"), ensure_ascii=False)
 # ---- TypeScript に書き出す（環境変数 HAIR_TS に .ts のパスがあれば） ----
 TS = os.environ.get("HAIR_TS")
 if TS:
-    GLOSS = '<path d="M-30 -80Q-24 -92 -10 -94" fill="none" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>'
+    GLOSS = '<path d="M-32 -72Q-26 -84 -12 -87" fill="none" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>'
     lines = [
         "// 手で塗り直した髪だけの絵から取り出した形（おかっぱ以外の 18 種）。scripts/picto-hair-trace.py が作る。手で直さない（製品仕様 §14）",
         "// 座標は頭の座標（首の付け根が原点、顔の内側は x ±42.5・下 −2.5）。front は顔より前、behind は胴より後ろ（あごより 8 下から下）。",
