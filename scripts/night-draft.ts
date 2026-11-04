@@ -4,6 +4,8 @@
 //   npx tsx scripts/night-draft.ts --sort-run <仕分けの番号> --run <番号> [--remote] [--tenant company] [--per-page 2] [--max 10] [--estimate]
 //   --estimate は API を呼ばず、ページの数・カードの数の上限・費用と時間の見込みだけを出す
 //   --sub は API の代わりにサブスクリプションの claude -p で呼ぶ（063 の前の通しの確かめ。手元の D1 だけ。費用は API の値段に換算して出すが払わない）
+//   --pick は、1 ページの決まりの先頭 N 個でなく、選ぶ段（src/shared/make/pick.ts）で絵で伝わる決まりを選ぶ（063 の前の通しで足した。本番に使うかは作者が決める）
+//   --run-max-usd は、この回の費用の合計（前の回の分と取り出しも入れる）の上限。API では既定 30 USD
 //   --shard i/n は「する」のページを n 組に分けた i 組目（1 から）だけを流す。サブスクで 4 本くらいを同時に流すときに使う
 import { claudePClient } from "../src/node/claude-p-client";
 import { loadEnv, makeClient } from "../src/node/client";
@@ -13,8 +15,9 @@ import { readPages } from "../src/node/night";
 import { CARD_MAX_USD, runDrafts, type Steps } from "../src/node/night-draft";
 import { imageBlock, svgToPng } from "../src/node/png";
 import { dayBudgetUsd, MemoryCallLog, sumAllUsd } from "../src/shared/claude";
-import { extractRules } from "../src/shared/extract/rules";
+import { extractRules, type Rule } from "../src/shared/extract/rules";
 import { makeCard } from "../src/shared/make/maker";
+import { pickRules } from "../src/shared/make/pick";
 import { makeWords } from "../src/shared/make/words";
 import { cutFrames } from "../src/shared/picto/motion";
 import { renderFrame } from "../src/shared/picto/scene";
@@ -64,6 +67,7 @@ async function main() {
   const since = new Date().toISOString();
   const steps: Steps = {
     extract: (text) => extractRules(deps, "night", text),
+    ...(args.includes("--pick") ? { pick: (rules: Rule[], n: number) => pickRules(deps, "night", rules, n) } : {}),
     make: async (rule, locate) => (await makeCard(deps, "night", rule, locate)).card,
     words: async (card) => {
       const w = await makeWords(deps, "night", card);
@@ -74,9 +78,10 @@ async function main() {
     spent: () => log.sumUsd("night", since),
   };
   const t0 = Date.now();
-  const s = await runDrafts({ db, steps, runId, tenant, sortRun, doc: run.doc, pages, perPage, maxCards: max, cardMaxUsd: CARD_MAX_USD, log: (l) => console.log(l) });
+  const runMaxUsd = opt("--run-max-usd") ? Number(opt("--run-max-usd")) : sub ? undefined : 30;
+  const s = await runDrafts({ db, steps, runId, tenant, sortRun, doc: run.doc, pages, perPage, maxCards: max, cardMaxUsd: CARD_MAX_USD, runMaxUsd, log: (l) => console.log(l) });
   console.log(
-    `下書き ${s.run_id}: この回 ${s.made_now} 枚・全部 ${s.cards} 枚（赤 ${s.red}・黄 ${s.yellow}・緑 ${s.green}）・失敗 ${s.errors}・費用 ${s.usd.toFixed(2)} USD${sub ? "（API の値段に換算・払っていない）" : ""}・${((Date.now() - t0) / 60000).toFixed(1)} 分${s.stopped ? `・止めた: ${s.stopped}` : ""}`,
+    `下書き ${s.run_id}: この回 ${s.made_now} 枚・全部 ${s.cards} 枚（赤 ${s.red}・黄 ${s.yellow}・緑 ${s.green}）・失敗 ${s.errors}・費用 ${s.usd.toFixed(2)} USD（うち取り出しと選ぶ段 ${s.extract_usd.toFixed(2)}）${sub ? "（API の値段に換算・払っていない）" : ""}・${((Date.now() - t0) / 60000).toFixed(1)} 分${s.stopped ? `・止めた: ${s.stopped}` : ""}`,
   );
 }
 

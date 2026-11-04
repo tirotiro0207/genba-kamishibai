@@ -17,6 +17,11 @@ function memDb() {
   const db = new DatabaseSync(":memory:");
   for (const f of readdirSync(join(root, "migrations")).filter((x) => x.endsWith(".sql")).sort()) db.exec(readFileSync(join(root, "migrations", f), "utf-8"));
   const d1 = execD1(async (sql) => {
+    // batch はまとめて 1 回で来る（D1 と同じく、ひとまとめに流す）
+    if (sql.includes(";\n")) {
+      db.exec(`BEGIN;\n${sql};\nCOMMIT;`);
+      return { results: [], changes: 0 };
+    }
     if (/^\s*(SELECT|WITH)/i.test(sql)) return { results: db.prepare(sql).all() as Record<string, unknown>[], changes: 0 };
     const r = db.prepare(sql).run();
     return { results: [], changes: Number(r.changes) };
@@ -105,5 +110,46 @@ describe("夜間の下書きの走り手（062）", () => {
     expect(dear.made_now).toBe(1);
     expect(dear.stopped).toMatch(/上限/);
     expect(db2.prepare("SELECT count(*) AS n FROM cards").get()).toEqual({ n: 1 });
+  });
+
+  // 063 の前の通しのレビューで直したこと
+  it("選ぶ段があれば、先頭でなく選んだ決まりの番号で枠を作り、分けをページの行に残す。取り出しの費用もページの行に入る", async () => {
+    const { db, d1 } = memDb();
+    const { steps } = fakeSteps({ rulesPerPage: 5 });
+    steps.pick = async (rules) => ({ items: [3, 1], notes: rules.map((_, i) => ({ i, class: i === 1 || i === 3 ? "動き" : "書類・教育・資格", weight: "高", reason: "r" })) });
+    let spent = 0;
+    const extract = steps.extract;
+    steps.extract = async (t) => ((spent += 0.05), extract(t));
+    const inner = steps.spent;
+    steps.spent = async () => (await inner()) + spent;
+    const s = await runDrafts({ db: d1, steps, ...base, pages: PAGES.slice(0, 1) });
+    expect(s.made_now).toBe(2);
+    expect(db.prepare("SELECT item FROM night_drafts WHERE item >= 0 ORDER BY item").all()).toEqual([{ item: 1 }, { item: 3 }]);
+    const head = db.prepare("SELECT usd, pick FROM night_drafts WHERE item = -1").get() as { usd: number; pick: string };
+    expect(head.usd).toBeCloseTo(0.05);
+    expect(JSON.parse(head.pick)).toHaveLength(5);
+    expect(s.extract_usd).toBeCloseTo(0.05);
+    expect(s.usd).toBeCloseTo(0.25);
+    expect(db.prepare("SELECT items FROM extraction_oks").get()).toEqual({ items: "[3,1]" });
+  });
+
+  it("枚数の上限はこの回の合計で数え、同じ上限で走らせ直しても超えない", async () => {
+    const { d1 } = memDb();
+    const a = await runDrafts({ db: d1, steps: fakeSteps().steps, ...base, maxCards: 3 });
+    expect(a.made_now).toBe(3);
+    const b = await runDrafts({ db: d1, steps: fakeSteps().steps, ...base, maxCards: 3 });
+    expect(b).toMatchObject({ made_now: 0, cards: 3 });
+    const c = await runDrafts({ db: d1, steps: fakeSteps().steps, ...base, maxCards: 5 });
+    expect(c).toMatchObject({ made_now: 2, cards: 5 });
+  });
+
+  it("この回の費用の合計が上限に届いたら止まる（前の回の分も入れる）", async () => {
+    const { db, d1 } = memDb();
+    const a = await runDrafts({ db: d1, steps: fakeSteps({ usdPerCard: 0.1 }).steps, ...base, runMaxUsd: 0.25 });
+    expect(a.made_now).toBe(3);
+    expect(a.stopped).toMatch(/この回の費用/);
+    const b = await runDrafts({ db: d1, steps: fakeSteps({ usdPerCard: 0.1 }).steps, ...base, runMaxUsd: 0.25 });
+    expect(b.made_now).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM cards").get()).toEqual({ n: 3 });
   });
 });

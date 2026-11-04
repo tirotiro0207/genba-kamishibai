@@ -12,7 +12,7 @@ async function main() {
   const tenant = opt("--tenant") ?? "company";
   const db = execD1(wranglerExec(args.includes("--remote") ? "remote" : "local"));
   type D = { page: number; item: number; state: string; extraction_id: string | null; card_id: string | null; band: string | null; dangerous: number | null; rate: number | null; usd: number | null; ms: number | null; attempts: number; error: string | null };
-  const rows = (await db.prepare("SELECT page, item, state, extraction_id, card_id, band, dangerous, rate, usd, ms, attempts, error FROM night_drafts WHERE run_id = ? AND tenant_id = ? ORDER BY page, item").bind(runId, tenant).all<D>()).results;
+  const rows = (await db.prepare("SELECT page, item, state, extraction_id, card_id, band, dangerous, rate, usd, ms, attempts, error, pick FROM night_drafts WHERE run_id = ? AND tenant_id = ? ORDER BY page, item").bind(runId, tenant).all<D>()).results;
   const heads = rows.filter((r) => r.item === -1);
   const items = rows.filter((r) => r.item >= 0);
   const out: string[] = [];
@@ -37,6 +37,18 @@ async function main() {
   const verifies = (await db.prepare("SELECT a.card_id, count(*) AS n FROM audit_log a JOIN night_drafts d ON d.card_id = a.card_id WHERE d.run_id = ? AND a.kind = 'verify' AND a.tenant_id = ? GROUP BY a.card_id").bind(runId, tenant).all<{ card_id: string; n: number }>()).results;
   const twice = verifies.filter((v) => Number(v.n) > 1);
   line(`再開: 同じカードが 2 つの枠に ${dupCards.length}・カードの行 ${cardRows.length}（枠 ${items.filter((r) => r.card_id).length}）・1 ページで取り出しが 2 つ ${mixed.length ? mixed.join(" ") : "0"}・確かめる AI を 2 回以上通ったカード ${twice.length}`);
+
+  // 作ったのに枠の無いカード（作ってから印を付けるまでの間で止まったもの）。この回の時間の中で night が作ったカードから数える
+  const span = (await db.prepare("SELECT (SELECT datetime(min(c.created_at), '-1 hour') FROM cards c JOIN night_drafts d ON d.card_id = c.id WHERE d.run_id = ?) AS a, (SELECT max(updated_at) FROM night_drafts WHERE run_id = ?) AS b").bind(runId, runId).first<{ a: string; b: string }>())!;
+  const orphans = (
+    await db
+      .prepare("SELECT count(DISTINCT a.card_id) AS n FROM audit_log a WHERE a.tenant_id = ? AND a.kind = 'make' AND a.actor = 'night' AND datetime(a.created_at) BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM night_drafts d WHERE d.card_id = a.card_id)")
+      .bind(tenant, span.a, span.b)
+      .first<{ n: number }>()
+  )?.n;
+  line(`枠の無い夜間のカード: ${orphans ?? "数えられない"}`);
+  const picks = heads.flatMap((h) => (h as D & { pick?: string | null }).pick ? (JSON.parse((h as D & { pick: string }).pick) as { class: string }[]) : []);
+  if (picks.length) line(`選ぶ段の分け: ${[...Map.groupBy(picks, (x) => x.class)].map(([k, v]) => `${k} ${v.length}`).join("・")}`);
 
   const done = items.filter((r) => r.state === "done");
   const red = done.filter((r) => r.band === "red" || r.dangerous === 1);

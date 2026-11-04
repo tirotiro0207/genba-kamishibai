@@ -32,6 +32,13 @@ describe("言葉の欄（036）", () => {
     expect(addedNumbers(card, { ja: "そとに でる", vi: "giảm 0,2 % thì ra ngoài" })).toEqual(["0,2"]);
   });
 
+  it("全角の数字はカードの文の半角と同じに見て、漢数字では止めない", () => {
+    const card = sampleCard();
+    card.statements[0].text = "高さ２ｍ以上では安全帯を使う";
+    expect(addedNumbers(card, { ja: "2 m より たかい ところ。ひとつずつ たしかめる", vi: "cao hơn 2 m" })).toEqual([]);
+    expect(addedNumbers(card, { ja: "三 回 たしかめる", vi: "kiểm tra ba lần" })).toEqual([]);
+  });
+
   it("数字を足したら 1 回だけ書き直させ、用語の空の組は捨てる", async () => {
     const card = sampleCard();
     const client = fake([

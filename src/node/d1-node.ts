@@ -26,8 +26,11 @@ export function wranglerExec(where: "local" | "remote"): Exec {
         // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
         const x = e as { stdout?: string; stderr?: string };
         const why = (x.stdout || x.stderr || String(e)).slice(-600);
-        // 手元の D1 に何本も同時に書くと、ファイルの取り合いで internal error が返る（書けていない）。少し待って送り直す。本番は二重に書く恐れがあるので送り直さない
-        if (where === "local" && attempt < 5 && /internal error|SQLITE_BUSY|database is locked/i.test(why)) {
+        // 手元の D1 に何本も同時に書くと、ファイルの取り合いで internal error が返る（書けていない）。少し待って送り直す。
+        // 本番は、INSERT を送り直すと二重に書く恐れがあるので、読み（SELECT）と WHERE 付きの UPDATE が 1 文だけのときに限って送り直す
+        const local = where === "local" && /internal error|SQLITE_BUSY|database is locked/i.test(why);
+        const safe = where === "remote" && /^\s*(SELECT|UPDATE\b[\s\S]*\bWHERE\b)/i.test(sql) && !sql.includes(";\n");
+        if (attempt < 5 && (local || (safe && attempt < 3))) {
           await new Promise((r) => setTimeout(r, 500 * attempt + Math.random() * 1000));
           continue;
         }
@@ -75,15 +78,17 @@ export function execD1(exec: Exec): D1Database {
       },
       raw: async () => (await go()).results.map((r) => Object.values(r)),
       _go: go,
+      _sql: () => bindSql(sql, values),
     };
     return s;
   };
   const db = {
     prepare: (sql: string) => stmt(sql),
-    batch: async (stmts: { run: () => Promise<unknown> }[]) => {
-      const out = [];
-      for (const s of stmts) out.push(await s.run());
-      return out;
+    // 文を 1 回の送信にまとめる。D1 は 1 回に送った文をひとまとめに流し、途中で失敗すれば全部を戻す
+    batch: async (stmts: { _sql: () => string }[]) => {
+      if (!stmts.length) return [];
+      const r = await exec(stmts.map((s) => s._sql()).join(";\n"));
+      return stmts.map(() => ({ results: [], success: true, meta: { changes: r.changes } }));
     },
     exec: async (sql: string) => (await exec(sql), { count: 1, duration: 0 }),
   };

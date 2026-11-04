@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import type { CardBody } from "../shared/card";
 import type { Rule } from "../shared/extract/rules";
 import type { OkRule } from "../shared/make/maker";
+import { type Pick, pickHead } from "../shared/make/pick";
 import type { Term } from "../shared/make/words";
 import type { Evidence } from "../shared/verify/formal";
 import { appendAudit } from "../worker/audit";
@@ -16,6 +17,8 @@ import type { NightPage } from "./night";
 export interface Steps {
   /** 1 ページの文から決まりを取り出す */
   extract(text: string): Promise<Rule[]>;
+  /** 取り出した決まりのどれをカードにするか。無ければ先頭の perPage 個（1 周目と同じ） */
+  pick?(rules: Rule[], perPage: number): Promise<Pick>;
   /** OK した 1 つの決まりから、カードの下書き（文・動き・部品）を作る */
   make(rule: OkRule, locate: ReturnType<typeof locator>): Promise<CardBody>;
   /** 言葉の欄（やさしい日本語とベトナム語）と、出てきた現場の言葉 */
@@ -44,6 +47,8 @@ export interface DraftOptions {
   maxCards?: number;
   /** 1 枚の費用がこれを超えたら止める（008 の実測の数倍） */
   cardMaxUsd: number;
+  /** この回の費用の合計（前の回までの分と取り出しも入れる）がこれを超えたら止める */
+  runMaxUsd?: number;
   /** これだけ続けて失敗したら止める */
   maxErrorsInRow?: number;
   log?: (line: string) => void;
@@ -61,6 +66,8 @@ export interface DraftSummary {
   green: number;
   errors: number;
   usd: number;
+  /** そのうち取り出しと選ぶ段の分 */
+  extract_usd: number;
   /** 止めた理由（最後まで行けば null） */
   stopped: string | null;
 }
@@ -95,14 +102,21 @@ async function extractPage(o: DraftOptions, p: NightPage): Promise<{ id: string;
   }
   await db.prepare("INSERT OR IGNORE INTO night_drafts (run_id, tenant_id, sort_run, page, item) VALUES (?, ?, ?, ?, -1)").bind(o.runId, o.tenant, o.sortRun, p.page).run();
   await set(db, o.runId, p.page, -1, { state: "running" });
+  const before = await o.steps.spent();
   const rules = (await o.steps.extract(text)).map((r) => ({ ...r, where: whereIs(source, r.from.line), reasons: r.reasons.map((x) => ({ ...x, where: whereIs(source, x.from.line) })) }));
+  const pick = o.steps.pick ? await o.steps.pick(rules, o.perPage) : pickHead(rules, o.perPage);
+  const usd = (await o.steps.spent()) - before;
   const id = crypto.randomUUID();
-  await db.prepare("INSERT INTO extractions (id, tenant_id, input, rules) VALUES (?, ?, ?, ?)").bind(id, o.tenant, JSON.stringify({ text, focus: null, source }), JSON.stringify(rules)).run();
-  // 夜間の走り手が OK した印（人の OK ではない）。カードは全部未承認の下書きなので、人は確認待ちの列で見る
-  const items = rules.slice(0, o.perPage).map((_, i) => i);
-  await db.prepare("INSERT INTO extraction_oks (extraction_id, tenant_id, items, actor) VALUES (?, ?, ?, ?)").bind(id, o.tenant, JSON.stringify(items), ACTOR).run();
-  for (const i of items) await db.prepare("INSERT OR IGNORE INTO night_drafts (run_id, tenant_id, sort_run, page, item, extraction_id) VALUES (?, ?, ?, ?, ?, ?)").bind(o.runId, o.tenant, o.sortRun, p.page, i, id).run();
-  await set(db, o.runId, p.page, -1, { state: "done", extraction_id: id });
+  // 取り出しの記録・OK の印・カードの枠・済みの印は 1 つの batch で書く。途中で止まって選び直したときに、前の枠と新しい枠が混ざらないように。
+  // OK の印は夜間の走り手のもの（人の OK ではない）。カードは全部未承認の下書きなので、人は確認待ちの列で見る。枠の item は決まりの番号
+  await db.batch([
+    db.prepare("INSERT INTO extractions (id, tenant_id, input, rules) VALUES (?, ?, ?, ?)").bind(id, o.tenant, JSON.stringify({ text, focus: null, source }), JSON.stringify(rules)),
+    db.prepare("INSERT INTO extraction_oks (extraction_id, tenant_id, items, actor) VALUES (?, ?, ?, ?)").bind(id, o.tenant, JSON.stringify(pick.items), ACTOR),
+    ...pick.items.map((i) => db.prepare("INSERT OR IGNORE INTO night_drafts (run_id, tenant_id, sort_run, page, item, extraction_id) VALUES (?, ?, ?, ?, ?, ?)").bind(o.runId, o.tenant, o.sortRun, p.page, i, id)),
+    db
+      .prepare("UPDATE night_drafts SET state = 'done', extraction_id = ?, usd = ?, pick = ?, updated_at = datetime('now') WHERE run_id = ? AND page = ? AND item = -1")
+      .bind(id, usd, pick.notes.length ? JSON.stringify(pick.notes) : null, o.runId, p.page),
+  ]);
   return { id, rules, text, source };
 }
 
@@ -115,10 +129,10 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
     const card = await steps.make(rule, locator(x.id, x.text, x.source));
     const w = await steps.words(card);
     const row = await createCard(db, o.tenant, { ...card, words: w.words }, ACTOR, [rule.from.quote, ...rule.reasons.map((y) => y.from.quote)]);
-    await addTerms(db, o.tenant, row.id, w.terms);
     cardId = row.id;
-    // 作ったところで印を付ける。ここで止まっても、走らせ直しはこのカードを確かめるだけにする（二重に作らない）
+    // 作ったらすぐに印を付ける（現場の言葉を積むより先）。ここで止まっても、走らせ直しはこのカードを確かめるだけにする（二重に作らない）
     await set(db, o.runId, r.page, r.item, { state: "made", card_id: cardId });
+    await addTerms(db, o.tenant, row.id, w.terms);
   }
   const now = (await getCard(db, o.tenant, cardId))!;
   const body = JSON.parse(now.body) as CardBody;
@@ -127,8 +141,9 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
   const png_sha256 = frames.map((f) => createHash("sha256").update(f).digest("hex"));
   await appendAudit(db, o.tenant, { card_id: cardId, kind: "verify", actor: e.agent, payload: { version: now.version, evidence: e, png_sha256 } });
   if (now.status === "draft" || now.status === "ai_draft") {
-    await db.prepare("UPDATE cards SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(cardId, o.tenant, now.status).run();
+    // 記録を先に書く。間で止まっても、状態の変化が記録の無いまま残らない（走らせ直しで記録がもう 1 行増えることはある）
     await appendAudit(db, o.tenant, { card_id: cardId, kind: "status", actor: ACTOR, payload: { version: now.version, from: now.status, to: "pending" } });
+    await db.prepare("UPDATE cards SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(cardId, o.tenant, now.status).run();
   }
   return e;
 }
@@ -136,19 +151,29 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
 export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
   const { db } = o;
   const log = o.log ?? (() => {});
-  const max = o.maxCards ?? Infinity;
+  // 枚数の上限は、この回の合計で数える（止めて同じ上限で走らせ直しても、前の回の分を足して超えない）
+  const doneBefore = Number((await db.prepare("SELECT count(*) AS n FROM night_drafts WHERE run_id = ? AND item >= 0 AND state = 'done'").bind(o.runId).first<{ n: number }>())?.n ?? 0);
+  const max = (o.maxCards ?? Infinity) - doneBefore;
+  const runUsd = async () => Number((await db.prepare("SELECT coalesce(sum(usd), 0) AS usd FROM night_drafts WHERE run_id = ?").bind(o.runId).first<{ usd: number }>())?.usd ?? 0);
+  const overRun = async () => {
+    if (o.runMaxUsd === undefined) return null;
+    const u = await runUsd();
+    return u >= o.runMaxUsd ? `この回の費用 ${u.toFixed(2)} USD が上限 ${o.runMaxUsd} USD に届いた` : null;
+  };
   let madeNow = 0;
   let errors = 0;
   let inRow = 0;
   let stopped: string | null = null;
   pages: for (const p of o.pages) {
     if (madeNow >= max) break;
+    stopped = await overRun();
+    if (stopped) break;
     let x;
     try {
       x = await extractPage(o, p);
     } catch (e) {
       const msg = (e as Error).message;
-      await set(db, o.runId, p.page, -1, { state: "error", error: msg.slice(0, 500) });
+      await set(db, o.runId, p.page, -1, { state: "error", error: msg.slice(0, 500) }).catch(() => {});
       errors++;
       log(`p${p.page}: 取り出しに失敗（${msg}）`);
       if (++inRow >= (o.maxErrorsInRow ?? 3)) {
@@ -160,11 +185,14 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
     for (const r of await rows(db, o.runId, p.page)) {
       if (r.item < 0 || r.state === "done") continue;
       if (madeNow >= max) break pages;
-      const before = await o.steps.spent();
+      stopped = await overRun();
+      if (stopped) break pages;
       const t0 = Date.now();
-      await set(db, o.runId, r.page, r.item, { state: r.card_id ? "made" : "running" });
-      await db.prepare("UPDATE night_drafts SET attempts = attempts + 1 WHERE run_id = ? AND page = ? AND item = ?").bind(o.runId, r.page, r.item).run();
+      // 1 枚の中の D1 の呼び出しは全部 try の中に入れ、一時的な失敗でも回全体を落とさず、その枚の失敗に留める
       try {
+        const before = await o.steps.spent();
+        await set(db, o.runId, r.page, r.item, { state: r.card_id ? "made" : "running" });
+        await db.prepare("UPDATE night_drafts SET attempts = attempts + 1 WHERE run_id = ? AND page = ? AND item = ?").bind(o.runId, r.page, r.item).run();
         const e = await draftOne(o, x, r);
         const usd = (await o.steps.spent()) - before;
         await set(db, o.runId, r.page, r.item, { state: "done", band: e.band, dangerous: e.dangerous ? 1 : 0, rate: e.rate, usd, ms: Date.now() - t0, error: null });
@@ -177,7 +205,7 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
         }
       } catch (e) {
         const msg = (e as Error).message;
-        await set(db, o.runId, r.page, r.item, { state: "error", error: msg.slice(0, 500) });
+        await set(db, o.runId, r.page, r.item, { state: "error", error: msg.slice(0, 500) }).catch(() => {});
         errors++;
         log(`p${r.page}-${r.item}: 失敗（${msg}）`);
         if (++inRow >= (o.maxErrorsInRow ?? 3)) {
@@ -190,5 +218,6 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
   if (stopped) log(`止めた: ${stopped}`);
   const all = (await db.prepare("SELECT band, dangerous, usd FROM night_drafts WHERE run_id = ? AND item >= 0 AND state = 'done'").bind(o.runId).all<{ band: string; dangerous: number; usd: number }>()).results;
   const count = (b: string) => all.filter((r) => (b === "red" ? r.band === "red" || r.dangerous === 1 : r.band === b && r.dangerous !== 1)).length;
-  return { run_id: o.runId, pages: o.pages.length, made_now: madeNow, cards: all.length, red: count("red"), yellow: count("yellow"), green: count("green"), errors, usd: all.reduce((s, r) => s + (r.usd ?? 0), 0), stopped };
+  const extractUsd = Number((await db.prepare("SELECT coalesce(sum(usd), 0) AS usd FROM night_drafts WHERE run_id = ? AND item = -1").bind(o.runId).first<{ usd: number }>())?.usd ?? 0);
+  return { run_id: o.runId, pages: o.pages.length, made_now: madeNow, cards: all.length, red: count("red"), yellow: count("yellow"), green: count("green"), errors, usd: all.reduce((s, r) => s + (r.usd ?? 0), 0) + extractUsd, extract_usd: extractUsd, stopped };
 }
