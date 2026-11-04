@@ -1,20 +1,29 @@
 // ③ 採点の画面。採点者ごとに開き、もう 1 人の判定は見えない。答えた人の ID も出さない
 import { useCallback, useEffect, useState } from "react";
+import { unpackAnswer } from "../../shared/answer-fields";
 import { authHeaders } from "../pin/TenantPin";
 import { csvUrl, type Grade, type Grader, listGrades, listResponses, postGrade, type ResponseRow, type Verdict } from "./api";
 
 const LABEL: Record<Verdict, string> = { correct: "正しい", wrong: "違う", danger: "危ない読み違い" };
+type Field = "ja" | "own";
 
-function Row({ n, r, mine, onGrade }: { n: number; r: ResponseRow; mine?: Grade; onGrade: (v: Verdict, ja: string) => Promise<void> }) {
+// 答えの欄は 2 つ（11/5 作者）。日本語の欄で分かれば日本語の欄で判定し、分からないときだけ自分の言葉の欄を日本語に訳して判定する。
+// どちらの欄で判定したかの印を付ける（自分の言葉の欄なら訳が要る。印は訳のあるなしで残る）
+function Row({ n, r, mine, onGrade }: { n: number; r: ResponseRow; mine?: Grade; onGrade: (v: Verdict, ja: string, field: Field) => Promise<void> }) {
+  const a = unpackAnswer(r.answer) ?? { ja: "", own: "" };
   const [ja, setJa] = useState(mine?.answer_ja ?? "");
+  const [field, setField] = useState<Field>(mine?.answer_ja || (!a.ja.trim() && a.own.trim()) ? "own" : "ja");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (mine?.answer_ja) setJa(mine.answer_ja);
+    if (mine?.answer_ja) {
+      setJa(mine.answer_ja);
+      setField("own");
+    }
   }, [mine?.answer_ja]);
   const go = async (v: Verdict) => {
     setBusy(true);
     try {
-      await onGrade(v, ja);
+      await onGrade(v, field === "own" ? ja : "", field);
     } finally {
       setBusy(false);
     }
@@ -22,14 +31,31 @@ function Row({ n, r, mine, onGrade }: { n: number; r: ResponseRow; mine?: Grade;
   return (
     <li className="grade" data-testid={`grade-${r.seq}`}>
       <p className="who">答え {n}</p>
-      <p className="said">{r.answer}</p>
-      <label>
-        日本語の訳
-        <input value={ja} disabled={busy} onChange={(e) => setJa(e.target.value)} data-testid={`grade-${r.seq}-ja`} />
-      </label>
+      <p className="said" data-testid={`grade-${r.seq}-said-ja`}>
+        日本語の欄: {a.ja || "（なし）"}
+      </p>
+      <p className="said" data-testid={`grade-${r.seq}-said-own`}>
+        自分の言葉の欄: {a.own || "（なし）"}
+      </p>
+      <div className="fields">
+        <label>
+          <input type="radio" name={`field-${r.seq}`} checked={field === "ja"} disabled={busy || !a.ja.trim()} onChange={() => setField("ja")} data-testid={`grade-${r.seq}-field-ja`} />
+          日本語の欄で判定
+        </label>
+        <label>
+          <input type="radio" name={`field-${r.seq}`} checked={field === "own"} disabled={busy || !a.own.trim()} onChange={() => setField("own")} data-testid={`grade-${r.seq}-field-own`} />
+          自分の言葉の欄で判定
+        </label>
+      </div>
+      {field === "own" && (
+        <label>
+          自分の言葉の欄の日本語の訳
+          <input value={ja} disabled={busy} onChange={(e) => setJa(e.target.value)} data-testid={`grade-${r.seq}-ja`} />
+        </label>
+      )}
       <div className="verdicts">
         {(Object.keys(LABEL) as Verdict[]).map((v) => (
-          <button key={v} className={mine?.verdict === v ? `pick on ${v}` : `pick ${v}`} disabled={busy} onClick={() => go(v)} data-testid={`grade-${r.seq}-${v}`}>
+          <button key={v} className={mine?.verdict === v ? `pick on ${v}` : `pick ${v}`} disabled={busy || (field === "own" && !ja.trim())} onClick={() => go(v)} data-testid={`grade-${r.seq}-${v}`}>
             {LABEL[v]}
           </button>
         ))}
@@ -67,8 +93,8 @@ export function GradeScreen({ tenant, id, grader }: { tenant: string; id: string
             n={i + 1}
             r={r}
             mine={mine.get(r.seq)}
-            onGrade={async (verdict, ja) => {
-              await postGrade(tenant, id, { response_seq: r.seq, grader, verdict, answer_ja: ja || undefined }).catch((e: Error) => setErr(e.message));
+            onGrade={async (verdict, ja, field) => {
+              await postGrade(tenant, id, { response_seq: r.seq, grader, verdict, answer_ja: ja || undefined, field }).catch((e: Error) => setErr(e.message));
               await reload();
             }}
           />

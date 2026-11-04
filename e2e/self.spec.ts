@@ -1,15 +1,39 @@
-import { expect, test } from "@playwright/test";
+import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
 import { sampleCard } from "../tests/fixtures/card";
 
 // ① の交差の回（11/5 作者）: 見せるものを画面で結び、2 人が別の端末で同時に受ける。片方はカード、もう片方は元のページの画像
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
-test("① 見せるものを結び、組のとおりにカードと元のページを 1 つずつ受ける", async ({ browser, page, request }) => {
+async function cards(request: APIRequestContext) {
   const ids: string[] = [];
   for (const rule of ["① 検電", "① 吊り荷"]) {
     const res = await request.post("/api/t/practice/cards", { data: { card: { ...sampleCard(), rule, words: { ja: "たしかめます。", vi: "kiểm tra" } } } });
     ids.push(((await res.json()) as { id: string }).id);
   }
+  return ids;
+}
+
+/** API で交差の回を作り、見せるものを結ぶ（画面の通しは 1 本目で見る） */
+async function crossTrial(request: APIRequestContext, people: string[]) {
+  const ids = await cards(request);
+  const t = (await (await request.post("/api/t/practice/trials", { data: { design: "cross", participants: people.map((id) => ({ id, group: "ベトナム" })) } })).json()) as { id: string; assignments: { participant: string; set: number }[] };
+  for (const k of ["A", "B"]) expect((await request.put(`/api/t/practice/files/pages/${t.id}-${k}.png`, { headers: { "content-type": "image/png" }, data: png })).status()).toBe(201);
+  const m = await request.put(`/api/t/practice/trials/${t.id}/material`, { data: { A: { card: ids[0], page: `pages/${t.id}-A.png` }, B: { card: ids[1], page: `pages/${t.id}-B.png` } } });
+  expect(m.status()).toBe(201);
+  return t;
+}
+
+const answerOne = async (pg: Page, text: string, wait = 300) => {
+  await pg.getByTestId("self-show").click();
+  await expect(pg.getByTestId("self-got")).toBeEnabled();
+  await pg.waitForTimeout(wait);
+  await pg.getByTestId("self-got").click();
+  await pg.getByTestId("self-text-ja").fill(text);
+  await pg.getByTestId("self-submit").click();
+};
+
+test("① 見せるものを結び、組のとおりにカードと元のページを 1 つずつ受ける", async ({ browser, page, request }) => {
+  const ids = await cards(request);
   // 回を作る画面で、交差の回を作る
   await page.goto("/#/t/practice/trial/new");
   await page.getByTestId("new-cross").check();
@@ -46,7 +70,9 @@ test("① 見せるものを結び、組のとおりにカードと元のペー�
       await expect(m).not.toContainText("kiểm tra");
       await pg.waitForTimeout(300);
       await pg.getByTestId("self-got").click();
-      await pg.getByTestId("self-text").fill(`${p} の答え ${round}`);
+      // 答えの欄は 2 つ。日本語の欄と、自分の言葉の欄（書かなくてもよい）
+      await pg.getByTestId("self-text-ja").fill(`${p} の答え ${round}`);
+      if (round === 1) await pg.getByTestId("self-text-own").fill("dừng lại");
       await pg.getByTestId("self-submit").click();
       await expect(pg.getByTestId(round === 0 ? "self-show" : "self-done")).toBeVisible();
     }));
@@ -55,7 +81,59 @@ test("① 見せるものを結び、組のとおりにカードと元のペー�
   // 1 人がカードと文を 1 つずつ。2 人は組が違うので、項目 A で見たものが逆
   for (const p of ["v1", "v2"]) expect([...seen[p]].sort()).toEqual(["card", "text"]);
   expect(seen.v1[0]).not.toBe(seen.v2[0]);
-  const rows = (await (await request.get(`/api/t/practice/trials/${id}/responses`)).json()).responses as { participant: string; ms: number; answer: string }[];
+  const rows = (await (await request.get(`/api/t/practice/trials/${id}/responses`)).json()).responses as { participant: string; item: string; ms: number; answer: string }[];
   expect(rows).toHaveLength(4);
   for (const r of rows) expect(r.ms).toBeGreaterThan(0);
+  expect(JSON.parse(rows.find((r) => r.participant === "v1" && r.item === "B")!.answer)).toEqual({ ja: "v1 の答え 1", own: "dừng lại" });
+});
+
+test("① 画像の読み込みが遅くても、その分は分かるまでの時間に入らない", async ({ page, request }) => {
+  const t = await crossTrial(request, ["s1", "s2"]);
+  // 文の側の画像を 2.5 秒遅らせる。読み込み終わるまで「見る」は押せない
+  await page.route("**/api/t/practice/files/pages/**", async (r) => {
+    await new Promise((ok) => setTimeout(ok, 2500));
+    await r.continue();
+  });
+  await page.goto(`/#/t/practice/trial/${t.id}/self/s1`);
+  await expect(page.getByTestId("self-show")).toBeDisabled();
+  await expect(page.getByTestId("self-show")).toHaveText("じゅんびちゅう");
+  await expect(page.getByTestId("self-show")).toBeEnabled({ timeout: 10_000 });
+  for (const k of [0, 1]) {
+    await answerOne(page, `答え ${k}`);
+    await expect(page.getByTestId(k === 0 ? "self-show" : "self-done")).toBeVisible();
+  }
+  const rows = (await (await request.get(`/api/t/practice/trials/${t.id}/responses`)).json()).responses as { participant: string; shown: string; ms: number }[];
+  const mine = rows.filter((r) => r.participant === "s1");
+  expect(mine.map((r) => r.shown).sort()).toEqual(["card", "text"]);
+  // 読み込みの 2.5 秒は入っていない（押すまで 0.3 秒待っただけ）
+  for (const r of mine) expect(r.ms).toBeLessThan(1500);
+});
+
+test("① 送るのに失敗しても答えと時間は消えず、回線が戻ると 1 回だけ届く", async ({ page, request }) => {
+  const t = await crossTrial(request, ["f1", "f2"]);
+  await page.goto(`/#/t/practice/trial/${t.id}/self/f1`);
+  // 答えを送る口だけを落とす
+  let down = true;
+  await page.route(`**/api/t/practice/trials/${t.id}/responses`, (r) => (down && r.request().method() === "POST" ? r.abort() : r.continue()));
+  await answerOne(page, "落ちても消えない");
+  await expect(page.getByTestId("self-pending")).toContainText("まだ おくれて いません（1）");
+  // 次の項目へは進める。読み直しても、送れていない答えは端末の中から戻る
+  await expect(page.getByTestId("self-show")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("self-pending")).toContainText("（1）");
+  await answerOne(page, "2 つ目");
+  await expect(page.getByTestId("self-pending")).toContainText("（2）");
+  await expect(page.getByTestId("self-done")).toBeVisible();
+  expect(((await (await request.get(`/api/t/practice/trials/${t.id}/responses`)).json()).responses as unknown[]).length).toBe(0);
+  // 回線が戻ったので、もう一度送る。2 回押しても同じ答えは 2 つ入らない
+  down = false;
+  await page.getByTestId("self-resend").click();
+  await page.getByTestId("self-resend").click({ timeout: 1000 }).catch(() => {});
+  await expect(page.getByTestId("self-pending")).toHaveCount(0);
+  await page.waitForTimeout(500);
+  const rows = (await (await request.get(`/api/t/practice/trials/${t.id}/responses`)).json()).responses as { participant: string; item: string; ms: number; answer: string }[];
+  expect(rows.map((r) => r.item).sort()).toEqual(["A", "B"]);
+  for (const r of rows) expect(r.ms).toBeGreaterThan(0);
+  expect(JSON.parse(rows.find((r) => r.item === "A")!.answer).ja).toBe("落ちても消えない");
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("gk-out:")).length)).toBe(0);
 });

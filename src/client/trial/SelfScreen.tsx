@@ -1,85 +1,139 @@
 // ① を自分で受ける画面（11/5 作者）。参加者が 1 人 1 台の iPad で、項目 A・B を 1 つずつ受ける。
-// 組のとおりに、片方はカード、もう片方は元のページ（日本語の原文の画像）。「見る」で出して計り始め、「分かった」で止め、意味を書いて送る
+// 組のとおりに、片方はカード、もう片方は元のページ（日本語の原文の画像）。
+// 会場の回線に左右されないように、2 問分の絵と画像を最初に全部読み込み、終わるまで「見る」を押せない。
+// 時間は絵か画像が画面に出た時から「分かった」まで、端末の中の時計で数える。答えは端末の中に置いてから送り、届くまで送り直す
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { getMaterial, getTrial, listResponses, type MaterialItem, postResponse, type ResponseRow, type Trial } from "./api";
+import { type AnswerFields, canSend, packAnswer } from "../../shared/answer-fields";
+import { AnswerBoxes } from "./AnswerBoxes";
+import { fileUrl, getMaterial, getTrial, listResponses, type MaterialItem, postResponse, type Trial } from "./api";
 import { Material } from "./Material";
+import { useOutbox } from "./outbox";
+
+type Out = { item: "A" | "B"; ms: number; answer: string };
+const sameItem = (a: Out, b: Out) => a.item === b.item;
+const blank: AnswerFields = { ja: "", own: "" };
+
+/** 文の側のページの画像を、先に全部読み込んで描ける形にしておく */
+async function preload(tenant: string, items: MaterialItem[]) {
+  const urls: Record<string, string> = {};
+  for (const x of items) {
+    if (x.shown !== "text" || !x.page) continue;
+    const u = await fileUrl(tenant, x.page);
+    const img = new Image();
+    img.src = u;
+    await img.decode();
+    urls[x.item] = u;
+  }
+  return urls;
+}
 
 export function SelfScreen({ tenant, id, participant }: { tenant: string; id: string; participant: string }) {
   const [trial, setTrial] = useState<Trial | null>(null);
   const [items, setItems] = useState<MaterialItem[] | null>(null);
-  const [rows, setRows] = useState<ResponseRow[]>([]);
-  const [start, setStart] = useState<number | null>(null);
+  const [urls, setUrls] = useState<Record<string, string> | null>(null);
+  const [sent, setSent] = useState<Set<string> | null>(null);
+  const [showing, setShowing] = useState(false);
+  const [shownAt, setShownAt] = useState<number | null>(null);
   const [ms, setMs] = useState<number | null>(null);
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState<AnswerFields>(blank);
   const [err, setErr] = useState("");
   const t0 = useRef(0);
-  const reload = useCallback(() => listResponses(tenant, id).then(setRows, (e: Error) => setErr(e.message)), [tenant, id]);
   useEffect(() => {
     getTrial(tenant, id).then(setTrial, (e: Error) => setErr(e.message));
-    getMaterial(tenant, id, participant).then(setItems, (e: Error) => setErr(e.message));
-    reload();
-  }, [tenant, id, participant, reload]);
+    listResponses(tenant, id).then(
+      (rs) => setSent(new Set(rs.filter((r) => r.participant === participant).map((r) => r.item))),
+      (e: Error) => setErr(e.message),
+    );
+    getMaterial(tenant, id, participant).then(
+      (xs) => {
+        setItems(xs);
+        preload(tenant, xs).then(setUrls, (e: Error) => setErr(e.message));
+      },
+      (e: Error) => setErr(e.message),
+    );
+  }, [tenant, id, participant]);
+  const send = useCallback(
+    async (e: Out) => {
+      try {
+        await postResponse(tenant, id, { participant, item: e.item, ms: e.ms, answer: e.answer });
+      } catch (x) {
+        // 409 は、前に送った答えがもう届いている（返事だけが落ちた）。同じ答えを 2 つ入れない
+        if ((x as { status?: number }).status !== 409) throw x;
+      }
+      setSent((s) => new Set([...(s ?? []), e.item]));
+    },
+    [tenant, id, participant],
+  );
+  const out = useOutbox<Out>(`gk-out:${tenant}:${id}:${participant}`, send, sameItem);
 
   if (err) return <p className="err">{err}</p>;
-  if (!trial || !items) return <p>読み込み中…</p>;
+  if (!trial || !items || !sent) return <p>読み込み中…</p>;
   if (trial.design !== "cross") return <p className="err">この回は、1 人がカードと文を 1 つずつ受ける形（交差の回）ではない</p>;
   if (!trial.participants.includes(participant)) return <p className="err">この回の参加者ではない: {participant}</p>;
-  const done = new Set(rows.filter((r) => r.participant === participant).map((r) => r.item));
+  const done = new Set([...sent, ...out.pending.map((p) => p.item)]);
   const cur = items.find((x) => !done.has(x.item));
+  const banner = out.pending.length > 0 && (
+    <p className="err" data-testid="self-pending">
+      まだ おくれて いません（{out.pending.length}）{" "}
+      <button type="button" onClick={() => void out.flush()} data-testid="self-resend">
+        もう いちど おくる
+      </button>
+    </p>
+  );
   if (!cur)
     return (
-      <p className="done" data-testid="self-done">
-        おわりです。ありがとうございました
-      </p>
+      <div className="answer">
+        {banner}
+        <p className="done" data-testid="self-done">
+          おわりです。ありがとうございました
+        </p>
+      </div>
     );
 
-  const show = () => {
-    t0.current = performance.now();
-    setStart(t0.current);
-  };
   const got = () => setMs(Math.round(performance.now() - t0.current));
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (ms === null || !text.trim() || busy) return;
-    setBusy(true);
-    try {
-      await postResponse(tenant, id, { participant, item: cur.item, ms, answer: text.trim() });
-      setStart(null);
-      setMs(null);
-      setText("");
-      await reload();
-    } catch (e2) {
-      setErr((e2 as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    if (ms === null || !canSend(text)) return;
+    out.add({ item: cur.item, ms, answer: packAnswer(text) });
+    setShowing(false);
+    setShownAt(null);
+    setMs(null);
+    setText(blank);
   };
 
   const n = items.findIndex((x) => x.item === cur.item) + 1;
   return (
     <form className="answer" onSubmit={submit} data-testid="self" data-item={cur.item}>
+      {banner}
       <p className="who">
         {n} / {items.length}
       </p>
-      {start === null ? (
-        <button type="button" className="big" onClick={show} data-testid="self-show">
-          見る
+      {!showing ? (
+        <button type="button" className="big" disabled={!urls} onClick={() => setShowing(true)} data-testid="self-show">
+          {urls ? "見る" : "じゅんびちゅう"}
         </button>
       ) : (
         <>
-          <Material shown={cur.shown} item={cur.item} tenant={tenant} content={cur} />
+          <Material
+            key={cur.item}
+            shown={cur.shown}
+            item={cur.item}
+            tenant={tenant}
+            content={cur}
+            src={urls?.[cur.item]}
+            onShown={() => {
+              t0.current = performance.now();
+              setShownAt(t0.current);
+            }}
+          />
           {ms === null ? (
-            <button type="button" className="big go" onClick={got} data-testid="self-got">
+            <button type="button" className="big go" disabled={shownAt === null} onClick={got} data-testid="self-got">
               分かった
             </button>
           ) : (
             <>
-              <label>
-                何をすればいいと思いますか
-                <textarea value={text} disabled={busy} onChange={(e) => setText(e.target.value)} rows={4} data-testid="self-text" />
-              </label>
-              <button className="big" disabled={busy || !text.trim()} data-testid="self-submit">
+              <AnswerBoxes value={text} onChange={setText} testid="self-text" />
+              <button className="big" disabled={!canSend(text)} data-testid="self-submit">
                 おくる
               </button>
             </>

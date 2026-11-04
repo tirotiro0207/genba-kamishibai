@@ -31,7 +31,7 @@ test("教育担当が 8 枚に勘を書き、参加者が絵だけで答える�
   await expect(page.getByTestId("read-frames")).toBeVisible();
   await expect(page.getByTestId("pic-answer")).not.toContainText("059 の輪");
   const first = await page.getByTestId("pic-answer").getAttribute("data-card");
-  await page.getByTestId("pic-text").fill("手袋をはめてから触る");
+  await page.getByTestId("pic-text-ja").fill("手袋をはめてから触る");
   await page.waitForTimeout(800);
   await page.getByTestId("pic-submit").click();
   await expect(page.getByTestId("pic-answer")).not.toHaveAttribute("data-card", first!);

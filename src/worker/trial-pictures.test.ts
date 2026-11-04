@@ -36,6 +36,13 @@ describe("記録アプリの 8 枚と教育担当の勘（059）", () => {
     const a1 = (await (await call(`${base}/${t.id}/picture-answers`, json("POST", { participant: "p1", answer: "手袋をはめる" }))).json()) as { card_id: string };
     const a2 = (await (await call(`${base}/${t.id}/picture-answers`, json("POST", { participant: "p1", answer: "線を確かめる" }))).json()) as { card_id: string };
     expect([a1.card_id, a2.card_id]).toEqual(orders[0].slice(0, 2));
+    // 送り直し（11/5）: どのカードへの答えかを付けると、済んだカードに 2 つ目を入れず、次のカードの答えにもしない
+    const again = (card_id: string) => call(`${base}/${t.id}/picture-answers`, json("POST", { participant: "p1", answer: "送り直し", card_id }));
+    expect((await again(a2.card_id)).status).toBe(409);
+    expect((await again(orders[0][3])).status).toBe(400);
+    expect((await again(orders[0][2])).status).toBe(201);
+    const mine = ((await (await call(`${base}/${t.id}/picture-answers`)).json()) as { answers: { participant: string }[] }).answers.filter((a) => a.participant === "p1");
+    expect(mine).toHaveLength(3);
   });
 
   it("勘の記入の日時は、絵だけの答えより前。答えが入り始めたら勘は書けず、カードも変えられない", async () => {

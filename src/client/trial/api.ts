@@ -33,7 +33,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const tenant = decodeURIComponent(path.split("/")[3] ?? "");
   const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...authHeaders(tenant), ...(init?.headers ?? {}) } });
   const body = await res.json();
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  // 送り直しで 409（済んでいる）を見分けられるように、HTTP の番号を付けて投げる
+  if (!res.ok) throw Object.assign(new Error((body as { error?: string }).error ?? `HTTP ${res.status}`), { status: res.status });
   return body as T;
 }
 
@@ -57,7 +58,7 @@ export interface Grade {
   answer_ja: string | null;
 }
 export const listGrades = (tenant: string, id: string, grader: Grader) => req<{ grades: Grade[] }>(`${base(tenant)}/${id}/grades?grader=${grader}`).then((r) => r.grades);
-export const postGrade = (tenant: string, id: string, body: { response_seq: number; grader: Grader; verdict: Verdict; answer_ja?: string }) =>
+export const postGrade = (tenant: string, id: string, body: { response_seq: number; grader: Grader; verdict: Verdict; answer_ja?: string; field?: "ja" | "own" }) =>
   req<{ seq: number }>(`${base(tenant)}/${id}/grades`, { method: "POST", body: JSON.stringify(body) });
 export const csvUrl = (tenant: string, id: string) => `${base(tenant)}/${id}/answers.csv`;
 
@@ -90,8 +91,8 @@ export const getMyPictures = (tenant: string, id: string, participant: string) =
 export const setPictureCards = (tenant: string, id: string, cards: string[]) => req<{ cards: string[] }>(`${base(tenant)}/${id}/cards`, { method: "POST", body: JSON.stringify({ cards }) });
 export const postForecast = (tenant: string, id: string, card_id: string, rate: number) =>
   req<{ seq: number; created_at: string }>(`${base(tenant)}/${id}/forecasts`, { method: "POST", body: JSON.stringify({ card_id, rate }) });
-export const postPictureAnswer = (tenant: string, id: string, participant: string, answer: string) =>
-  req<{ seq: number; card_id: string }>(`${base(tenant)}/${id}/picture-answers`, { method: "POST", body: JSON.stringify({ participant, answer }) });
+export const postPictureAnswer = (tenant: string, id: string, participant: string, answer: string, card_id?: string) =>
+  req<{ seq: number; card_id: string }>(`${base(tenant)}/${id}/picture-answers`, { method: "POST", body: JSON.stringify({ participant, answer, card_id }) });
 export const listTenantCards = (tenant: string) =>
   req<{ cards: { id: string; body: { rule: string; motion: CardMotion }; status: string }[] }>(`/api/t/${encodeURIComponent(tenant)}/cards`).then((r) => r.cards);
 
@@ -124,3 +125,16 @@ export async function putFile(tenant: string, path: string, file: Blob) {
   const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/files/${path}`, { method: "PUT", headers: { ...authHeaders(tenant), "content-type": file.type || "application/octet-stream" }, body: file });
   if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
 }
+
+/** 交差の回の結果（11/5）。国籍ごとの数はまとめた数だけ */
+export interface SummaryCell {
+  item: "A" | "B";
+  shown: Shown;
+  n: number;
+  median_ms: number | null;
+  graded: number;
+  correct: number;
+  disagree: number;
+}
+export const getSummary = (tenant: string, id: string) =>
+  req<{ all: SummaryCell[]; groups: { group: string; people: number; cells: SummaryCell[] }[]; hidden: number }>(`${base(tenant)}/${id}/summary`);

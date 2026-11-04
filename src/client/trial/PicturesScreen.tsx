@@ -1,7 +1,10 @@
 // 絵だけの 8 枚（059）。教育担当が前もって勘を書く画面と、参加者が絵だけを見て意味を答える画面。
 // 見せる順番は参加者ごとにサーバーが種から決める。答えが入り始めたら勘は書けない（記入の日時が結果より前になる）
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type AnswerFields, canSend, packAnswer } from "../../shared/answer-fields";
 import { Frames } from "../read/ReadScreen";
+import { AnswerBoxes } from "./AnswerBoxes";
+import { useOutbox } from "./outbox";
 import { getMyPictures, getPictures, listTenantCards, type PictureCard, type PicturesView, postForecast, postPictureAnswer, setPictureCards } from "./api";
 import "./pictures.css";
 
@@ -130,57 +133,70 @@ export function ForecastScreen({ tenant, id }: { tenant: string; id: string }) {
 }
 
 /** 参加者: 絵だけを 1 枚ずつ見て、何をしなさいと言っているかを書く */
+type PicOut = { card_id: string; answer: string };
+const sameCard = (a: PicOut, b: PicOut) => a.card_id === b.card_id;
+
+// 答えの欄は ① と同じ 2 つ（11/5 作者）。答えは端末の中に置いてから送り、届くまで送り直す（会場の回線が切れても消さない）
 export function PictureAnswerScreen({ tenant, id, participant }: { tenant: string; id: string; participant: string }) {
   const [cards, setCards] = useState<PictureCard[] | null>(null);
   const [answered, setAnswered] = useState<string[]>([]);
-  const [text, setText] = useState("");
+  const [text, setText] = useState<AnswerFields>({ ja: "", own: "" });
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const reload = useCallback(
-    () =>
-      getMyPictures(tenant, id, participant).then((r) => {
-        setCards(r.cards);
-        setAnswered(r.answered);
-      }, (e: Error) => setErr(e.message)),
+  useEffect(() => {
+    getMyPictures(tenant, id, participant).then((r) => {
+      setCards(r.cards);
+      setAnswered(r.answered);
+    }, (e: Error) => setErr(e.message));
+  }, [tenant, id, participant]);
+  const send = useCallback(
+    async (e: PicOut) => {
+      try {
+        await postPictureAnswer(tenant, id, participant, e.answer, e.card_id);
+      } catch (x) {
+        // 409 は、このカードの答えがもう届いている
+        if ((x as { status?: number }).status !== 409) throw x;
+      }
+      setAnswered((a) => [...a, e.card_id]);
+    },
     [tenant, id, participant],
   );
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  const out = useOutbox<PicOut>(`gk-pic:${tenant}:${id}:${participant}`, send, sameCard);
   if (err) return <p className="err">{err}</p>;
   if (!cards) return <p>読み込み中…</p>;
-  const next = cards.find((c) => !answered.includes(c.id));
+  const done = new Set([...answered, ...out.pending.map((p) => p.card_id)]);
+  const next = cards.find((c) => !done.has(c.id));
+  const banner = out.pending.length > 0 && (
+    <p className="err" data-testid="pic-pending">
+      まだ おくれて いません（{out.pending.length}）{" "}
+      <button type="button" onClick={() => void out.flush()} data-testid="pic-resend">
+        もう いちど おくる
+      </button>
+    </p>
+  );
   if (!next)
     return (
-      <p className="done" data-testid="pic-done">
-        絵の答えは全部済み。ありがとうございました
-      </p>
+      <div className="answer">
+        {banner}
+        <p className="done" data-testid="pic-done">
+          絵の答えは全部済み。ありがとうございました
+        </p>
+      </div>
     );
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    try {
-      await postPictureAnswer(tenant, id, participant, text.trim());
-      setText("");
-      await reload();
-    } catch (e2) {
-      setErr((e2 as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    if (!canSend(text)) return;
+    out.add({ card_id: next.id, answer: packAnswer(text) });
+    setText({ ja: "", own: "" });
   };
   return (
     <form className="answer pic-answer" onSubmit={submit} data-testid="pic-answer" data-card={next.id}>
+      {banner}
       <p className="who">
-        参加者 {participant} ・ {answered.length + 1} / {cards.length} 枚
+        参加者 {participant} ・ {done.size + 1} / {cards.length} 枚
       </p>
       <Frames key={next.id} motion={next.motion} />
-      <label>
-        この絵は、何をしなさいと言っていますか
-        <textarea value={text} disabled={busy} onChange={(e) => setText(e.target.value)} rows={3} data-testid="pic-text" />
-      </label>
-      <button className="big" disabled={busy || !text.trim()} data-testid="pic-submit">
+      <AnswerBoxes value={text} onChange={setText} testid="pic-text" />
+      <button className="big" disabled={!canSend(text)} data-testid="pic-submit">
         答える
       </button>
     </form>
