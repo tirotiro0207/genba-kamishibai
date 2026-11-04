@@ -170,10 +170,13 @@ FIX = {
     # clip: 頭の輪郭（線の外の端）より外の髪を落とす（とさかは残す）。shift: 顔の右の髪の塊を顔の輪郭に寄せる
     # front_all: 胴より後ろに回さない（肩に掛かる髪）。tail_back: 真横のツインテールの尾を後ろへずらす量
     # nape: (x, y) 耳の後ろの x より後ろ・y より上の頭を髪で埋める
+    # under_face: その y より下で、顔（輪郭の線の外の端まで）に重なる髪を、前の層から顔の後ろの層へ移す（顔の線を髪の前に出す）
     ("mash", "side"): {"fitx": (-50, None, 46.5)},
     ("sidePart", "side"): {"fitx": (-50, None, 46.5)},
     ("curly", "front"): {"front_all": True},
     ("curly", "quarter"): {"front_all": True},
+    # 三つ編みの斜め: 耳の下の髪の塊は顔の線の後ろ（見本の一覧で顔の線が手前）。耳より下で顔（線の外の端まで）に重なる所を顔の後ろの層へ移す
+    ("braids", "quarter"): {"under_face": -22},
 }
 
 def flatten(d, n=24):
@@ -377,17 +380,39 @@ for no, name in enumerate(NEW, 2):
             gray = (ndi.binary_fill_holes(hair | fin) | (fin & head)) & (out_head < 1.5)
             gray = smooth(gray, 0.4 * u)
             hair = smooth(fin, 0.4 * u)
-        # あごより 8 下から下は、胴より後ろの層（三つ編みと、肩に掛かるくせ毛は胸の前なので前の層のまま）
-        lower = hair & (yy > 8) if name != "braids" and not fix.get("front_all") else np.zeros_like(hair)
+        # あごの線（y 0）より 1 下から下は、首と胴より後ろの層（三つ編みと、肩に掛かるくせ毛は胸の前なので前の層のまま）。
+        # 切れ目をあごより下（8）に置くと、前の層が首の上を塗って、首が細い帯しか見えなくなる
+        lower = hair & (yy > 1) if name != "braids" and not fix.get("front_all") else np.zeros_like(hair)
         # 前の層は切れ目より少し下（1.5）まで伸ばし、後ろの層と重ねる（切れ目にすき間の線が出ないように）
-        front = hair & ~(lower & (yy > 9.5)) if lower.any() else hair
-        lower = components(lower, lambda sl, n: n * sv * sv > 150)
+        front = hair & ~(lower & (yy > 2.5)) if lower.any() else hair
+        # かぶり物の下の後ろ髪は、前の層が手描きの髪に替わるので、あごより 8 下で切った前の形のまま（帽子の絵を変えない）
+        hat = components(hair & (yy > 8), lambda sl, n: n * sv * sv > 150) if name != "braids" and not fix.get("front_all") else np.zeros_like(hair)
+        under = np.zeros_like(hair)
+        if "under_face" in fix:
+            # 外した髪は捨てずに顔の後ろの層へ回す（細い顔は輪郭が内へ入るので、捨てると顔と髪の間に白いすき間が出る）
+            under = front & ndi.binary_dilation(region(FACE, sv, ox, oy, hair.shape), iterations=max(1, round(2.5 / sv))) & (yy > fix["under_face"])
+            front &= ~under
+        # 小さな切れ端は捨てる。ただし切れ目（y 1）に接する塊は前の層の続き（尾の先など）なので残す
+        lower = components(lower, lambda sl, n: n * sv * sv > 150 or (sl[0].start - oy) * sv < 2)
+        # 首のまわり: 後ろ髪の端と首の線の間に白いすき間が残ると、首の線が二重に見える（元の絵では髪が首の線に付いている）。
+        # 首（頭の座標で x ±13.5・あごの下から y 24 まで）の高さの行で、首の外 6 までに後ろ髪の端があれば、首の真ん中までを後ろ髪で埋める。
+        # 後ろの層は首の下に描くので、埋めた所は首に隠れ、すき間だけが消える
+        if lower.any():
+            xx = (np.arange(W)[None, :] - ox) * sv
+            for r in np.nonzero(((yy[:, 0] > 1) & (yy[:, 0] < 24)) & lower.any(1))[0]:
+                for side in (-1, 1):
+                    edge = lower[r] & (side * xx[0] >= 13.5) & (side * xx[0] <= 19.5)
+                    if edge.any():
+                        lim = xx[0][edge].min() if side > 0 else xx[0][edge].max()
+                        lower[r] |= (side * xx[0] >= 0) & (side * xx[0] <= side * lim)
         g2 = components(smooth(gray, 0.4 * u), lambda sl, n: n * sv * sv > 3)
         ys, xs = np.nonzero(front)
         result[name][view] = {
             "black": to_head(trace(front), sv, ox, oy) if front.any() else "",
             "gray": to_head(trace(g2), sv, ox, oy) if g2.any() else "",
             "behind": to_head(trace(lower), sv, ox, oy) if lower.any() else "",
+            "hat": to_head(trace(hat), sv, ox, oy) if hat.any() else "",
+            "back": to_head(trace(under | (front & ndi.binary_dilation(under, iterations=2))), sv, ox, oy) if under.any() else "",
             "dark": to_head(trace(dark), sv, ox, oy) if dark.any() else "",
             "skin": to_head(trace(skin), sv, ox, oy) if skin.any() else "",
             "top": round(float((ys.min() - oy) * sv), 1) if front.any() else None,
@@ -408,13 +433,13 @@ if TS:
     }.items()}
     lines = [
         "// 手で塗り直した髪だけの絵から取り出した形（おかっぱ以外の 18 種）。scripts/picto-hair-trace.py が作る。手で直さない（製品仕様 §14）",
-        "// 座標は頭の座標（首の付け根が原点、顔の内側は x ±42.5・下 −2.5）。front は顔より前、behind は胴より後ろ（あごより 8 下から下）。",
+        "// 座標は頭の座標（首の付け根が原点、顔の内側は x ±42.5・下 −2.5）。front は顔より前、back は顔より後ろ、behind は首と胴より後ろ（あごより 1 下から下）。hat はかぶり物をかぶったときの behind。",
         "// HAIRFILL は髪の塗り、SKINFILL は肌の色（スキンヘッドとソフトモヒカンの頭の丸み）に置き換える",
         'import type { View } from "./character";',
         "",
         "export const TRACED_HAIRS = " + json.dumps(NEW) + " as const;",
         "export type TracedHair = (typeof TRACED_HAIRS)[number];",
-        "export const TRACED: Record<TracedHair, Record<View, { front: string; behind?: string }>> = {",
+        "export const TRACED: Record<TracedHair, Record<View, { front: string; behind?: string; back?: string; hat?: string }>> = {",
     ]
     tops = {}
     for name in NEW:
@@ -444,6 +469,10 @@ if TS:
             entry = "front: " + json.dumps(front)
             if d["behind"]:
                 entry += ", behind: " + json.dumps(d["behind"])
+            if d.get("hat") != d["behind"]:
+                entry += ", hat: " + json.dumps(d.get("hat", ""))
+            if d.get("back"):
+                entry += ", back: " + json.dumps(f'<path d="{d["back"]}" fill="HAIRFILL"/>')
             lines.append(f"    {view}: {{ {entry} }},")
             t = -100 if name == "skinhead" else d["top"]
             tops[name] = min(tops.get(name, 0), t)

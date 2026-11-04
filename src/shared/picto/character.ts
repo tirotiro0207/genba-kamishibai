@@ -422,11 +422,13 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
   const gloss = bare && h.gloss ? `<path d="${h.gloss}" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>` : "";
   const body = h.front.startsWith("<") ? h.front.replaceAll("HAIRFILL", fill).replaceAll("SKINFILL", skin) : `<path d="${h.front}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>`;
   const front = body + gloss;
-  const behindSrc = (hair === "bob" ? HAIR_B.bob : TRACED[hair])[view].behind;
+  const src = (hair === "bob" ? HAIR_B.bob : TRACED[hair])[view];
+  // かぶり物の下は前の層が手描きの髪に替わるので、それに合う切り方の後ろ髪（hat）を使う
+  const behindSrc = !bare && "hat" in src ? src.hat : src.behind;
   // 手で塗り直した髪は絵に縁まで入っているので、縁取りを足さない（足すと前の層との切れ目に線が出る）
   const behind = !behindSrc ? "" : hair === "bob" ? `<path d="${behindSrc}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : `<path d="${behindSrc}" fill="${fill}"/>`;
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
-  return { back: fit(bare ? (h.back ?? "") : ""), front: fit(front), behind: fit(behind) };
+  return { back: fit(bare ? (h.back ?? "").replaceAll("HAIRFILL", fill) : ""), front: fit(front), behind: fit(behind) };
 };
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
 const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts) => {
