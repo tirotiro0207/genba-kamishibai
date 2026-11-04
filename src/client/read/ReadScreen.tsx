@@ -42,7 +42,7 @@ interface ReadCard {
   id: string;
   rule: string;
   why: string;
-  words: { ja: string; vi: string } | null;
+  words: { ja: string } | null;
   motion: CardMotion;
   frames: { t: number; png?: string }[];
 }
@@ -123,12 +123,7 @@ function ReadCards({ tenant }: { tenant: string }) {
           <p className="read-rule">{c.rule}</p>
           <p className="read-why">なぜ: {c.why}</p>
           {c.words && (
-            <>
-              <p className="read-words">{c.words.ja}</p>
-              <p className="read-words" lang="vi">
-                {c.words.vi}
-              </p>
-            </>
+            <p className="read-words">{c.words.ja}</p>
           )}
         </section>
       </Slide>

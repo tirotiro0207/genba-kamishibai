@@ -116,10 +116,11 @@ export function ForecastScreen({ tenant, id }: { tenant: string; id: string }) {
       {saved && <p className="pic-meta">残した {saved}</p>}
       {v.items.length > 0 && (
         <section className="pic-items" data-testid="pic-items">
-          <h2>2 項目の元のページの訳（このテナントの中だけ）</h2>
+          {/* 元のページは全員に日本語の原文で見せる（11/5 作者）。訳は確かめた人がいないので出さない。vi はデータに残す */}
+          <h2>2 項目の元のページ（日本語の原文・このテナントの中だけ）</h2>
           {v.items.map((it) => (
             <p key={it.item}>
-              項目 {it.item}: {it.vi ?? "（まだ）"}
+              項目 {it.item}: {it.ja ?? "（まだ）"}
             </p>
           ))}
         </section>

@@ -181,8 +181,8 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           {b.words && (
             <div className="card-words" data-testid="card-words">
               <span>言葉</span>
+              {/* やさしい日本語だけを出す（11/5 作者）。監修者が確かめられない訳は出さない。vi はデータに残す */}
               <p>{b.words.ja}</p>
-              <p lang="vi">{b.words.vi.normalize("NFC")}</p>
             </div>
           )}
           <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/route/${encodeURIComponent(card.id)}`} data-testid="card-route">

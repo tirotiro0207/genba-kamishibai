@@ -24,7 +24,8 @@ interface Row {
 
 const view = (r: Row) => {
   const b = JSON.parse(r.body) as CardBody;
-  return { id: r.id, rule: b.rule, why: b.why, words: b.words ?? null, motion: b.motion, frames: b.frames };
+  // 言葉はやさしい日本語だけを渡す（11/5 作者）。監修者が確かめられない訳は、新入社員に届けない。vi はデータに残す
+  return { id: r.id, rule: b.rule, why: b.why, words: b.words ? { ja: b.words.ja } : null, motion: b.motion, frames: b.frames };
 };
 
 /** 署名済みで、最後の署名の行と今の中身・版が合うカードだけ残す */

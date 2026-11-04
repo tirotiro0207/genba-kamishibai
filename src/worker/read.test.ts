@@ -39,6 +39,19 @@ describe("新入社員の閲覧の入口（028）", () => {
     expect(JSON.stringify(c)).not.toContain("sources");
   });
 
+  it("言葉はやさしい日本語だけを返し、ベトナム語は返さない。データの vi は残る（11/5 作者）", async () => {
+    const vi = "Trước khi chạm vào tủ điện, hãy kiểm tra bằng bút thử điện.";
+    const made = (await (await call("/api/t/practice/cards", json("POST", { card: { ...sampleCard(), rule: "028 言葉", words: { ja: "ばんに さわる まえに たしかめます。", vi } } }))).json()) as { id: string };
+    await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(made.id).run();
+    await addSignRow(made.id);
+    const c = (await (await call(`/api/t/practice/read/cards/${made.id}`)).json()) as { words: Record<string, string> };
+    expect(c.words).toEqual({ ja: "ばんに さわる まえに たしかめます。" });
+    const list = (await (await call("/api/t/practice/read/cards")).json()) as { cards: { id: string; words: unknown }[] };
+    expect(JSON.stringify(list.cards.find((x) => x.id === made.id))).not.toContain("tủ điện");
+    const row = (await env.DB.prepare("SELECT body FROM cards WHERE id = ?").bind(made.id).first<{ body: string }>())!;
+    expect((JSON.parse(row.body) as { words: { vi: string } }).words.vi).toBe(vi);
+  });
+
   it("新入社員の役割のしるしで読め、停止すると消える。別のテナントからは見えない", async () => {
     const id = await cardWith("signed", "028 停止");
     const nh = { "x-role": ((await (await call("/api/t/practice/login", json("POST", { role: "newhire" }))).json()) as { token: string }).token };

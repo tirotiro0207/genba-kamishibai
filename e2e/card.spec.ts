@@ -41,7 +41,9 @@ test("コマを 1 つずつ送り、絵の面は 0 字、タップで文が出�
   await face.click();
   await expect(page.getByTestId("card-text")).toContainText("盤に触る前に");
   await expect(page.getByTestId("card-text")).toContainText("感電する");
-  await expect(page.getByTestId("card-words")).toContainText("tủ điện");
+  // 言葉はやさしい日本語だけ（11/5 作者）。データに vi があっても出さない
+  await expect(page.getByTestId("card-words")).toContainText("けんでんきで");
+  await expect(page.getByTestId("card-words")).not.toContainText("tủ điện");
   await page.waitForTimeout(1000);
 
   // 署名の前の下書きは「未承認の下書き」、署名済みは帯なし
