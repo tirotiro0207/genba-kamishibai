@@ -346,7 +346,7 @@ for no, name in enumerate(NEW, 2):
             # とさかのわきに付いてきた縁の黒の細い切れ端（太さ 7 未満）を落とす（とさかは太いので残る）
             fin = ndi.binary_opening(fin, structure=disk(3.5 / sv)) & fin
             # 線より内のとさかは、とさかが線を横切る左右の 2 点を結ぶ弦から下へ垂らした半分の楕円（雫の下の丸み）にする。
-            # 深さは元の絵のとさかの内側の深さ。元の縁の黒に隠れていた、つばのような出っ張りは出さない
+            # 元の縁の黒に隠れていた、つばのような出っ張りは出さない
             outer = fin & ~head
             ys, xs = np.nonzero(fin & ~head & (out_head <= 2))
             i, j = int(np.argmin(xs)), int(np.argmax(xs))
@@ -357,7 +357,8 @@ for no, name in enumerate(NEW, 2):
             gy, gx = np.mgrid[0:H, 0:W]
             uu = (gx - c[0]) * ex[0] + (gy - c[1]) * ex[1]
             vv = (gx - c[0]) * ey[0] + (gy - c[1]) * ey[1]
-            depth = max(float(vv[fin & head].max()) * 0.9, 4 / sv)
+            # 深さは斜めの 14 までにそろえる（正面の元の絵は生え際の近くまで垂れていて、頭の上にちょこんと乗って見えない）
+            depth = min(max(float(vv[fin & head].max()) * 0.9, 4 / sv), 14 / sv)
             # 弦より上（弦と頭の線の間）も、とさかで埋める
             drop = ((vv >= 0) & ((uu / half) ** 2 + (vv / depth) ** 2 <= 1)) | ((vv < 0) & (np.abs(uu) <= half))
             fin = outer | (head & drop) | (fin & ~head)
