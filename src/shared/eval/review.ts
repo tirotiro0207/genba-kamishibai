@@ -38,8 +38,10 @@ export function readMarks(csv: string): Map<number, { mark: Mark; note: string }
 /** 調整用の項目の形にする。担当者の欄は今の調整用の値（役割）を残し、KEEP に無い欄は落とす */
 export function toTune(src: Item, cur: Item | undefined): Item {
   const out: Item = { no: Number(src.no) };
-  for (const k of KEEP) if (k !== "no" && k in src) out[k] = src[k];
-  if (cur && "reviewer" in cur) out.reviewer = cur.reviewer;
+  // 欄の並びは KEEP のとおり（担当者は番号のすぐ後ろ）
+  for (const k of KEEP)
+    if (k === "reviewer" && cur && "reviewer" in cur) out.reviewer = cur.reviewer;
+    else if (k !== "no" && k in src) out[k] = src[k];
   return out;
 }
 

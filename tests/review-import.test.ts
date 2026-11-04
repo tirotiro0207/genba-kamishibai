@@ -88,6 +88,16 @@ describe("監修者の確認表の取り込み（060）", () => {
     expect(hashes.file_sha256).toBe(sha(readFileSync(out, "utf-8")));
   });
 
+  it("送った版の担当者の欄が owner でも、確認用のハッシュは変わらない", () => {
+    const s = setup();
+    const owned = s.next.map(({ reviewer, ...i }: { reviewer: string }) => ({ ...i, owner: reviewer }));
+    writeFileSync(s.nextPath, JSON.stringify(owned));
+    const { result, stopped } = run(s.nextPath, { root: s.root, dry: true });
+    expect(stopped).toBe(false);
+    expect(result.holdoutChanged).toEqual([]);
+    expect(result.tune.map((i) => i.reviewer)).toEqual(["安全の監修者", "規程の監修者"]);
+  });
+
   it("--dry は何も書かない", () => {
     const s = setup();
     expect(run(s.nextPath, { root: s.root, dry: true }).wrote).toEqual([]);

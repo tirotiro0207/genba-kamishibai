@@ -58,8 +58,10 @@ export function run(nextPath: string, o: RunOptions = {}): { result: ImportResul
   const marks = o.marks ? readMarks(readFileSync(o.marks, "utf-8")) : undefined;
   // 担当者の名前 → 役割を、調整用の 20 項目の組から作る（確認用は読まない）。確認用も同じ形にしてからハッシュを比べる
   const nextByNo = new Map(next.map((i) => [i.no, i]));
-  const role = new Map(tune.map((t) => [String(nextByNo.get(t.no)?.reviewer ?? ""), t.reviewer]));
-  const asHoldout = (i: Item) => toTune(i, { no: i.no, reviewer: role.get(String(i.reviewer)) ?? i.reviewer });
+  // 監修者に送った版では担当者の欄が owner の名前のこともある
+  const who = (i: Item | undefined) => String(i?.reviewer ?? i?.owner ?? "");
+  const role = new Map(tune.map((t) => [who(nextByNo.get(t.no)), t.reviewer]));
+  const asHoldout = (i: Item) => toTune(i, { no: i.no, reviewer: role.get(who(i)) ?? who(i) });
   const hashOf = (i: Item) => sha(stable(asHoldout(i)));
   const result = importReview(next, tune, new Map(hashes.items.map((h) => [h.no, h.sha256])), hashOf, marks);
   const wrote: string[] = [];
@@ -67,7 +69,8 @@ export function run(nextPath: string, o: RunOptions = {}): { result: ImportResul
   if (o.dry || stopped) return { result, wrote, stopped };
 
   const at = (o.now ?? new Date()).toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 16);
-  writeFileSync(join(root, PATHS.tune), `${JSON.stringify(result.tune, null, 2)}\n`);
+  // 今の調整用と同じ字下げ（1）にして、差分を中身の違いだけにする
+  writeFileSync(join(root, PATHS.tune), `${JSON.stringify(result.tune, null, 1)}\n`);
   wrote.push(PATHS.tune);
   const head = "# 監修者の確認の取り込みの履歴（060）\n\n調整用の 20 項目の直した差分。確認用の 10 項目は番号と数だけ。\n\n";
   const hist = join(root, PATHS.history);
