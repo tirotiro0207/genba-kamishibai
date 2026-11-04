@@ -2,7 +2,7 @@
 // 取り出す側には、元の文とプロンプトだけを渡す（正解・○△×・注記は渡さない）。採点は別の `claude -p` で、採点する側だけが正解を見る。
 // 周回中は調整用の 20 項目だけを使う。確認用の 10 項目は --final のときだけ読み、点だけを出す（ずれの中身は出さない）。
 //
-//   CLAUDE_BIN=<claude.exe> npx tsx scripts/blind-tune.ts --prompt eval/prompts/extract_v1.txt --round 1 [--jobs 5] [--only 1,2] [--final]
+//   CLAUDE_BIN=<claude.exe> npx tsx scripts/blind-tune.ts --prompt eval/prompts/extract_v1.txt --round 1 [--rep 1] [--jobs 5] [--only 1,2] [--final（HOLDOUT_FILE が要る）]
 //
 // 書くもの: private/tune/<周>/（取り出しと採点の生の結果。git に入らない）と、docs/numbers.md の 1 行
 import { spawn } from "node:child_process";
@@ -17,7 +17,12 @@ const ROOT = join(import.meta.dirname, "..");
 export const EXTRACT = { model: "claude-opus-5-5", effort: "high" };
 export const JUDGE = { model: "claude-opus-5-5", effort: "high" };
 const TUNE = "eval/items_tune_v1r8.json";
-const HOLDOUT = "eval/holdout/items_holdout_v1r8.json";
+/** 確認用の 10 項目の場所は、コードに書かず --final のときに環境変数 HOLDOUT_FILE で渡す（eval-hook のテストが見張る） */
+const holdoutFile = () => {
+  const f = process.env.HOLDOUT_FILE;
+  if (!f || !existsSync(f)) throw new Error("--final には HOLDOUT_FILE（確認用の 10 項目のファイル）が要る");
+  return f;
+};
 const NUMBERS = "docs/numbers.md";
 const HEADING = "## 取り出しのプロンプトを合わせ直す（Opus 5.5・high、サブスクリプションの claude -p）";
 const TABLE_HEAD =
@@ -241,7 +246,7 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  const items = (final ? (JSON.parse(readFileSync(join(ROOT, HOLDOUT), "utf-8")) as Item[]) : tune).filter((i) => !only || only.includes(i.no));
+  const items = (final ? (JSON.parse(readFileSync(holdoutFile(), "utf-8")) as Item[]) : tune).filter((i) => !only || only.includes(i.no));
   const dir = privatePath("tune", final ? `${round}-final` : `${round}-${rep}`);
   mkdirSync(dir, { recursive: true });
   // 取り出す側も採点する側も、リポジトリの外の空のフォルダで動かす（リポジトリの指示や正解のファイルを読ませない）
