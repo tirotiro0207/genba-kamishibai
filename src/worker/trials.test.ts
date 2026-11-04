@@ -33,6 +33,24 @@ describe("回答の記録 1: 保存と順番の乱数（011）", () => {
     expect(b1.shown).not.toBe(r1.shown);
   });
 
+  it("交差の回（11/5）: 国籍つきで作り、1 人が項目ごとに 1 回だけ答える。カードと文を 1 つずつ", async () => {
+    const people = [
+      { id: "v1", group: "ベトナム" },
+      { id: "v2", group: "ベトナム" },
+      { id: "c1", group: "カンボジア" },
+      { id: "c2", group: "カンボジア" },
+    ];
+    expect((await call(base, json("POST", { design: "cross", participants: [{ id: "x" }] }))).status).toBe(400);
+    const t = (await (await call(base, json("POST", { design: "cross", participants: people, seed: "cross-1" }))).json()) as { id: string; design: string; participants: string[]; assignments: { participant: string; group: string; set: number; A: string[]; B: string[] }[] };
+    expect(t.design).toBe("cross");
+    expect(t.participants).toEqual(["v1", "v2", "c1", "c2"]);
+    for (const g of ["ベトナム", "カンボジア"]) expect(t.assignments.filter((a) => a.group === g).map((a) => a.set).sort()).toEqual([1, 2]);
+    const a = (await (await call(`${base}/${t.id}/responses`, json("POST", { participant: "v1", item: "A", ms: 5000, answer: "電気を確かめる" }))).json()) as { shown: string };
+    expect((await call(`${base}/${t.id}/responses`, json("POST", { participant: "v1", item: "A", ms: 1 }))).status).toBe(409);
+    const b = (await (await call(`${base}/${t.id}/responses`, json("POST", { participant: "v1", item: "B", ms: 7000, answer: "下に入らない" }))).json()) as { shown: string };
+    expect([a.shown, b.shown].sort()).toEqual(["card", "text"]);
+  });
+
   it("書き換えと消すことはサーバーが断り、DB でも断る", async () => {
     const t = await newTrial();
     await call(`${base}/${t.id}/responses`, json("POST", { participant: "p2", item: "A", ms: 3000 }));

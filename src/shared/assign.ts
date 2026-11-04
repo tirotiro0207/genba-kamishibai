@@ -41,6 +41,42 @@ export function assign(seed: string, participants: string[]): Assignment[] {
   });
 }
 
+/** 交差の割り当て（11/5 作者）の 1 人分。項目ごとに 1 回だけ見せる */
+export interface CrossAssignment {
+  participant: string;
+  /** 国籍（組を分ける単位） */
+  group: string;
+  /** 組 1: 項目 A をカード・B を文。組 2: その逆 */
+  set: 1 | 2;
+  A: [Shown];
+  B: [Shown];
+}
+
+/**
+ * 1 人がカードの問題と文の問題を 1 つずつ受ける割り当て（11/5 作者）。同じ項目を 2 回見せない。
+ * 国籍ごとに、並べた半分ずつを乱数で組 1・組 2 に分ける（国籍が片方の組にかたよらないように）。
+ * 人数が奇数の国籍の 1 人多い組は、国籍ごとに乱数で決める
+ */
+export function crossAssign(seed: string, people: { id: string; group: string }[]): CrossAssignment[] {
+  const r = rng(seed);
+  const set = new Map<string, 1 | 2>();
+  const groups = [...new Set(people.map((p) => p.group))].sort();
+  for (const g of groups) {
+    const ids = people.filter((p) => p.group === g).map((p) => p.id);
+    const extra: 1 | 2 = r() < 0.5 ? 1 : 2;
+    const sets: (1 | 2)[] = ids.map((_, i) => (i % 2 === 0 ? extra : extra === 1 ? 2 : 1));
+    for (let i = sets.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [sets[i], sets[j]] = [sets[j], sets[i]];
+    }
+    ids.forEach((id, i) => set.set(id, sets[i]));
+  }
+  return people.map(({ id, group }) => {
+    const s = set.get(id)!;
+    return { participant: id, group, set: s, A: [s === 1 ? "card" : "text"], B: [s === 1 ? "text" : "card"] };
+  });
+}
+
 /** 新しい種（記録に残す） */
 export function newSeed(): string {
   return [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("");
