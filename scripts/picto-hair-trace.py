@@ -363,6 +363,15 @@ for no, name in enumerate(NEW, 2):
             drop = ((vv >= 0) & ((uu / half) ** 2 + (vv / depth) ** 2 <= 1)) | ((vv < 0) & (np.abs(uu) <= half))
             fin = outer | (head & drop) | (fin & ~head)
             print("  fin chord %.1f wide, depth %.1f" % (2 * half * sv, depth * sv))
+            # とさかのてっぺんは 3 つの向きで同じ高さ（y −125）。弦の真ん中の高さを根もとにして縦に伸び縮みさせる
+            yt = float(np.nonzero(fin.any(axis=1))[0].min())
+            yb, target = float(c[1]), oy - 125 / sv
+            k = (yb - target) / (yb - yt)
+            src_r = np.where(np.arange(H) < yb, yb - (yb - np.arange(H)) / k, np.arange(H))
+            yi = np.broadcast_to(src_r[:, None], (H, W))
+            xi = np.broadcast_to(np.arange(W)[None, :].astype(float), (H, W))
+            fin = ndi.map_coordinates(fin.astype(float), [yi, xi], order=1) > 0.5
+            print("  fin top %.1f -> -125 (x%.3f)" % ((yt - oy) * sv, k))
             fin = ndi.binary_opening(fin, structure=disk(3 / sv)) & fin
             # 灰は頭の線の下まで敷く（線が灰の端を隠すので、端の角やすき間が出ない）
             gray = (ndi.binary_fill_holes(hair | fin) | (fin & head)) & (out_head < 1.5)
