@@ -80,6 +80,26 @@ Also built:
 - Every API call is logged with its cost, and each use has a spending cap (per call, per day, in total).
 - The app itself was built with Claude Code.
 
+### Running the whole program before spending on the API
+
+Before the overnight run on the API, the same program was run end to end with only the calls to Claude swapped for `claude -p` (the Claude Code CLI on a subscription). Everything else stayed the same: the database writes, the resume logic, the checks. This finds bugs in the program itself (answers it cannot parse, resumes that drift, pages left out), not only in the prompts. Having Claude do the work by hand inside a chat would skip the program, so those bugs would stay hidden.
+
+- Run: 109 pages sorted, 123 draft cards from 62 pages, 4 runs at once, stopped on purpose and resumed. Drift after the resume: 0.
+- Problems found: 8. Fixed before the API run: 3 (parallel writes to the local database, a Vietnamese decimal comma read as a new number, no tool to count resume drift). The other 5 are written down with the reason they remain.
+- Details: [docs/dry-run-063.md](docs/dry-run-063.md).
+
+### What the supervisors' review showed about the AI
+
+The extraction was tested on 30 items cut from Japanese laws and public materials (the evaluation data under Before / During), and two supervisors marked every answer. What the AI gets wrong, as found:
+
+- Exceptions and supplements are often far from the sentence: later in the same paragraph, in another article, in an enforcement regulation or a ministry notice. The AI summarizes only the text in front of it, so it misses them. Cue words ("however", "except") catch some cases, not all.
+- The "why" is usually not written in the source. The AI left it out; the supervisors added who and what the rule protects.
+- Plain rewording can change the meaning (for example, "six months of continuous work" read as "never taking a day off").
+- Tuning on 20 items raised their score from 0.81 to 0.96, but the 10 held-out items only moved from 0.79 to 0.80. The gain did not carry over.
+- Examples taken from the test material make scores look better without showing real ability, so prompt examples come from outside it, and every prompt is checked for overlap with it.
+
+Because of this, a supervisor's check is a step the system depends on, not an extra. Details: [docs/lessons-extraction.md](docs/lessons-extraction.md).
+
 ## Quick Start
 
 Requires Node.js 24.
