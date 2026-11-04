@@ -24,8 +24,9 @@ const sections = (s: string) => {
 };
 
 describe.skipIf(files.length === 0)("同意書の下書き（026）", () => {
-  it("やさしい日本語とベトナム語の版がある", () => {
-    expect(files).toEqual(expect.arrayContaining(["consent.ja-easy.md", "consent.vi.md"]));
+  // 渡すのはやさしい日本語の版だけ（11/4 作者の決定）。ほかの言葉の下書きが置き場にあれば、同じ検査をかける
+  it("やさしい日本語の版がある", () => {
+    expect(files).toContain("consent.ja-easy.md");
   });
 
   for (const f of files) {

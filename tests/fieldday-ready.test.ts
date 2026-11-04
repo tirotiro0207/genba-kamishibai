@@ -61,9 +61,9 @@ describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("当日の準備の�
     for (const p of paths) expect(app, p).toMatch(new RegExp(`r\\[[34]\\] === "${p}"`));
   });
 
-  it("同意書は 2 つの言葉の版を刷り、確認の済んでいない版は使わない。新入社員は撮らない", () => {
-    expect(sec.get("consent")).toMatch(/ベトナム語の版/);
+  it("同意書はやさしい日本語の版だけを刷り、確認の済んでいない版は使わない。新入社員は撮らない", () => {
     expect(sec.get("consent")).toMatch(/やさしい日本語の版/);
+    expect(sec.get("consent")).not.toMatch(/ベトナム語の版/);
     expect(sec.get("consent")).toMatch(/済んでいない版は使わない/);
     expect(sec.get("recording")).toMatch(/顔・声・名前を撮らない/);
   });
