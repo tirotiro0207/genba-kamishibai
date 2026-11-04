@@ -7,6 +7,7 @@
 //   --pick は、1 ページの決まりの先頭 N 個でなく、選ぶ段（src/shared/make/pick.ts）で絵で伝わる決まりを選ぶ（063 の前の通しで足した。本番に使うかは作者が決める）
 //   --run-max-usd は、この回の費用の合計（前の回の分と取り出しも入れる）の上限。API では既定 30 USD
 //   --pick-prompt <ファイル> は選ぶ段の指示を別の版にする（合わせ込み用）。--pages 3,8,15 はそのページだけを流す（合わせる用・取っておく用に分けたとき）
+//   --draw-extra <ファイル> は、角度と人形の指示（src/shared/picto/draw.ts）の終わりに一般の決まりを足す（合わせ込み用。決まったら draw.ts に入れる）
 //   --shard i/n は「する」のページを n 組に分けた i 組目（1 から）だけを流す。サブスクで 4 本くらいを同時に流すときに使う
 import { readFileSync } from "node:fs";
 import { claudePClient } from "../src/node/claude-p-client";
@@ -67,7 +68,13 @@ async function main() {
   console.log(`今日の費用（手元の記録・全部の用途）${today.toFixed(2)} USD・1 日の上限 ${dayBudgetUsd()} USD（.env の API_BUDGET_USD_PER_DAY）・1 枚の上限 ${CARD_MAX_USD} USD`);
   if (args.includes("--estimate")) return;
 
-  const client = sub ? claudePClient() : makeClient();
+  const base = sub ? claudePClient() : makeClient();
+  const drawExtra = opt("--draw-extra") ? readFileSync(opt("--draw-extra")!, "utf-8").trim() : "";
+  // 角度と人形の呼び出し（指示が「人形の姿勢と小物を数字で決める係」で始まるもの）にだけ、足す決まりを付ける
+  const client = drawExtra
+    ? { messages: { create: (p: Parameters<typeof base.messages.create>[0]) => base.messages.create(typeof p.system === "string" && p.system.includes("人形の姿勢と小物を数字で決める係") ? { ...p, system: `${p.system}
+${drawExtra}` } : p) } }
+    : base;
   const deps = { client, log };
   const since = new Date().toISOString();
   const steps: Steps = {
