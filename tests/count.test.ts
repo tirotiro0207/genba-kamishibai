@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { count, countBuildLog, countTests, taskIds, toMarkdown } from "../scripts/count";
+import { count, countBuildLog, countTests, fillAppendix, taskIds, toMarkdown } from "../scripts/count";
 
 // 113: 数えるスクリプトの前半。097: 行数と制作記録の行
 const log = ["2026-11-03\taaaa111\t005: 角度", "2026-11-03\tbbbb222\t表を直す", "2026-11-02\tcccc333\t費用を測る", "2026-11-02\t002・002b: 共通部品", "2026-11-02\t001: 骨組み"].join("\n");
@@ -49,5 +49,23 @@ describe("数えるスクリプト（113）", () => {
     expect(md).toContain("| 制作記録の行 | 3 |");
     expect(md).toContain("| tests | 1 | 3 |");
     for (const row of md.split("\n").filter((l) => l.startsWith("|"))) expect(row.endsWith("|"), row).toBe(true);
+  });
+
+  it("期間を渡すと、全体の表のあとに最初と最後のコミットの表が入る。渡さなければ入らない", () => {
+    const span = { first: { at: "2026-11-02 13:21:39 +0900", hash: "cccc333" }, last: { at: "2026-11-03 09:00:00 +0900", hash: "aaaa111" } };
+    const md = toMarkdown({ ...c, span });
+    expect(md.match(/^## .+$/gm)).toEqual(["## 全体", "## 期間", "## フォルダごとのファイル", "## 日ごと"]);
+    expect(md).toContain("| 最初のコミット | 2026-11-02 13:21:39 +0900 | cccc333 |");
+    expect(toMarkdown(c)).not.toContain("## 期間");
+  });
+
+  it("付録の「数えた表」の節だけを貼り替え、数えた時点の行を書き換える", () => {
+    const md = "# 付録\n\n- 数えた時点: コミット 0000000（2026-11-02）\n\n## 数えた表\n\n古い表\n\n## 数え方\n\n- そのまま\n";
+    const out = fillAppendix(md, toMarkdown(c), { hash: "aaaa111", day: "2026-11-03" });
+    expect(out).toContain("- 数えた時点: コミット aaaa111（2026-11-03）");
+    expect(out).not.toContain("古い表");
+    expect(out.match(/^### .+$/gm)).toEqual(["### 全体", "### フォルダごとのファイル", "### 日ごと"]);
+    expect(out.endsWith("## 数え方\n\n- そのまま\n")).toBe(true);
+    expect(() => fillAppendix("# 節が無い\n", "", { hash: "a", day: "b" })).toThrow();
   });
 });

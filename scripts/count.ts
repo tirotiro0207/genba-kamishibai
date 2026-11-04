@@ -1,9 +1,11 @@
 // 数えるスクリプトの前半（113）。git と作業の表から、コミット数・テスト数・ファイル数・日ごとの済んだマスを数えて表にする。
 // 097: 行数（コードのファイル）と、制作記録（docs/build-log.md）の日ごとの行の数も数える。
 // 現場の確認のデータが要る数（docs/failures.md の 3 つの欄）はここでは数えない。
+// 期間（最初と最後のコミットの日時）も出す。README の数（106・107）と付録（103）はこの出力から取る。
 // 使い方: npx tsx scripts/count.ts（表を標準出力に出す）
+//         npx tsx scripts/count.ts --appendix（docs/appendix-build-effort.md の「数えた表」を、いまの数で貼り替える）
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf-8" });
 
@@ -51,6 +53,8 @@ export interface Counts {
   lines: { total: number; byDir: [string, number][] };
   /** 制作記録の日ごとの行（「→ 」で始まる行）の数 */
   buildLog: { day: string; entries: number }[];
+  /** 最初と最後のコミット（日時は git の %ci の形） */
+  span?: { first: { at: string; hash: string }; last: { at: string; hash: string } };
   /** 作業の表では済みだが、件名の頭にその番号が付いたコミットも、表の「コミット」の欄に当たるコミットも無いマス */
   unlogged: string[];
 }
@@ -113,6 +117,9 @@ export function count(log: string, plan: string, files: string[], read: (f: stri
 /** Markdown の表にする */
 export function toMarkdown(c: Counts): string {
   const t = c.tests;
+  const span = c.span
+    ? ["## 期間", "", "| 項目 | 日時 | コミット |", "|---|---|---|", `| 最初のコミット | ${c.span.first.at} | ${c.span.first.hash} |`, `| 最後のコミット | ${c.span.last.at} | ${c.span.last.hash} |`, ""]
+    : [];
   return [
     "## 全体",
     "",
@@ -126,6 +133,7 @@ export function toMarkdown(c: Counts): string {
     `| コードの行（ts・tsx・css・sql・mjs・js・py） | ${c.lines.total} |`,
     `| 制作記録の行 | ${c.buildLog.reduce((a, d) => a + d.entries, 0)} |`,
     "",
+    ...span,
     "## フォルダごとのファイル",
     "",
     "| フォルダ | ファイル | コードの行 |",
@@ -143,10 +151,26 @@ export function toMarkdown(c: Counts): string {
   ].join("\n");
 }
 
+/** 付録の「## 数えた表」から次の「## 」の前までを、表（見出しを 1 段下げる）で貼り替え、数えた時点の行を書き換える */
+export function fillAppendix(md: string, table: string, at: { hash: string; day: string }): string {
+  const start = md.indexOf("\n## 数えた表\n");
+  const end = md.indexOf("\n## ", start + 1);
+  if (start < 0 || end < 0) throw new Error("付録に「## 数えた表」の節が無い");
+  const body = table.replace(/^## /gm, "### ").trimEnd();
+  return (md.slice(0, start) + `\n## 数えた表\n\n${body}\n` + md.slice(end)).replace(/数えた時点: コミット [0-9a-f]{7,40}（[^）]*）/, `数えた時点: コミット ${at.hash}（${at.day}）`);
+}
+
 function main() {
   const log = git("log", "--format=%ad%x09%h%x09%s", "--date=short");
   const files = git("ls-files").split(/\r?\n/).filter(Boolean);
-  process.stdout.write(toMarkdown(count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8"))));
+  const ends = git("log", "--format=%ci%x09%h").split(/\r?\n/).filter(Boolean);
+  const at = (l: string) => ({ at: l.split("\t")[0], hash: l.split("\t")[1] });
+  const c = { ...count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8")), span: { first: at(ends.at(-1)!), last: at(ends[0]) } };
+  const table = toMarkdown(c);
+  if (!process.argv.includes("--appendix")) return void process.stdout.write(table);
+  const f = "docs/appendix-build-effort.md";
+  writeFileSync(f, fillAppendix(readFileSync(f, "utf-8").replace(/\r\n/g, "\n"), table, { hash: c.span.last.hash, day: c.span.last.at.slice(0, 10) }));
+  process.stdout.write(`${f} を ${c.span.last.hash} の数で貼り替えた\n`);
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) main();
