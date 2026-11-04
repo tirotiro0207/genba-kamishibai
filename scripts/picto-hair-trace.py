@@ -152,6 +152,157 @@ def smooth(mask, sigma):
     """縁のギザギザをならす（ぼかしてから半分で切る）"""
     return ndi.gaussian_filter(mask.astype(float), sigma) > 0.5
 
+# ---- こちらの頭に合わせる直し（作者の見直し表のコメントから） ----
+# 参考絵の頭は丸く、こちらの頭（顔の輪郭）は角の丸い四角なので、斜め・真横では後頭部の角が髪からはみ出たり、
+# 前髪が顔より前へ出すぎたりする。髪の形（パスにする前の塗り）を頭の座標の上で直してから、パスにする。
+FACE = "M-18 -70H18Q44 -70 44.6 -48L45.4 -30Q45 0 12 0H-12Q-44.6 0.4 -45 -30L-44.4 -48Q-44 -70 -18 -70Z"  # avatar.ts の faceOutline("standard")
+DOME = "M-44.6 -46C-46 -86 -24 -100 0 -100S46 -86 44.6 -46"  # 頭の上の丸み（スキンヘッド。3 つの向きで同じ）
+FIX = {
+    # wrap: 後頭部の角（顔の輪郭の線の外の端まで）を髪で包む。fitx: (行の y, 後ろの端, 前の端) へ髪を横に伸び縮みさせる
+    # clip: 頭の輪郭（線の外の端）より外の髪を落とす（とさかは残す）。shift: 顔の右の髪の塊を顔の輪郭に寄せる
+    # front_all: 胴より後ろに回さない（肩に掛かる髪）。tail_back: 真横のツインテールの尾を後ろへずらす量
+    # nape: (x, y) 耳の後ろの x より後ろ・y より上の頭を髪で埋める
+    ("braids", "side"): {"wrap": True},
+    ("buzz", "quarter"): {"clip": True, "wrap": True},
+    ("buzz", "side"): {"clip": True, "wrap": True},
+    ("mash", "side"): {"fitx": (-50, None, 46.5)},
+    ("sidePart", "side"): {"fitx": (-50, -50, 46.5), "wrap": True},
+    ("softMohawk", "front"): {"clip": True},
+    ("softMohawk", "quarter"): {"clip": True, "wrap": True},
+    ("softMohawk", "side"): {"clip": True, "wrap": True},
+    ("twinTails", "quarter"): {"shift": True},
+    ("twinTails", "side"): {"nape": (-4, -24), "wrap": -24, "tail_back": 4},
+    ("twoBlock", "quarter"): {"wrap": True},
+    ("twoBlock", "side"): {"wrap": True},
+    ("curly", "front"): {"front_all": True},
+    ("curly", "quarter"): {"front_all": True},
+}
+
+def flatten(d, n=24):
+    """M H L Q C S Z だけの path を折れ線の点にする"""
+    t = re.findall(r"[A-Za-z]|-?\d+(?:\.\d+)?", d)
+    pts, i, cur, cmd, last_c = [], 0, (0.0, 0.0), "", None
+    while i < len(t):
+        if t[i].isalpha():
+            cmd = t[i]; i += 1
+            continue
+        if cmd in "ML":
+            cur = (float(t[i]), float(t[i + 1])); i += 2; pts.append(cur); last_c = None
+        elif cmd == "H":
+            cur = (float(t[i]), cur[1]); i += 1; pts.append(cur); last_c = None
+        elif cmd in "QCS":
+            k = {"Q": 4, "C": 6, "S": 4}[cmd]
+            v = [float(x) for x in t[i:i + k]]; i += k
+            if cmd == "Q":
+                c = [cur, (v[0], v[1]), (v[2], v[3])]
+                last_c = None
+            else:
+                if cmd == "S":
+                    r = (2 * cur[0] - last_c[0], 2 * cur[1] - last_c[1]) if last_c else cur
+                    v = [r[0], r[1]] + v
+                c = [cur, (v[0], v[1]), (v[2], v[3]), (v[4], v[5])]
+                last_c = (v[2], v[3])
+            for j in range(1, n + 1):
+                q, pp = j / n, c
+                while len(pp) > 1:
+                    pp = [((1 - q) * a[0] + q * b[0], (1 - q) * a[1] + q * b[1]) for a, b in zip(pp, pp[1:])]
+                pts.append(pp[0])
+            cur = pts[-1]
+    return pts
+
+def region(d, sv, ox, oy, shape):
+    """頭の座標の path の内側を、髪の絵の画素の格子で塗る"""
+    from PIL import ImageDraw
+    im = Image.new("L", (shape[1], shape[0]), 0)
+    ImageDraw.Draw(im).polygon([(x / sv + ox, y / sv + oy) for x, y in flatten(d)], fill=255)
+    return np.array(im) > 127
+
+def remap_x(masks, xrow, src_of_dst):
+    """横に伸び縮みさせる。src_of_dst は、直したあとの x（頭の座標）が元のどの x から来るか"""
+    H, W = masks[0].shape
+    xi = np.broadcast_to(((src_of_dst(xrow) - xrow) / (xrow[1] - xrow[0]) + np.arange(W))[None, :], (H, W))
+    yi = np.broadcast_to(np.arange(H)[:, None].astype(float), (H, W))
+    return [ndi.map_coordinates(m.astype(float), [yi, xi], order=1, cval=0) > 0.5 for m in masks]
+
+def apply_fix(fix, hair, gray, dark, sv, ox, oy):
+    H, W = hair.shape
+    u = 1 / sv
+    yy = (np.arange(H)[:, None] - oy) * sv
+    xx = (np.arange(W)[None, :] - ox) * sv
+    face = region(FACE, sv, ox, oy, hair.shape)
+    if "fitx" in fix:
+        y0, back, front = fix["fitx"]
+        xs = np.nonzero(hair[int(round(y0 / sv + oy))])[0]
+        b0, f0 = (xs.min() - ox) * sv, (xs.max() - ox) * sv
+        b1 = b0 if back is None else back
+        # 後ろの端と前の端を、それぞれ目当ての位置へ（あいだは真っすぐ伸び縮み、外はそのままずらす）
+        src = lambda x: np.interp(x, [-1e4, b1, front, 1e4], [-1e4 + (b0 - b1), b0, f0, 1e4 + (f0 - front)])
+        hair, gray, dark = remap_x([hair, gray, dark], xx[0], src)
+        print("  fitx y %g: back %.1f -> %.1f, front %.1f -> %.1f" % (y0, b0, b1, f0, front))
+    if fix.get("shift"):
+        # 顔の右に垂れる髪（顔の右の端より右・耳より下）を、顔の輪郭の線の外の端（線の太さ 5 の半分）に触れるまで左へ寄せる
+        out_face = ndi.distance_transform_edt(~face) * sv
+        part = hair & (xx > 40) & (yy > -50)
+        # 行ごとに、髪の左の端と線の外の端のすき間を測り、いちばん広い所が閉じるだけ寄せる
+        rows = [float(out_face[r][part[r]].min()) - 2.5 for r in range(H) if part[r].any() and -35 < (r - oy) * sv < -5]
+        gap = max(rows)
+        sh = (0, -int(round(gap / sv)))
+        hair = (hair & ~part) | ndi.shift(part, sh, order=0)
+        gray = (gray & ~part) | ndi.shift(gray & part, sh, order=0)
+        hair = smooth(hair, 0.5 * u)
+        print("  shift right part left by %.2f" % gap)
+    if fix.get("tail_back"):
+        # 真横のツインテールの尾（頭の塊と離れた塊）を後ろへずらす
+        lab, n = ndi.label(hair)
+        sizes = ndi.sum(hair, lab, range(1, n + 1))
+        big = int(np.argmax(sizes)) + 1
+        sh = (0, -int(round(fix["tail_back"] / sv)))
+        for i in range(1, n + 1):
+            comp = lab == i
+            if i == big or float(np.broadcast_to(xx, comp.shape)[comp].mean()) > -15:
+                continue
+            hair = (hair & ~comp) | ndi.shift(comp, sh, order=0)
+            gray = (gray & ~comp) | ndi.shift(gray & comp, sh, order=0)
+            print("  tail moved back by", fix["tail_back"], "size", int(sizes[i - 1]))
+    head = face | region(DOME + "Z", sv, ox, oy, hair.shape)
+    out_head = ndi.distance_transform_edt(~head) * sv
+    in_head = ndi.distance_transform_edt(head) * sv
+    if fix.get("clip"):
+        hair &= (out_head <= 2.5) | (yy < -98)
+        hair = components(hair, lambda sl, n: n * sv * sv > 20)
+    if "nape" in fix:
+        # 尾が頭から離れて垂れる髪は、頭の後ろ（耳の後ろの x より後ろ、y の下の端まで）を髪で埋める
+        xcut, ybot = fix["nape"]
+        band = ((out_head <= 2.5) | head) & (xx < xcut) & (yy <= ybot) & (yy > -80)
+        hair |= smooth(band, 2 * u)
+        print("  nape x < %g, down to y %g" % (xcut, ybot))
+    if fix.get("wrap"):
+        # 行ごとに、髪の後ろの端を、顔の輪郭の線の外の端（後頭部の角）まで出す。出す量は縦になめらかに変える（段を作らない）
+        # 包む下の端は、後ろの髪のいちばん下（数で渡したときはその y。頭から離れて垂れる尾があるとき）
+        back_hair = hair & (xx < -35) & (yy < -5)
+        ymax = fix["wrap"] if fix["wrap"] is not True else (np.nonzero(back_hair)[0].max() - oy) * sv if back_hair.any() else -40
+        x0 = np.arange(W)
+        outer = (out_head <= 2.5) & (yy > -70) & (xx < 0)
+        rows = [r for r in range(H) if -105 < (r - oy) * sv <= ymax and hair[r].any()]
+        # 後ろの端は、線の外の端より内の髪で測る（それより後ろに離れて垂れる尾は数えない）
+        xb = np.array([x0[hair[r] & (x0 >= x0[outer[r]].min())].min() if outer[r].any() and (hair[r] & (x0 >= x0[outer[r]].min())).any()
+                       else x0[hair[r]].min() for r in rows], float)
+        want = np.array([min(xb[i], x0[outer[r]].min()) if outer[r].any() else xb[i] for i, r in enumerate(rows)])
+        new = np.minimum(xb, ndi.gaussian_filter1d(want, 5 * u, mode="nearest"))
+        for i, r in enumerate(rows):
+            if (xb[i] - ox) * sv < -20:  # 後ろ半分に端がある行だけ（頭の上で前に寄った毛先の行は伸ばさない）
+                hair[r, int(round(new[i])):int(xb[i]) + 1] = True
+        hair = smooth(hair, 0.5 * u)
+        print("  wrap down to y %.1f, out by up to %.1f" % (ymax, float((xb - new).max()) * sv))
+    if fix.get("clip") or fix.get("wrap"):
+        # 縁の黒（輪郭の線の太さ 5）を残し、剃った所の灰と坊主の地肌はその内側だけ（とさかの灰・つやの線はそのまま）
+        inner = ndi.distance_transform_edt(ndi.binary_fill_holes(hair)) * sv > 5  # つやの白い点（穴）のまわりは縁にしない
+        big = components(gray, lambda sl, n: n * sv * sv > 60)  # 剃った所・刈り上げ（つやの細い線は残す）
+        gray = (gray & ~big) | (big & (inner | (yy < -98)))
+        gray &= hair
+        dark &= inner
+    return hair, gray, dark
+
 result = json.load(open(OUT, encoding="utf-8")) if ONLY and os.path.exists(OUT) else {}
 for no, name in enumerate(NEW, 2):
     if ONLY and name not in ONLY:
@@ -176,8 +327,16 @@ for no, name in enumerate(NEW, 2):
         gray = alpha & (np.abs(rgba[..., 0] - 0x77) < 20)
         dark = smooth(alpha & (np.abs(rgba[..., 0] - 0x44) < 20), 0.4 * u)  # 坊主の地肌の透ける所。黒い縁の内側
         hair = smooth(alpha, 0.5 * u)
-        # あごより 8 下から下は、胴より後ろの層（三つ編みは胸の前に垂らすので前の層のまま）
-        lower = hair & (yy > 8) if name != "braids" else np.zeros_like(hair)
+        fix = FIX.get((name, view), {})
+        if fix:
+            hair, gray, dark = apply_fix(fix, hair, gray, dark, sv, ox, oy)
+        skin = np.zeros_like(hair)
+        if name == "softMohawk":
+            # 剃った頭の内側（輪郭の線の内）は肌の色。頭の丸みの線は髪の縁の黒がかねる（二重の線にしない）
+            inside = ndi.binary_fill_holes(hair | region(FACE, sv, ox, oy, hair.shape))
+            skin = smooth(ndi.binary_dilation(inside & ~hair & (yy < -66), iterations=3) & inside & (yy < -60), 0.4 * u)
+        # あごより 8 下から下は、胴より後ろの層（三つ編みと、肩に掛かるくせ毛は胸の前なので前の層のまま）
+        lower = hair & (yy > 8) if name != "braids" and not fix.get("front_all") else np.zeros_like(hair)
         # 前の層は切れ目より少し下（1.5）まで伸ばし、後ろの層と重ねる（切れ目にすき間の線が出ないように）
         front = hair & ~(lower & (yy > 9.5)) if lower.any() else hair
         lower = components(lower, lambda sl, n: n * sv * sv > 150)
@@ -188,6 +347,7 @@ for no, name in enumerate(NEW, 2):
             "gray": to_head(trace(g2), sv, ox, oy) if g2.any() else "",
             "behind": to_head(trace(lower), sv, ox, oy) if lower.any() else "",
             "dark": to_head(trace(dark), sv, ox, oy) if dark.any() else "",
+            "skin": to_head(trace(skin), sv, ox, oy) if skin.any() else "",
             "top": round(float((ys.min() - oy) * sv), 1) if front.any() else None,
             "scale": round(sv, 5), "ox": round(float(ox), 1), "oy": round(float(oy), 1), "W": W, "H": H,
         }
@@ -198,11 +358,6 @@ json.dump(result, open(OUT, "w", encoding="utf-8"), ensure_ascii=False)
 # ---- TypeScript に書き出す（環境変数 HAIR_TS に .ts のパスがあれば） ----
 TS = os.environ.get("HAIR_TS")
 if TS:
-    DOME = {
-        "front": "M-44.6 -46C-46 -86 -24 -100 0 -100S46 -86 44.6 -46",
-        "quarter": "M-46 -42C-49 -86 -22 -100 2 -100C26 -100 46 -86 44.6 -46",
-        "side": "M-47 -36C-52 -88 -20 -100 6 -100C30 -100 46 -86 44.6 -46",
-    }
     GLOSS = '<path d="M-30 -80Q-24 -92 -10 -94" fill="none" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>'
     lines = [
         "// 手で塗り直した髪だけの絵から取り出した形（おかっぱ以外の 18 種）。scripts/picto-hair-trace.py が作る。手で直さない（製品仕様 §14）",
@@ -219,8 +374,10 @@ if TS:
         lines.append(f"  {name}: {{")
         for view in VIEWS:
             d = result[name][view]
-            dome = name in ("skinhead", "softMohawk")
-            front = (f'<path d="{DOME[view]}" fill="SKINFILL" stroke="#000" stroke-width="5"/>' if dome else "")
+            # スキンヘッドの頭の丸みは顔の輪郭の線にそのままつながる 1 つの形（3 つの向きで同じ）
+            front = f'<path d="{DOME}" fill="SKINFILL" stroke="#000" stroke-width="5"/>' if name == "skinhead" else ""
+            if d.get("skin"):
+                front += f'<path d="{d["skin"]}" fill="SKINFILL"/>'
             if name == "skinhead":
                 front += GLOSS
             else:
