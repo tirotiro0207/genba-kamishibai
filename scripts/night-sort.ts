@@ -3,19 +3,33 @@
 //
 //   npx tsx scripts/night-sort.ts <資料の名前> --run <番号> [--tenant <テナント>] [--remote] [--pages 1-5] [--fake]
 //   --fake は API を呼ばず、決まった答えを返す（走り手の通しの確かめ用）。--remote は本番の D1 に置く
+//   --sub は Managed Agents の代わりに、同じ指示をサブスクリプションの claude -p で 1 ページずつ呼ぶ（063 の前の通しの確かめ。手元の D1 だけ）
+import { claudePMessage } from "../src/node/claude-p-client";
 import { makeClient } from "../src/node/client";
-import { ensureAgent, sortPageManaged } from "../src/node/managed-sort";
+import { ensureAgent, MA_MODEL, sortPageManaged } from "../src/node/managed-sort";
+import { costUsd } from "../src/shared/claude";
+import { parseSort, SORT_SYSTEM } from "../src/shared/sort/page";
 import { d1Sql, readPages, runNight, type SortPage } from "../src/node/night";
 
 async function main() {
   const args = process.argv.slice(2);
   const opt = (n: string) => (args.includes(n) ? args[args.indexOf(n) + 1] : undefined);
-  const doc = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && !["--remote", "--fake"].includes(args[i - 1])));
+  const doc = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && !["--remote", "--fake", "--sub"].includes(args[i - 1])));
   const runId = opt("--run");
   if (!doc || !runId) throw new Error("使い方: night-sort.ts <資料の名前> --run <番号> [--tenant <テナント>] [--remote] [--pages 1-5] [--fake]");
   const pages = readPages(doc, opt("--pages"));
   let sortPage: SortPage;
-  if (args.includes("--fake")) {
+  if (args.includes("--sub")) {
+    if (args.includes("--remote")) throw new Error("--sub は手元の D1 だけ（本番には書かない）");
+    sortPage = async (text) => {
+      const t0 = Date.now();
+      const m = await claudePMessage({ model: MA_MODEL, max_tokens: 4000, system: SORT_SYSTEM, output_config: { effort: "high" }, messages: [{ role: "user", content: `次のページを仕分けてください。
+
+${text}` }] } as never);
+      const r = parseSort(m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""));
+      return { ...r, usd: costUsd(MA_MODEL, m.usage), ms: Date.now() - t0 };
+    };
+  } else if (args.includes("--fake")) {
     sortPage = async (text) => ({ card: text.length > 200, reason: "（API を呼ばない確かめ）", usd: 0, ms: 0 });
   } else {
     const client = makeClient();

@@ -25,6 +25,13 @@ describe("言葉の欄（036）", () => {
     expect(addedNumbers(card, { ja: "3 回 たしかめる", vi: "kiểm tra 3 lần" })).toEqual(["3"]);
   });
 
+  it("ベトナム語の小数点の「,」は、カードの文の「.」と同じ数字と見る（063 の通しで 1 枚が止まった）", () => {
+    const card = sampleCard();
+    card.statements[0].text = "酸素の濃度が 0.1 % 下がったら外に出る";
+    expect(addedNumbers(card, { ja: "0.1 % さがったら そとに でる", vi: "giảm 0,1 % thì ra ngoài" })).toEqual([]);
+    expect(addedNumbers(card, { ja: "そとに でる", vi: "giảm 0,2 % thì ra ngoài" })).toEqual(["0,2"]);
+  });
+
   it("数字を足したら 1 回だけ書き直させ、用語の空の組は捨てる", async () => {
     const card = sampleCard();
     const client = fake([

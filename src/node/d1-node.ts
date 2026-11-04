@@ -17,13 +17,22 @@ export function wranglerExec(where: "local" | "remote"): Exec {
   const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
   const flags = where === "local" ? ["--local"] : ["--remote", "--env", "production", "-y"];
   return async (sql) => {
-    let out: string;
-    try {
-      out = execFileSync(process.execPath, [wrangler, "d1", "execute", "DB", ...flags, "--json", "--command", sql], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
-    } catch (e) {
-      // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
-      const x = e as { stdout?: string; stderr?: string };
-      throw new Error(`D1 に送れなかった: ${(x.stdout || x.stderr || String(e)).slice(-600)}`);
+    let out = "";
+    for (let attempt = 1; ; attempt++) {
+      try {
+        out = execFileSync(process.execPath, [wrangler, "d1", "execute", "DB", ...flags, "--json", "--command", sql], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
+        break;
+      } catch (e) {
+        // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
+        const x = e as { stdout?: string; stderr?: string };
+        const why = (x.stdout || x.stderr || String(e)).slice(-600);
+        // 手元の D1 に何本も同時に書くと、ファイルの取り合いで internal error が返る（書けていない）。少し待って送り直す。本番は二重に書く恐れがあるので送り直さない
+        if (where === "local" && attempt < 5 && /internal error|SQLITE_BUSY|database is locked/i.test(why)) {
+          await new Promise((r) => setTimeout(r, 500 * attempt + Math.random() * 1000));
+          continue;
+        }
+        throw new Error(`D1 に送れなかった: ${why}`);
+      }
     }
     // JSON の前に案内の行が付いても読めるよう、最初の [ から読む
     const parsed = JSON.parse(out.slice(out.indexOf("["))) as { results?: Record<string, unknown>[]; meta?: { changes?: number } }[];

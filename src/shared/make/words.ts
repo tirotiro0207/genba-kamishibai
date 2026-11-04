@@ -49,10 +49,14 @@ export interface Term {
 const nfkc = (s: string) => s.normalize("NFKC").replace(/\s+/g, "");
 const NUMBER = /\d+(?:[.,]\d+)?/g;
 
+/** 小数点と位取りの印を外した数字（ベトナム語は小数点が「,」で位取りが「.」なので、0,1 と 0.1 を同じに見る） */
+const digits = (n: string) => n.replace(/[.,]/g, "");
+
 /** 言葉の欄に、カードの文に無い数字があればその数字 */
 export function addedNumbers(card: CardBody, words: { ja: string; vi: string }): string[] {
   const src = nfkc(card.statements.map((s) => s.text).join("\n"));
-  return [...new Set([...(nfkc(words.ja).match(NUMBER) ?? []), ...(nfkc(words.vi).match(NUMBER) ?? [])])].filter((n) => !src.includes(n));
+  const srcDigits = new Set((src.match(NUMBER) ?? []).map(digits));
+  return [...new Set([...(nfkc(words.ja).match(NUMBER) ?? []), ...(nfkc(words.vi).match(NUMBER) ?? [])])].filter((n) => !src.includes(n) && !srcDigits.has(digits(n)));
 }
 
 export interface Words {
