@@ -29,6 +29,7 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 
 - The author works with an electrical contractor (founded in 1923) that hires new staff from Vietnam.
 - A rule that is misread on site can hurt someone. A picture card that a supervisor has checked and signed is safer than a machine translation nobody checked.
+- For the same reason, the card shows only plain Japanese. The supervisors cannot check a translation, so it is not shown until someone who reads that language can check it.
 - Direction of the project: [docs/compass.md](docs/compass.md).
 
 ## What it does
@@ -72,7 +73,7 @@ Also built:
 | Extraction | Claude Opus 5.5 | Picks out rules (what to do / not to do / why) with their source positions |
 | Card making | Claude Opus 5.5 | Writes the keyframes and a route for every part of the picture, as numbers (it does not draw the picture directly) |
 | Checking | Claude Opus 5.5 | Looks only at the frames and grades the card; it never sees the card's text |
-| Word field | Claude Opus 5.5 | Writes short plain-Japanese and Vietnamese lines from the card's text only |
+| Word field | Claude Opus 5.5 | Writes short plain-Japanese lines from the card's text only (a Vietnamese line is also written and kept in the data, but not shown) |
 | Overnight sorting | Claude Managed Agents | Reads a whole manual page by page and says which pages hold rules a worker must follow; resumable |
 | Grading the extraction | Claude Sonnet 5.5 | Compares extracted rules with the evaluation answers |
 | Reader panel | Claude Code subagents (Sonnet 5.5 by default) | Each simulated reader is one subagent; the model ID is kept with every answer |
@@ -180,7 +181,7 @@ What existed before the build period (2026-11-02) and what was made during it.
 
 - All code was written from scratch. No code or HTML made before the build period was brought in.
 - All production prompts were written from scratch.
-- The Vietnamese in each card's word field was translated by Claude and collected in a small glossary (Japanese · Vietnamese · which card uses it), which a Vietnamese speaker is checking.
+- The Vietnamese in each card's word field was translated by Claude and collected in a small glossary (Japanese · Vietnamese · which card uses it). It is kept in the data but not shown on the cards until a Vietnamese speaker has checked it.
 
 ## Disclosure
 
