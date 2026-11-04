@@ -29,7 +29,7 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 
 - The author works with an electrical contractor (founded in 1923) that hires new staff from Vietnam.
 - A rule that is misread on site can hurt someone. A picture card that a supervisor has checked and signed is safer than a machine translation nobody checked.
-- For the same reason, the card shows only plain Japanese. The supervisors cannot check a translation, so it is not shown until someone who reads that language can check it.
+- The card's words are in plain Japanese only. A supervisor signs only what they have read and agreed with, so a translation the supervisor cannot read is not put on the card.
 - Direction of the project: [docs/compass.md](docs/compass.md).
 
 ## What it does
