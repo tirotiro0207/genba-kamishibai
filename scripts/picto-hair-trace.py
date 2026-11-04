@@ -400,7 +400,12 @@ json.dump(result, open(OUT, "w", encoding="utf-8"), ensure_ascii=False)
 # ---- TypeScript に書き出す（環境変数 HAIR_TS に .ts のパスがあれば） ----
 TS = os.environ.get("HAIR_TS")
 if TS:
-    GLOSS = '<path d="M-32 -72Q-26 -84 -12 -87" fill="none" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>'
+    # スキンヘッドのつやの線（向きごと）。作者の元の絵（スキンヘッドの 3 枚）のつやの線の真ん中を頭の座標に直して当てはめた。頭の線から離して内側に置く
+    GLOSS = {v: f'<path d="{d}" fill="none" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>' for v, d in {
+        "front": "M-32.5 -60.5Q-28.9 -73.1 -15.6 -80.4",
+        "quarter": "M-32.2 -63.1Q-26.7 -77.9 -9.6 -82.8",
+        "side": "M-32.2 -62.9Q-26.3 -77.7 -9.4 -82.8",
+    }.items()}
     lines = [
         "// 手で塗り直した髪だけの絵から取り出した形（おかっぱ以外の 18 種）。scripts/picto-hair-trace.py が作る。手で直さない（製品仕様 §14）",
         "// 座標は頭の座標（首の付け根が原点、顔の内側は x ±42.5・下 −2.5）。front は顔より前、behind は胴より後ろ（あごより 8 下から下）。",
@@ -424,7 +429,7 @@ if TS:
             if d.get("skin"):
                 front += f'<path d="{d["skin"]}" fill="SKINFILL"/>'
             if name == "skinhead":
-                front += GLOSS
+                front += GLOSS[view]
             elif name == "softMohawk":
                 # 剃った所の灰は頭の線の下に敷き（線が灰の端を隠す）、とさかを線の上に重ねる
                 front = front.replace('<path d="M-45', f'<path d="{d["gray"]}" fill="#777"/><path d="M-45', 1)
