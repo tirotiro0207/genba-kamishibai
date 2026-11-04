@@ -110,20 +110,19 @@ export function shoeFront(i: number, ankle: number, fill = "#222"): string {
 
 /**
  * ベストの V（襟の開き）。正面はまん中で左右同じ。斜めは胸が向く側へ寄せ、手前の辺は長く、奥の辺は縮めて立てる
- * （奥の襟は体の丸みで回り込んで見える）。真横はさらに前へ寄せる
+ * （奥の襟は体の丸みで回り込んで見える）。真横は V を開けない（torso の中）
  */
-const VEST_V: Record<View, string> = {
+const VEST_V: Record<Exclude<View, "side">, string> = {
   front: "-20 -142L0 -100L20 -142",
   quarter: "-12 -142L10 -100L24 -142",
-  side: "-6 -142L8 -100L18 -142",
 };
-// 真横の V は胴の角の丸み（rx 20）の内側で止める。28 まで開くと、角の外へベストの角が突き出て、首元が前へ「ぽこっ」と出て見えた
 /** 胴（原点＝腰。斜めと正面はふつうの幅、真横は細く） */
 export const torso = (view: View, look: Look) => {
   const c = CLOTH[look];
   const w = view === "side" ? 30 : 46;
   return `<rect x="${-w}" y="-142" width="${w * 2}" height="162" rx="${view === "side" ? 20 : 30}" fill="${c.shirt}" stroke="#000" stroke-width="6"/>` +
-    `<path d="M${-w} -110Q${-w} -142 ${VEST_V[view]}Q${w} -142 ${w} -110${hem(w, 18, view)}" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
+    // 真横は V を開けず、上の縁を胴の角の丸み（rx 20）に重ねて両肩をひと続きにする（開くと、襟の中の白と胴の縁の線が首の続きに見えた）
+    `<path d="M${-w} -110${view === "side" ? `V-122A20 20 0 0 1 -10 -142H10A20 20 0 0 1 ${w} -122V-110` : `Q${-w} -142 ${VEST_V[view]}Q${w} -142 ${w} -110`}${hem(w, 18, view)}" fill="${c.vest}" stroke="#000" stroke-width="6" stroke-linejoin="round"/>` +
     `<path d="M${-w + 3} -40H${w - 3}" stroke="#333" stroke-width="12"/>`;
 };
 
@@ -481,7 +480,7 @@ const neckB = (skin: string) => (skin === "#fff" ? NECK_B : NECK_B.replace('fill
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
 /**
  * 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える）。
- * 真横も同じで、首は胴のまん中より少し前（x 6）に立ち、ベストの V（VEST_V.side のまん中 6）と服の襟のまん中（outfit.ts の CX.side）をここにそろえる。
+ * 真横も同じで、首は胴のまん中より少し前（x 6）に立ち、服の襟のまん中（outfit.ts の CX.side）をここにそろえる。
  * 首を 0 のままにすると、襟の開きが首の前へずれて浮いて見えた
  */
 // 斜めは服の中心の線（10）に合わせると頭が前へ出すぎて見えたので、少し戻して 6 にする（11/3 作者の確認）
