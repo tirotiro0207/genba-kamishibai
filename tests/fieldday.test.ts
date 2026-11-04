@@ -1,4 +1,4 @@
-// 現場の確認の日の段取り表の検査（042）。下書きは private/fieldday/runsheet.md（git に入らない）に置き、ここでは項目と時間の割り振りだけを調べる
+// 現場の確認の日の段取り表の検査（042）。段取り表は private/fieldday/runsheet.md（git に入らない）に置き、ここでは項目と時間の割り振りだけを調べる
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { privatePath } from "../src/node/private-dir";
@@ -7,8 +7,8 @@ const FILE = privatePath("fieldday", "runsheet.md");
 
 /** 必要な項目。並びは書面の順番 */
 const ITEMS = ["basics", "timeline", "lanes", "devices", "supervisor", "filming", "graders", "trainer", "fallback"] as const;
-/** 026 の同意がそろってから埋める欄 */
-const BLANKS = ["日時", "場所", "新入社員の人数", "国籍"];
+/** 決まっていないところに付ける印 */
+const PENDING = "確定待ち";
 const TOTAL = 90;
 
 const sections = (s: string) => {
@@ -34,9 +34,13 @@ describe.skipIf(!existsSync(FILE))("現場の確認の日の段取り表（042�
     for (const [k, body] of sec) expect(body.replace(/^#.*$/gm, "").trim().length, k).toBeGreaterThan(20);
   });
 
-  it("日時・場所・人数・国籍は、同意がそろうまで空欄のまま", () => {
+  it("日時・場所・人数・国籍の欄があり、決まっていないところには確定待ちの印がある", () => {
     const basics = new Map(rows(sec.get("basics")!).map(([k, v]) => [k, v]));
-    for (const k of BLANKS) expect(basics.get(k), k).toMatch(/^（空欄: 026 の同意がそろってから/);
+    expect(basics.get("日時")).toMatch(/\d+\/\d+.*\d+:\d{2}/);
+    for (const k of ["場所", "新入社員の人数", "国籍"]) expect(basics.get(k), k).toBeTruthy();
+    // 中身の無い「空欄」は残さない。決まっていないところは確定待ちと書く
+    for (const [k, v] of basics) expect(v, k).not.toMatch(/空欄/);
+    expect([...basics.values()].some((v) => v.includes(PENDING))).toBe(true);
   });
 
   it("割り振りは 0 分から 90 分まで、すき間も重なりも無く続く", () => {
@@ -49,17 +53,28 @@ describe.skipIf(!existsSync(FILE))("現場の確認の日の段取り表（042�
     }
   });
 
-  it("① は 2 列で ② より前、② は端末を分けて同時、監修者の 20 枚は ① と並行、教育担当の勘は ① より前", () => {
+  it("① は 2 列で ② より前、② は端末を分けて同時、教育担当の勘は ① より前", () => {
     const t = rows(sec.get("timeline")!).map(([a, b, room, side]) => ({ a: Number(a), b: Number(b), room, side }));
     const one = t.find((x) => x.room.startsWith("① 分かるまでの時間"))!;
     const two = t.find((x) => x.room.startsWith("② 絵だけ"))!;
     expect(one.room).toMatch(/2 列/);
     expect(two.room).toMatch(/端末を分けて同時/);
     expect(one.b).toBeLessThanOrEqual(two.a);
-    expect(one.side).toMatch(/20 枚/);
     const trainer = t.find((x) => x.side.includes("教育担当の勘"))!;
     expect(trainer.b).toBeLessThanOrEqual(one.a);
     expect(sec.get("trainer")).toMatch(/① より前/);
+  });
+
+  it("監修者の段に、監修と署名・20 枚・一言の撮影が時刻つきで、すき間なく並ぶ", () => {
+    const t = rows(sec.get("supervisor")!).map(([a, b, what]) => ({ a, b, what }));
+    const min = (x: string) => Number(x.split(":")[0]) * 60 + Number(x.split(":")[1]);
+    for (let i = 0; i < t.length; i++) {
+      expect(min(t[i].b), t[i].a).toBeGreaterThan(min(t[i].a));
+      if (i) expect(t[i].a).toBe(t[i - 1].b);
+    }
+    expect(t.find((x) => /署名/.test(x.what))).toBeTruthy();
+    expect(t.find((x) => /20 枚/.test(x.what))).toBeTruthy();
+    expect(t.find((x) => /一言/.test(x.what))).toBeTruthy();
   });
 
   it("撮影と一言の公開の同意を確かめる手順と、2 人目の採点者の欄がある", () => {
