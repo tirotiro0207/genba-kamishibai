@@ -88,6 +88,13 @@ export const hem = (w: number, b: number, view: View) => {
   const r = Math.max(0, (view === "side" ? 20 : 30) - (20 - b));
   return r ? `V${n(b - r)}A${r} ${r} 0 0 1 ${n(w - r)} ${b}H${n(-w + r)}A${r} ${r} 0 0 1 ${-w} ${n(b - r)}Z` : `V${b}H${-w}Z`;
 };
+/**
+ * 真横は襟の V・前立て・紐を首の下に描かない。胴の上の端のまん中は首の真下なので、そこから下へ伸びる線は
+ * 首の枠の続きに見えた（胴の直しと同じ考え。character.ts の torso）。ベスト類は上の縁を胴の角の丸み（rx 20）に重ねて両肩をひと続きにする
+ */
+const sideTop = (w: number) => `M${-w} -110V-122A20 20 0 0 1 -10 -142H10A20 20 0 0 1 ${w} -122V-110`;
+/** 真横の縦の線（ファスナー・前立て）の上の端。手前の腕の付け根（−136 から下を覆う）より下から始め、首の下に線を出さない */
+const lineTop = (v: View, y: number) => (v === "side" ? Math.max(y, -120) : y);
 const fullTop = (w: number, tone: string, bottom = 20) =>
   `<rect x="${-w}" y="-142" width="${w * 2}" height="${bottom + 142}" rx="${w === 30 ? 20 : 30}" fill="${tone}" ${S(6)}/>`;
 
@@ -97,8 +104,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
       const x = (d: number) => n(c + d * SPAN[v]);
-      return fullTop(w, t, 26) + `<path d="M${x(-16)} -142L${x(0)} -118L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
-        `<path d="M${x(-5)} -136H${x(5)}L${x(6)} -112L${x(0)} -106L${x(-6)} -112Z" fill="#222" ${S(3)}/>` +
+      return fullTop(w, t, 26) + (v === "side" ? "" : `<path d="M${x(-16)} -142L${x(0)} -118L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
+        `<path d="M${x(-5)} -136H${x(5)}L${x(6)} -112L${x(0)} -106L${x(-6)} -112Z" fill="#222" ${S(3)}/>`) +
         [-96, -72, -48, -24].map((y) => `<circle cx="${x(0)}" cy="${y}" r="3.5" fill="${k === "#fff" ? "#ccc" : "#555"}"/>`).join("") +
         `<rect x="${x(-34)}" y="-106" width="20" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
     },
@@ -108,8 +115,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
       const x = (d: number) => n(c + d * SPAN[v]);
-      return fullTop(w, t) + `<path d="M${x(-20)} -142L${x(-4)} -124L${x(0)} -136L${x(4)} -124L${x(20)} -142" fill="${t}" ${S(4)}/>` +
-        `<path d="M${x(0)} -136V20" stroke="${k}" stroke-width="3"/><path d="M${-w + 3} -40H${w - 3}" stroke="${k}" stroke-width="5"/>`;
+      return fullTop(w, t) + (v === "side" ? "" : `<path d="M${x(-20)} -142L${x(-4)} -124L${x(0)} -136L${x(4)} -124L${x(20)} -142" fill="${t}" ${S(4)}/>`) +
+        `<path d="M${x(0)} ${lineTop(v, -136)}V20" stroke="${k}" stroke-width="3"/><path d="M${-w + 3} -40H${w - 3}" stroke="${k}" stroke-width="5"/>`;
     },
   },
   tunic: {
@@ -117,7 +124,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v], k = ink(t);
       const x = (d: number) => n(c + d * SPAN[v]);
-      return fullTop(w, t, 30) + `<path d="M${x(-18)} -142Q${x(0)} -122 ${x(18)} -142" fill="none" stroke="${k}" stroke-width="3"/><path d="M${x(-4)} -130V-80" stroke="${k}" stroke-width="3"/>`;
+      return fullTop(w, t, 30) + (v === "side" ? "" : `<path d="M${x(-18)} -142Q${x(0)} -122 ${x(18)} -142" fill="none" stroke="${k}" stroke-width="3"/>`) + `<path d="M${x(-4)} ${lineTop(v, -130)}V-80" stroke="${k}" stroke-width="3"/>`;
     },
   },
   lifeJacket: {
@@ -125,8 +132,10 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return `<path d="M${-w} -108Q${-w} -142 ${x(-18)} -142L${x(-6)} -100V-20H${-w}Z" fill="${t}" ${S(5)}/>` +
-        `<path d="M${w} -108Q${w} -142 ${x(18)} -142L${x(6)} -100V-20H${w}Z" fill="${t}" ${S(5)}/>` +
+      // 真横は前と後ろの身頃を 1 枚にし、上の縁を胴の角の丸みに重ねる（V の合わせ目が首の続きに見えた）
+      return (v === "side" ? `<path d="${sideTop(w)}V-20H${-w}Z" fill="${t}" ${S(5)}/>` :
+        `<path d="M${-w} -108Q${-w} -142 ${x(-18)} -142L${x(-6)} -100V-20H${-w}Z" fill="${t}" ${S(5)}/>` +
+        `<path d="M${w} -108Q${w} -142 ${x(18)} -142L${x(6)} -100V-20H${w}Z" fill="${t}" ${S(5)}/>`) +
         `<path d="M${-w + 2} -60H${w - 2}" stroke="#000" stroke-width="6"/>`;
     },
   },
@@ -136,8 +145,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
       const grid = [-110, -80, -50, -20].map((y) => `<path d="M${-w + 4} ${y}H${w - 4}" stroke="#666" stroke-width="3"/>`).join("") +
-        [-24, 0, 24].filter((x) => Math.abs(x) < w - 6).map((x) => `<path d="M${x} -132V16" stroke="#666" stroke-width="3"/>`).join("");
-      return fullTop(w, t) + grid + `<path d="M${x(-20)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(20)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>`;
+        [-24, 0, 24].filter((x) => Math.abs(x) < w - 6).map((x) => `<path d="M${x} ${lineTop(v, -132)}V16" stroke="#666" stroke-width="3"/>`).join("");
+      return fullTop(w, t) + grid + (v === "side" ? "" : `<path d="M${x(-20)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(20)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>`);
     },
   },
   jacket: {
@@ -146,8 +155,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v), c = CX[v], k = ink(t);
       const x = (d: number) => n(c + d * SPAN[v]);
       return fullTop(w, t) +
-        `<path d="M${x(-24)} -142L${x(-6)} -122L${x(0)} -136L${x(6)} -122L${x(24)} -142" fill="${t}" ${S(4)}/>` +
-        `<path d="M${x(0)} -136V14" stroke="${k}" stroke-width="3"/><rect x="${x(-30)}" y="-108" width="18" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
+        (v === "side" ? "" : `<path d="M${x(-24)} -142L${x(-6)} -122L${x(0)} -136L${x(6)} -122L${x(24)} -142" fill="${t}" ${S(4)}/>`) +
+        `<path d="M${x(0)} ${lineTop(v, -136)}V14" stroke="${k}" stroke-width="3"/><rect x="${x(-30)}" y="-108" width="18" height="14" fill="none" stroke="${k}" stroke-width="3"/>`;
     },
   },
   polo: {
@@ -156,8 +165,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v), c = CX[v], k = ink(t);
       const x = (d: number) => n(c + d * SPAN[v]);
       return fullTop(w, t) +
-        `<path d="M${x(-22)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(22)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>` +
-        `<path d="M${x(0)} -130V-104" stroke="${k}" stroke-width="3"/><circle cx="${x(0)}" cy="-118" r="2.5" fill="${k}"/><circle cx="${x(0)}" cy="-108" r="2.5" fill="${k}"/>`;
+        (v === "side" ? "" : `<path d="M${x(-22)} -142L${x(-4)} -126L${x(-2)} -142ZM${x(22)} -142L${x(4)} -126L${x(2)} -142Z" fill="${t}" ${S(4)}/>`) +
+        `<path d="M${x(0)} ${lineTop(v, -130)}V-104" stroke="${k}" stroke-width="3"/><circle cx="${x(0)}" cy="-118" r="2.5" fill="${k}"/><circle cx="${x(0)}" cy="-108" r="2.5" fill="${k}"/>`;
     },
   },
   chefJacket: {
@@ -166,7 +175,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
       const dots = [-122, -102, -82, -62].flatMap((y) => [x(-12), x(12)].map((cx) => `<circle cx="${cx}" cy="${y}" r="3.5" fill="${ink(t)}"/>`)).join("");
-      return fullTop(w, t) + `<rect x="${x(-20)}" y="-142" width="${40 * SPAN[v]}" height="10" fill="${t}" ${S(4)}/>` + dots;
+      // 立ち襟の帯は、真横では首と同じ幅になって首の続きに見えたので描かない
+      return fullTop(w, t) + (v === "side" ? "" : `<rect x="${x(-20)}" y="-142" width="${40 * SPAN[v]}" height="10" fill="${t}" ${S(4)}/>`) + dots;
     },
   },
   coat: {
@@ -175,7 +185,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
       return `<path d="M${-w} -112Q${-w} -142 ${-w + 30} -142H${w - 30}Q${w} -142 ${w} -112L${w + 6} 104H${-w - 6}Z" fill="${t}" ${S(6)}/>` +
-        `<path d="M${x(-18)} -142L${x(0)} -112L${x(18)} -142M${x(0)} -112V104" stroke="${ink(t)}" stroke-width="3" fill="none"/>`;
+        `<path d="${v === "side" ? "" : `M${x(-18)} -142L${x(0)} -112L${x(18)} -142`}M${x(0)} -112V104" stroke="${ink(t)}" stroke-width="3" fill="none"/>`;
     },
   },
   suit: {
@@ -183,8 +193,8 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return fullTop(w, t, 30) + `<path d="M${x(-16)} -142L${x(0)} -96L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
-        `<path d="M${x(-26)} -142L${x(-4)} -90M${x(26)} -142L${x(4)} -90" stroke="#777" stroke-width="3"/>` +
+      return fullTop(w, t, 30) + (v === "side" ? "" : `<path d="M${x(-16)} -142L${x(0)} -96L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
+        `<path d="M${x(-26)} -142L${x(-4)} -90M${x(26)} -142L${x(4)} -90" stroke="#777" stroke-width="3"/>`) +
         `<circle cx="${x(0)}" cy="-60" r="3.5" fill="#777"/><circle cx="${x(0)}" cy="-36" r="3.5" fill="#777"/>`;
     },
   },
@@ -193,7 +203,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return `<path d="M${-w} -110Q${-w} -142 ${x(-22)} -142L${x(0)} -84L${x(22)} -142Q${w} -142 ${w} -110${hem(w, 14, v)}" fill="${t}" ${S(6)}/>` +
+      return `<path d="${v === "side" ? sideTop(w) : `M${-w} -110Q${-w} -142 ${x(-22)} -142L${x(0)} -84L${x(22)} -142Q${w} -142 ${w} -110`}${hem(w, 14, v)}" fill="${t}" ${S(6)}/>` +
         [-74, -54, -34].map((y) => `<circle cx="${x(0)}" cy="${y}" r="3" fill="${ink(t)}"/>`).join("");
     },
   },
@@ -202,7 +212,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return `<path d="M${-w} -110Q${-w} -142 ${x(-20)} -142L${x(0)} -100L${x(20)} -142Q${w} -142 ${w} -110${hem(w, 4, v)}" fill="${t}" ${S(6)}/>` +
+      return `<path d="${v === "side" ? sideTop(w) : `M${-w} -110Q${-w} -142 ${x(-20)} -142L${x(0)} -100L${x(20)} -142Q${w} -142 ${w} -110`}${hem(w, 4, v)}" fill="${t}" ${S(6)}/>` +
         [-70, -30].map((y) => `<rect x="${-w + 3}" y="${y}" width="${w * 2 - 6}" height="9" fill="#fff"/>`).join("");
     },
   },
@@ -210,6 +220,9 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     tone: "#222",
     draw: (v, t) => {
       const c = CX[v], s = v === "side" ? 0.5 : 1;
+      // 真横は肩の帯を胴の前と後ろの端の近く（首の幅の外）に立てる。首の下で寄せると、首の枠が胴へ続いて見えた
+      if (v === "side")
+        return `<path d="M22 -138V-40M-22 -138V-40M-22 -94H22" stroke="${t}" stroke-width="7" fill="none"/><rect x="${c - 6}" y="-100" width="12" height="12" fill="#999" ${S(3)}/>`;
       return `<path d="M${c - 26 * s} -140L${c - 12 * s} -40M${c + 26 * s} -140L${c + 12 * s} -40M${c - 22 * s} -94H${c + 22 * s}" stroke="${t}" stroke-width="7" fill="none"/>` +
         `<rect x="${c - 6}" y="-100" width="12" height="12" fill="#999" ${S(3)}/>`;
     },
@@ -233,6 +246,9 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v) - 2, c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
+      // 真横は胸当てを胴の前の側に寄せ、肩紐は前の端の近くに 1 本だけ立てる（首の下で寄る 2 本の紐が首の続きに見えた）
+      if (v === "side")
+        return `<path d="M${c} -112H${w}V56H${-w}V-62H${c}Z" fill="${t}" ${S(5)}/><path d="M${w - 6} -112V-138" stroke="#000" stroke-width="4"/>`;
       return `<path d="M${x(-20)} -112H${x(20)}V-62H${w}V56H${-w}V-62H${x(-20)}Z" fill="${t}" ${S(5)}/>` +
         `<path d="M${x(-20)} -112L${x(-12)} -142M${x(20)} -112L${x(12)} -142" stroke="#000" stroke-width="4"/>`;
     },
@@ -243,6 +259,13 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
 const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
   const c = CX[view], w = W(view);
   const x = (d: number) => n(c + d * SPAN[view]);
+  // 真横は首の真下に縦の線を出さない: 手ぬぐいの垂れは前の端に 1 本、ネクタイは胸の前の端、スカーフは首を巻く帯と前の結び目
+  if (view === "side") {
+    if (kind === "towel")
+      return `<path d="M${-w + 6} -142Q${c} -124 ${w - 6} -142V-130Q${c} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/><path d="M${w - 12} -130V-86H${w - 2}V-134Z" fill="#fff" ${S(4)}/>`;
+    if (kind === "tie") return `<path d="M${w - 12} -134H${w - 6}L${w - 5} -74L${w - 9} -64L${w - 13} -74Z" fill="#222" ${S(3)}/>`;
+    return `<path d="M-8 -145H20Q23 -139 20 -133H-8Q-11 -139 -8 -145Z" fill="#222" ${S(4)}/><path d="M15 -136L21 -112L27 -132Z" fill="#222" ${S(4)}/>`;
+  }
   if (kind === "towel")
     return `<path d="M${-w + 6} -142Q${x(0)} -124 ${w - 6} -142V-130Q${x(0)} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
       `<path d="M${x(-22)} -132V-86H${x(-10)}V-128ZM${x(10)} -128V-86H${x(22)}V-132Z" fill="#fff" ${S(4)}/>`;
@@ -257,7 +280,9 @@ const tagSvg = (view: View, kind: "clip" | "lanyard") => {
     const x = view === "side" ? c - 4 : c + 14;
     return `<rect x="${x}" y="-114" width="22" height="14" fill="#fff" ${S(3)}/><path d="M${x + 5} -107H${x + 17}" stroke="#000" stroke-width="2.5"/>`;
   }
-  return `<path d="M${x(-18)} -140L${x(0)} -96L${x(18)} -140" stroke="#444" stroke-width="4" fill="none"/>` +
+  // 真横の紐は首の後ろから胸の名札へ斜めに 1 本（V に寄る 2 本は首の枠の続きに見えた）
+  const cord = view === "side" ? `M-4 -140L${x(0)} -96` : `M${x(-18)} -140L${x(0)} -96L${x(18)} -140`;
+  return `<path d="${cord}" stroke="#444" stroke-width="4" fill="none"/>` +
     `<rect x="${x(-11)}" y="-98" width="22" height="16" fill="#fff" ${S(3)}/><path d="M${x(-6)} -90H${x(6)}" stroke="#000" stroke-width="2.5"/>`;
 };
 const toolBeltSvg = (view: View) => {
