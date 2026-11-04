@@ -330,12 +330,15 @@ for no, name in enumerate(NEW, 2):
             hair, gray, dark = apply_fix(fix, hair, gray, dark, sv, ox, oy)
         skin = np.zeros_like(hair)
         if name == "softMohawk":
-            # とさかの丸い下の端が剃った所の上に乗ると、頭から離れた背びれに見える。頭の輪郭の線より内のとさかは剃った所の灰にし、とさかが線から立つようにする
-            in_head = ndi.distance_transform_edt(region(FACE, sv, ox, oy, hair.shape) | region(DOME + "Z", sv, ox, oy, hair.shape)) * sv
-            gray |= hair & (in_head > 3) & (yy < -60)
-            # 剃った頭の内側（輪郭の線の内）は肌の色。頭の丸みの線は髪の縁の黒がかねる（二重の線にしない）
-            inside = ndi.binary_fill_holes(hair | region(FACE, sv, ox, oy, hair.shape))
-            skin = smooth(ndi.binary_dilation(inside & ~hair & (yy < -66), iterations=3) & inside & (yy < -60), 0.4 * u)
+            # 頭の丸みの線は、スキンヘッドと同じ 1 つの形（顔の輪郭の線にそのままつながる）を描き、元の絵の縁の黒は使わない。
+            # 剃った所の灰はその線の内側だけ。とさかは線より外の黒を、線の上まで下ろして線から立たせる
+            head = region(FACE, sv, ox, oy, hair.shape) | region(DOME + "Z", sv, ox, oy, hair.shape)
+            in_head = ndi.distance_transform_edt(head) * sv
+            out_head = ndi.distance_transform_edt(~head) * sv
+            gray = (gray | (hair & (yy < -60))) & (in_head > 2.5)
+            # とさかは頭のてっぺんより上へ伸びる塊だけ（縁の黒の切れ端は捨てる）
+            fin = components(hair & (out_head > 2.0), lambda sl, n: (sl[0].start - oy) * sv < -95)
+            hair = smooth(ndi.binary_dilation(fin, iterations=int(round(3 / sv))) & hair & (in_head <= 2.5), 0.4 * u)
         # あごより 8 下から下は、胴より後ろの層（三つ編みと、肩に掛かるくせ毛は胸の前なので前の層のまま）
         lower = hair & (yy > 8) if name != "braids" and not fix.get("front_all") else np.zeros_like(hair)
         # 前の層は切れ目より少し下（1.5）まで伸ばし、後ろの層と重ねる（切れ目にすき間の線が出ないように）
@@ -375,8 +378,8 @@ if TS:
         lines.append(f"  {name}: {{")
         for view in VIEWS:
             d = result[name][view]
-            # スキンヘッドの頭の丸みは顔の輪郭の線にそのままつながる 1 つの形（3 つの向きで同じ）
-            front = f'<path d="{DOME}" fill="SKINFILL" stroke="#000" stroke-width="5"/>' if name == "skinhead" else ""
+            # スキンヘッドとソフトモヒカンの頭の丸みは顔の輪郭の線にそのままつながる 1 つの形（3 つの向きで同じ）
+            front = f'<path d="{DOME}" fill="SKINFILL" stroke="#000" stroke-width="5"/>' if name in ("skinhead", "softMohawk") else ""
             if d.get("skin"):
                 front += f'<path d="{d["skin"]}" fill="SKINFILL"/>'
             if name == "skinhead":
