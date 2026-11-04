@@ -52,6 +52,8 @@ const EXTRACT_SCHEMA = {
         additionalProperties: false,
         required: ["kind", "text", "from", "reasons", "checklist", "reworded"],
         properties: {
+          // 補足の規定がある見込みと、どこを見るか（v9 から。採点には使わない）
+          check: { type: "string" },
           kind: { type: "string", enum: ["do", "dont"] },
           text: { type: "string" },
           from: SOURCE,
@@ -262,7 +264,7 @@ async function main() {
           counts[f] = countJudged(gold.length, pred[f].length, judged[f]);
         }),
       );
-      if (!final) writeFileSync(join(dir, `${it.no}.json`), JSON.stringify({ no: it.no, pred, judged, counts, sec: x.sec }, null, 1));
+      if (!final) writeFileSync(join(dir, `${it.no}.json`), JSON.stringify({ no: it.no, pred, checks: (x.out as { rules: { check?: string }[] }).rules.map((r) => r.check ?? "").filter(Boolean), judged, counts, sec: x.sec }, null, 1));
       console.log(`${it.no}: ${FIELDS.map((f) => `${f} ${points(counts[f]).toFixed(2)}`).join("・")}（${x.sec.toFixed(0)} 秒）`);
       return counts;
     } catch (e) {
@@ -284,10 +286,18 @@ async function main() {
   const numbers = join(ROOT, NUMBERS);
   if (!readFileSync(numbers, "utf-8").includes(HEADING)) appendFileSync(numbers, `\n${HEADING}\n\n点 = 項目 × 欄（やること・やらないこと・なぜ）ごとの 合う ÷（正解の数 + 余計）の平均。取り出しは ${EXTRACT.model}（深さ ${EXTRACT.effort}）、採点は ${JUDGE.model}。取っておく用は最後に 1 回だけ流す\n\n${TABLE_HEAD}\n`);
   const s = score.toFixed(3);
-  appendFileSync(
-    numbers,
-    `| ${round} | ${at} | ${promptPath.split("/").pop()} | ${final ? "" : s} | ${final ? s : ""} | ${total.合う} | ${total.足りない} | ${total.余計} | ${total.違う} | ${failed} | ${min.toFixed(1)} | ${opt("--note") ?? ""} |\n`,
-  );
+  const row = `| ${round} | ${at} | ${promptPath.split("/").pop()} | ${final ? "" : s} | ${final ? s : ""} | ${total.合う} | ${total.足りない} | ${total.余計} | ${total.違う} | ${failed} | ${min.toFixed(1)} | ${opt("--note") ?? ""} |`;
+  writeFileSync(numbers, insertRow(readFileSync(numbers, "utf-8"), HEADING, row));
+}
+
+/** 見出しの下の表の最後の行のすぐ後ろに 1 行足す（表の下に書いた要点より上） */
+export function insertRow(doc: string, heading: string, row: string): string {
+  const lines = doc.split("\n");
+  let i = lines.indexOf(heading);
+  while (i + 1 < lines.length && !lines[i + 1].startsWith("|")) i++;
+  while (i + 1 < lines.length && lines[i + 1].startsWith("|")) i++;
+  lines.splice(i + 1, 0, row);
+  return lines.join("\n");
 }
 
 if (process.argv[1]?.endsWith("blind-tune.ts"))

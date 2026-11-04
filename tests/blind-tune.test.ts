@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countJudged, leaks, points, toFields } from "../scripts/blind-tune";
+import { countJudged, insertRow, leaks, points, toFields } from "../scripts/blind-tune";
 
 // 目隠しの合わせ込みの数え方と、正解の語句の混入の検査
 describe("目隠しの合わせ込み", () => {
@@ -32,5 +32,10 @@ describe("目隠しの合わせ込み", () => {
     const items = [{ no: 1, text: "", do: [{ text: "作りものの決まりの文、ここまで" }], dont: [], why: [] }];
     expect(leaks("例: 作りもの の決まりの文 を書く", items)).toContain("作りものの決まり");
     expect(leaks("関係の無い文", items)).toEqual([]);
+  });
+
+  it("周の行は、表の下の要点より上（表の最後の行の後ろ）に入る", () => {
+    const doc = "## A\n\n説明\n\n| 周 |\n|---|\n| 1 |\n\n- 要点\n\n## B\n\n| x |";
+    expect(insertRow(doc, "## A", "| 2 |")).toBe("## A\n\n説明\n\n| 周 |\n|---|\n| 1 |\n| 2 |\n\n- 要点\n\n## B\n\n| x |");
   });
 });
