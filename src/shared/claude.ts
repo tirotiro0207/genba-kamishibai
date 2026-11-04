@@ -222,13 +222,26 @@ export interface GuardedDeps extends CallDeps {
   maxAttempts?: number;
 }
 
-function retryable(e: unknown): boolean {
-  const status = (e as { status?: number })?.status;
-  return status === 429 || status === 529;
+/** 呼び直してよい失敗: 429（混んでいる）・408・5xx（529 を含む）と、答えが返らなかった通信の切れ（夜間に何時間も流すとき、1 回の切れで止めないため） */
+export function retryable(e: unknown): boolean {
+  const x = e as { status?: number; name?: string; code?: string; cause?: { code?: string } } | null;
+  const status = x?.status;
+  if (status === 429 || status === 408 || (typeof status === "number" && status >= 500)) return true;
+  if (status !== undefined) return false;
+  return x?.name === "APIConnectionError" || x?.name === "APIConnectionTimeoutError" || /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ECONNREFUSED|UND_ERR/.test(`${x?.code ?? ""} ${x?.cause?.code ?? ""}`);
+}
+
+/** Retry-After（秒か日時）を ms で。無ければ null。待ちすぎないよう 60 秒まで */
+export function retryAfterMs(e: unknown, now = Date.now()): number | null {
+  const h = (e as { headers?: { get?: (k: string) => string | null } | Record<string, string> })?.headers;
+  const v = h ? (typeof (h as { get?: unknown }).get === "function" ? (h as { get: (k: string) => string | null }).get("retry-after") : (h as Record<string, string>)["retry-after"]) : null;
+  if (!v) return null;
+  const ms = /^\d+(\.\d+)?$/.test(v) ? Number(v) * 1000 : Date.parse(v) - now;
+  return Number.isFinite(ms) && ms >= 0 ? Math.min(ms, 60_000) : null;
 }
 
 /**
- * 上限を確かめてから呼び、429・529 は待ち時間を延ばしながら呼び直す。
+ * 上限を確かめてから呼び、429・5xx・通信の切れは待ち時間を延ばしながら呼び直す（Retry-After があればそれより短くは待たない）。
  * client は SDK の自動の呼び直しを切って（maxRetries: 0）渡す。呼び直しも 1 回ずつ記録に残すため。
  */
 export async function guardedCall(deps: GuardedDeps, req: CallRequest): Promise<Anthropic.Message> {
@@ -259,7 +272,7 @@ export async function guardedCall(deps: GuardedDeps, req: CallRequest): Promise<
       return await callClaude(deps, req);
     } catch (e) {
       if (!retryable(e) || attempt >= maxAttempts) throw e;
-      await sleep(1000 * 2 ** (attempt - 1));
+      await sleep(Math.max(1000 * 2 ** (attempt - 1), retryAfterMs(e) ?? 0));
     }
   }
 }

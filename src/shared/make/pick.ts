@@ -14,7 +14,7 @@ export const CLASSES = ["動き", "物の名前", "書類・教育・資格", "�
 export type PickClass = (typeof CLASSES)[number];
 export const WEIGHTS = ["高", "中", "低"] as const;
 
-const SYSTEM = `あなたは、工事の現場の新入社員に向けた「文字の無い人形の絵のカード」を作る前に、どの決まりをカードにするかを分ける係です。
+export const PICK_SYSTEM = `あなたは、工事の現場の新入社員に向けた「文字の無い人形の絵のカード」を作る前に、どの決まりをカードにするかを分ける係です。
 カードの絵は、棒の人形（新入社員・先輩・作業員の 3 役）が 3〜4 コマで動くだけです。文字は入りません。
 描ける物は次のものだけです: ヘルメット・安全帯・検電器・電線・分電盤・コンセント・吊り荷・ほうき・ごみ箱・箱・工具箱・鍵・札・時計・チェック表と ✓・禁止の印・○ と ×・高い所の縁・親綱・幅を示す矢印・具合が悪い印・話す吹き出しと考える吹き出し（中に分電盤・検電器・コンセント・電線・安全帯・鍵・札・箱・工具箱・チェック表・吊り荷・ほうき・時計を描ける）。
 
@@ -61,12 +61,13 @@ export interface Pick {
   notes: PickNote[];
 }
 
-export function pickParams(rules: Rule[]): Anthropic.MessageCreateParamsNonStreaming {
+/** system は合わせ込みで別の版を試すとき（eval/prompts/pick_v○.txt）。無ければ PICK_SYSTEM */
+export function pickParams(rules: Rule[], system = PICK_SYSTEM): Anthropic.MessageCreateParamsNonStreaming {
   const list = rules.map((r, i) => `${i}. [${r.kind === "dont" ? "してはいけない" : "する"}${r.checklist ? "・点検表" : ""}] ${r.text}`).join("\n");
   return {
     model: PICK_MODEL,
     max_tokens: 8000,
-    system: SYSTEM,
+    system,
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     messages: [{ role: "user", content: `決まりの一覧:\n${list}` }],
   } as Anthropic.MessageCreateParamsNonStreaming;
@@ -91,9 +92,9 @@ export function choose(rules: Rule[], notes: PickNote[], perPage: number): numbe
     .map((n) => n.i);
 }
 
-export async function pickRules(deps: GuardedDeps, purpose: Purpose, rules: Rule[], perPage: number): Promise<Pick> {
+export async function pickRules(deps: GuardedDeps, purpose: Purpose, rules: Rule[], perPage: number, system?: string): Promise<Pick> {
   if (!rules.length) return { items: [], notes: [] };
-  const msg = await guardedCall(deps, { purpose, label: "選ぶ（夜間）", params: pickParams(rules) });
+  const msg = await guardedCall(deps, { purpose, label: "選ぶ（夜間）", params: pickParams(rules, system) });
   if (msg.stop_reason !== "end_turn") throw new Error(`選ぶ段が最後まで返らなかった: ${msg.stop_reason}`);
   const out = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as { rules: PickNote[] };
   const notes = out.rules.filter((n) => Number.isInteger(n.i) && n.i >= 0 && n.i < rules.length);

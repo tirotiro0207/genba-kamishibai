@@ -6,7 +6,9 @@
 //   --sub は API の代わりにサブスクリプションの claude -p で呼ぶ（063 の前の通しの確かめ。手元の D1 だけ。費用は API の値段に換算して出すが払わない）
 //   --pick は、1 ページの決まりの先頭 N 個でなく、選ぶ段（src/shared/make/pick.ts）で絵で伝わる決まりを選ぶ（063 の前の通しで足した。本番に使うかは作者が決める）
 //   --run-max-usd は、この回の費用の合計（前の回の分と取り出しも入れる）の上限。API では既定 30 USD
+//   --pick-prompt <ファイル> は選ぶ段の指示を別の版にする（合わせ込み用）。--pages 3,8,15 はそのページだけを流す（合わせる用・取っておく用に分けたとき）
 //   --shard i/n は「する」のページを n 組に分けた i 組目（1 から）だけを流す。サブスクで 4 本くらいを同時に流すときに使う
+import { readFileSync } from "node:fs";
 import { claudePClient } from "../src/node/claude-p-client";
 import { loadEnv, makeClient } from "../src/node/client";
 import { execD1, wranglerExec } from "../src/node/d1-node";
@@ -36,6 +38,8 @@ async function main() {
   const sub = args.includes("--sub");
   if (sub && where === "remote") throw new Error("--sub は手元の D1 だけ（本番には書かない）");
   const shard = opt("--shard")?.split("/").map(Number);
+  const only = opt("--pages")?.split(",").map(Number);
+  const pickSystem = opt("--pick-prompt") ? readFileSync(opt("--pick-prompt")!, "utf-8") : undefined;
   const tenant = opt("--tenant") ?? "company";
   const perPage = Number(opt("--per-page") ?? 2);
   const max = opt("--max") ? Number(opt("--max")) : undefined;
@@ -48,6 +52,7 @@ async function main() {
   const yes = (await db.prepare("SELECT page FROM night_pages WHERE run_id = ? AND tenant_id = ? AND state = 'done' AND card = 1 ORDER BY page").bind(sortRun, tenant).all<{ page: number }>()).results.map((r) => Number(r.page));
   const pages = readPages(run.doc)
     .filter((p) => yes.includes(p.page))
+    .filter((p) => !only || only.includes(p.page))
     .filter((_, i) => !shard || i % shard[1] === shard[0] - 1);
   const cardsMax = Math.min(pages.length * perPage, max ?? Infinity);
   const pagesUsed = Math.min(pages.length, Math.ceil(cardsMax / perPage));
@@ -67,7 +72,7 @@ async function main() {
   const since = new Date().toISOString();
   const steps: Steps = {
     extract: (text) => extractRules(deps, "night", text),
-    ...(args.includes("--pick") ? { pick: (rules: Rule[], n: number) => pickRules(deps, "night", rules, n) } : {}),
+    ...(args.includes("--pick") ? { pick: (rules: Rule[], n: number) => pickRules(deps, "night", rules, n, pickSystem) } : {}),
     make: async (rule, locate) => (await makeCard(deps, "night", rule, locate)).card,
     words: async (card) => {
       const w = await makeWords(deps, "night", card);

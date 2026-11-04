@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileCallLog } from "../src/node/file-log";
-import { type BudgetEvent, BudgetExceededError, DEFAULT_LIMITS, dayBudgetUsd, guardedCall, MemoryCallLog, notifyBudget, resetBudgetWarnings, startOfJstDay } from "../src/shared/claude";
+import { type BudgetEvent, BudgetExceededError, DEFAULT_LIMITS, dayBudgetUsd, guardedCall, MemoryCallLog, notifyBudget, resetBudgetWarnings, retryAfterMs, retryable, startOfJstDay } from "../src/shared/claude";
 
 function client(script: Array<number | "ok">) {
   let i = 0;
@@ -60,6 +60,23 @@ describe("費用の上限と呼び直し（002b）", () => {
     await guardedCall({ client: c, log, now: () => NOW, sleep: async (ms) => void waits.push(ms) }, { purpose: "night", label: "x", params });
     expect(waits).toEqual([1000, 2000]);
     expect(log.records.map((r) => r.ok)).toEqual([false, false, true]);
+  });
+
+  it("5xx と通信の切れも呼び直し、Retry-After があればそれより短くは待たない（063 の前に足した）", async () => {
+    expect([500, 502, 503, 504, 529, 408, 429].every((status) => retryable({ status }))).toBe(true);
+    expect([400, 401, 403, 404, 413].some((status) => retryable({ status }))).toBe(false);
+    expect(retryable({ name: "APIConnectionError" })).toBe(true);
+    expect(retryable({ cause: { code: "ECONNRESET" } })).toBe(true);
+    expect(retryable(new Error("ほかの失敗"))).toBe(false);
+    expect(retryAfterMs({ headers: new Headers({ "retry-after": "7" }) })).toBe(7000);
+    expect(retryAfterMs({ headers: { "retry-after": "600" } })).toBe(60_000);
+    expect(retryAfterMs({ headers: new Headers() })).toBeNull();
+    const waits: number[] = [];
+    const busy = Object.assign(new Error("混んでいる"), { status: 503, headers: new Headers({ "retry-after": "5" }) });
+    let n = 0;
+    const c = { messages: { create: async () => { if (n++ === 0) throw busy; return { model: "claude-opus-5-5", stop_reason: "end_turn", content: [], usage: { input_tokens: 1, output_tokens: 1 } } as unknown as Anthropic.Message; } } };
+    await guardedCall({ client: c, log: new MemoryCallLog(), now: () => NOW, sleep: async (ms) => void waits.push(ms) }, { purpose: "night", label: "x", params });
+    expect(waits).toEqual([5000]);
   });
 
   it("400 は呼び直さない。呼び直しは回数の上限で止まる", async () => {
