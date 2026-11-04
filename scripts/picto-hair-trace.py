@@ -164,7 +164,9 @@ def smooth(mask, sigma):
 # 参考絵の頭は丸く、こちらの頭（顔の輪郭）は角の丸い四角なので、斜め・真横では後頭部の角が髪からはみ出たり、
 # 前髪が顔より前へ出すぎたりする。髪の形（パスにする前の塗り）を頭の座標の上で直してから、パスにする。
 FACE = "M-18 -70H18Q44 -70 44.6 -48L45.4 -30Q45 0 12 0H-12Q-44.6 0.4 -45 -30L-44.4 -48Q-44 -70 -18 -70Z"  # avatar.ts の faceOutline("standard")
-DOME = "M-45 -30L-44.4 -48C-47 -87 -11 -91.6 0 -91.6S47 -87 44.6 -48L45.4 -30"  # 両はしは顔の輪郭の線の真っすぐな所に重ねる（つなぎ目を出さない）  # 頭の上の丸み（スキンヘッド。3 つの向きで同じ）
+# 頭の上の丸み（スキンヘッド。3 つの向きで同じ）。両はしは顔の輪郭の線の y −30 から、顔の線と同じ向きで立ち上がり、元の丸み（y −48 から上）へなめらかにつなぐ
+# （−48 で角度を変えてつなぐと、真横でつなぎ目が折れて見えた）
+DOME = "M-45 -30C-45.2 -43.1 -46.5 -57.1 -41.2 -69.1C-32.4 -88.8 -8.6 -91.6 0 -91.6C8.6 -91.6 32.4 -88.8 41.3 -69.1C46.7 -57.1 45.6 -43.1 45.4 -30"
 FIX = {
     # wrap: 後頭部の角（顔の輪郭の線の外の端まで）を髪で包む。fitx: (行の y, 後ろの端, 前の端) へ髪を横に伸び縮みさせる
     # clip: 頭の輪郭（線の外の端）より外の髪を落とす（とさかは残す）。shift: 顔の右の髪の塊を顔の輪郭に寄せる
@@ -174,7 +176,9 @@ FIX = {
     ("mash", "side"): {"fitx": (-50, None, 46.5)},
     ("sidePart", "side"): {"fitx": (-50, None, 46.5)},
     ("curly", "front"): {"front_all": True},
-    ("curly", "quarter"): {"front_all": True},
+    # くせ毛の斜めは、あごより下の房を首より後ろに回す（前の層のままだと、手前の房が首の線を塗りつぶす。作者の指示で首を上にする）。
+    # pockets: 髪と顔の線の間に閉じこめられた白（半径 r より細い所）を、顔の後ろの層で埋める（あごの後ろの白いくさび）
+    ("curly", "quarter"): {"pockets": 4},
     # 三つ編みの斜め: 耳の下の髪の塊は顔の線の後ろ（見本の一覧で顔の線が手前）。耳より下で顔（線の外の端まで）に重なる所を顔の後ろの層へ移す
     ("braids", "quarter"): {"under_face": -22},
 }
@@ -332,6 +336,15 @@ for no, name in enumerate(NEW, 2):
         if fix:
             hair, gray, dark = apply_fix(fix, hair, gray, dark, sv, ox, oy)
         skin = np.zeros_like(hair)
+        if name == "buzz":
+            # 坊主も頭の丸みの線はスキンヘッドと同じ 1 つの形で描き、元の絵の縁の黒は使わない（縁の黒は顔の線と位置も太さもずれていた）。
+            # 髪の色は、元の絵の髪のうち頭の形（顔と頭の丸み）の中だけ
+            # 頭の線より下（y −30 から下）は、顔の線の内側の縁まで（顔の線の内側の半分を塗ると、線がそこから細くなって段に見える）
+            head_m = ndi.binary_erosion(region(FACE, sv, ox, oy, hair.shape), iterations=max(1, round(2.5 / sv))) | region(DOME + "Z", sv, ox, oy, hair.shape)
+            # 元の絵の髪のてっぺんが頭の線より内にあると白いすき間が残るので、髪のある列は頭の線まで上へ伸ばす
+            # 伸ばすのは列のいちばん上の髪より上だけ（髪の中の白いつやの抜きは残す）
+            above = ~np.maximum.accumulate(hair, axis=0) & np.maximum.accumulate(hair[::-1], axis=0)[::-1]
+            dark = smooth((hair | above) & head_m, 0.4 * u)
         if name == "softMohawk":
             # 頭の丸みの線は、スキンヘッドと同じ 1 つの形（顔の輪郭の線にそのままつながる）を描き、元の絵の縁の黒は使わない。
             # とさかは元の絵のまま、剃った所の内側から雫の形に立ち上がる。剃った所の灰は線の内側を埋め、とさかの下に敷く（つなぎ目を出さない）
@@ -392,6 +405,13 @@ for no, name in enumerate(NEW, 2):
             # 外した髪は捨てずに顔の後ろの層へ回す（細い顔は輪郭が内へ入るので、捨てると顔と髪の間に白いすき間が出る）
             under = front & ndi.binary_dilation(region(FACE, sv, ox, oy, hair.shape), iterations=max(1, round(2.5 / sv))) & (yy > fix["under_face"])
             front &= ~under
+        if "pockets" in fix:
+            face_s = ndi.binary_dilation(region(FACE, sv, ox, oy, hair.shape), iterations=max(1, round(2.5 / sv)))
+            # 外形の房と房の間の切れ込みは残す（顔の線から 6 以内だけ）
+            hull = ndi.binary_closing(hair | face_s, structure=disk(fix["pockets"] / sv))
+            pocket = hull & ~hair & ~face_s & ndi.binary_dilation(face_s, iterations=round(6 / sv))
+            # 顔の中へも 4 広げる（顔の後ろなので隠れる。細い顔は輪郭が内へ入るので、広げないと白いすじが残る）。髪と顔を閉じた形の外へは出さない
+            under |= ndi.binary_dilation(pocket, iterations=round(4 / sv)) & (hull | face_s)
         # 小さな切れ端は捨てる。ただし切れ目（y 1）に接する塊は前の層の続き（尾の先など）なので残す
         lower = components(lower, lambda sl, n: n * sv * sv > 150 or (sl[0].start - oy) * sv < 2)
         # 首のまわり: 後ろ髪の端と首の線の間に白いすき間が残ると、首の線が二重に見える（元の絵では髪が首の線に付いている）。
@@ -466,18 +486,21 @@ if TS:
         lines.append(f"  {name}: {{")
         for view in VIEWS:
             d = result[name][view]
-            # スキンヘッドとソフトモヒカンの頭の丸みは顔の輪郭の線にそのままつながる 1 つの形（3 つの向きで同じ）
-            # 肌の塗りは線の両はし（y −48）で閉じる（下まで塗ると目に掛かる）。線は顔の輪郭の線の真っすぐな所まで伸ばして重ねる
-            dome_fill = DOME.split("L", 1)[1].rsplit("L", 1)[0]
-            front = (f'<path d="M{dome_fill}Z" fill="SKINFILL"/><path d="{DOME}" fill="none" stroke="#000" stroke-width="5" stroke-linejoin="round"/>'
-                     if name in ("skinhead", "softMohawk") else "")
+            # スキンヘッド・ソフトモヒカン・坊主の頭の丸みは顔の輪郭の線にそのままつながる 1 つの形（3 つの向きで同じ）
+            # 肌の塗りは y −48 の横の線で閉じる（下まで塗ると目に掛かる）。線は顔の輪郭の線の y −30 まで伸ばして重ね、両はしの細い帯は −30 まで塗って顔の線の内側の縁を隠す。線の端は丸め、顔の線との継ぎ目の細い筋を消す
+            dome_fill = DOME[1:] + "H42.5L41.5 -48H-41.5L-42.5 -30"
+            front = (f'<path d="M{dome_fill}Z" fill="SKINFILL"/><path d="{DOME}" fill="none" stroke="#000" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>'
+                     if name in ("skinhead", "softMohawk", "buzz") else "")
             if d.get("skin"):
                 front += f'<path d="{d["skin"]}" fill="SKINFILL"/>'
             if name == "skinhead":
                 front += GLOSS[view]
+            elif name == "buzz":
+                # 髪の色とつやの灰は頭の線の下に敷く（線が髪の端を隠す）
+                front = front.replace(f'<path d="{DOME}"', f'<path d="{d["dark"]}" fill="HAIRFILL"/>' + (f'<path d="{d["gray"]}" fill="#777"/>' if d["gray"] else "") + f'<path d="{DOME}"', 1)
             elif name == "softMohawk":
                 # 剃った所の灰は頭の線の下に敷き（線が灰の端を隠す）、とさかを線の上に重ねる
-                front = front.replace('<path d="M-45', f'<path d="{d["gray"]}" fill="#777"/><path d="M-45', 1)
+                front = front.replace(f'<path d="{DOME}"', f'<path d="{d["gray"]}" fill="#777"/><path d="{DOME}"', 1)
                 front += f'<path d="{d["black"]}" fill="HAIRFILL"/>'
             else:
                 # 黒の上に灰（つやの線・剃った所）を重ねる。坊主は黒い縁の内側を髪の色（#444）で塗る
