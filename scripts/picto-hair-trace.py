@@ -405,6 +405,26 @@ for no, name in enumerate(NEW, 2):
                     if edge.any():
                         lim = xx[0][edge].min() if side > 0 else xx[0][edge].max()
                         lower[r] |= (side * xx[0] >= 0) & (side * xx[0] <= side * lim)
+            # あごの丸みの下: 元の絵の髪が顔の線から少し離れて始まる所に、白い三日月が残る（斜めのウルフ）。
+            # 後ろ髪を上へ 6 伸ばし、顔（線の外の縁より少し外の 3 まで）の所だけを足す。後ろの層は頭の下に描くので、すき間だけが消える
+            face_in = ndi.binary_dilation(region(FACE, sv, ox, oy, hair.shape), iterations=max(1, round(3 / sv)))
+            up = np.zeros((round(6 / sv) * 2 + 1, 1), bool)
+            up[: round(6 / sv) + 1] = True
+            lower |= ndi.binary_dilation(lower, structure=up) & face_in
+        elif fix.get("front_all"):
+            # 前の層だけの髪（肩に掛かるくせ毛）は、あごの下で毛先と首の線の間に白いすき間が残る。
+            # 毛先から首の線までを横に埋める。埋める所の下の端は、首の線（x 11）から 45° で外へ下がり、毛先の下の丸みにつながる
+            xx = (np.arange(W)[None, :] - ox) * sv
+            tips = hair & (yy > 0) & (yy < 24) & (np.abs(xx) <= 22)
+            for r in np.nonzero(tips.any(1))[0]:
+                inner = 11 + max(0.0, float(yy[r, 0]) - 3)
+                for side in (-1, 1):
+                    edge = tips[r] & (side * xx[0] >= 11)
+                    if edge.any():
+                        lim = xx[0][edge].min() if side > 0 else xx[0][edge].max()
+                        if side * lim > inner:
+                            lower[r] |= (side * xx[0] >= (0 if inner <= 11 else inner)) & (side * xx[0] <= side * lim + 1)
+            lower = smooth(lower, 0.4 * u) if lower.any() else lower
         g2 = components(smooth(gray, 0.4 * u), lambda sl, n: n * sv * sv > 3)
         ys, xs = np.nonzero(front)
         result[name][view] = {
