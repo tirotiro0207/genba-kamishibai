@@ -551,7 +551,8 @@ export function characterSvg(c: CharacterSpec): string {
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(neckB(skin)) : "";
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
-  const behind = look === "b" ? hairSvg(view, hair, headwear).behind : "";
+  // 前の層と同じ横の倍率で描く（倍率を外すと、細い顔で毛先だけ外へずれて段や平らな切れ目が出る）
+  const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face)).behind : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = torso(view, look) + outfitTorso(view, o);
