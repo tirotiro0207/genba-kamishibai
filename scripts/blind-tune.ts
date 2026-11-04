@@ -12,16 +12,16 @@ import { privatePath } from "../src/node/private-dir";
 import { numberLines } from "../src/shared/extract/rules";
 
 const ROOT = join(import.meta.dirname, "..");
-/** 062 と同じモデルと考える深さ（src/shared/extract/rules.ts） */
-export const EXTRACT = { model: "claude-opus-5-5", effort: "medium" };
-/** 採点は 003a の判定と同じモデル */
-export const JUDGE = { model: "claude-sonnet-5-5", effort: "low" };
+/** 取り出しと採点の既定（11/5 から両方 Opus 5.5・high。補足を探す決まりは推論が要り、Sonnet の採点はぶれが大きかったため）。
+ *  前の設定（取り出し medium・採点 Sonnet 5.5 low）は --extract-effort medium --judge-model claude-sonnet-5-5 --judge-effort low */
+export const EXTRACT = { model: "claude-opus-5-5", effort: "high" };
+export const JUDGE = { model: "claude-opus-5-5", effort: "high" };
 const TUNE = "eval/items_tune_v1r8.json";
 const HOLDOUT = "eval/holdout/items_holdout_v1r8.json";
 const NUMBERS = "docs/numbers.md";
-const HEADING = "## 取り出しのプロンプトを目隠しで合わせる（サブスクリプションの claude -p）";
+const HEADING = "## 取り出しのプロンプトを合わせ直す（Opus 5.5・high、サブスクリプションの claude -p）";
 const TABLE_HEAD =
-  "| 周 | 日時（日本時間） | プロンプト | 合わせる用（20）の点 | 取っておく用（10）の点 | 合う | 足りない | 余計 | 違う | 失敗 | 時間（分） | 直した決まり |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
+  "| 周 | 日時（日本時間） | 設定 | プロンプト | 回 | 調整用（20）の点 | 確認用（10）の点 | 合う | 足りない | 余計 | 違う | 失敗 | 時間（分） | 取り出しの換算費用（USD） | 直した決まり |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|";
 
 export type Field = "do" | "dont" | "why";
 const FIELDS: Field[] = ["do", "dont", "why"];
@@ -105,7 +105,8 @@ export function claudeBin(): string {
 }
 
 /** 設定・指示・道具を何も読ませずに 1 回呼ぶ。返すのは構造化された出力 */
-export function claudeP(o: { model: string; effort: string; system: string; schema: object; input: string; cwd: string }): Promise<{ out: unknown; sec: number }> {
+/** usd は claude -p が出す換算の費用（API の値段で数えた額。サブスクリプションでは払っていない） */
+export function claudeP(o: { model: string; effort: string; system: string; schema: object; input: string; cwd: string }): Promise<{ out: unknown; sec: number; usd: number }> {
   const args = [
     "-p",
     "--model",
@@ -135,10 +136,10 @@ export function claudeP(o: { model: string; effort: string; system: string; sche
     p.on("error", reject);
     p.on("close", (code) => {
       try {
-        const j = JSON.parse(so) as { structured_output?: unknown; result?: string; is_error?: boolean };
+        const j = JSON.parse(so) as { structured_output?: unknown; result?: string; is_error?: boolean; total_cost_usd?: number };
         if (code !== 0 || j.is_error) throw new Error(`claude -p が失敗した（${code}）: ${(j.result ?? se).slice(0, 300)}`);
         const out = j.structured_output ?? JSON.parse(j.result ?? "");
-        resolve({ out, sec: (Date.now() - t0) / 1000 });
+        resolve({ out, sec: (Date.now() - t0) / 1000, usd: j.total_cost_usd ?? 0 });
       } catch (e) {
         reject(e instanceof Error && e.message.startsWith("claude -p") ? e : new Error(`claude -p の出力が読めない: ${(so || se).slice(0, 300)}`));
       }
@@ -224,6 +225,10 @@ async function main() {
   const round = opt("--round");
   if (!promptPath || !round) throw new Error("使い方: blind-tune.ts --prompt <プロンプト> --round <周> [--jobs 5] [--only 1,2] [--final] [--note <直した決まり>]");
   const final = a.includes("--final");
+  const ex = { model: EXTRACT.model, effort: opt("--extract-effort") ?? EXTRACT.effort };
+  const ju = { model: opt("--judge-model") ?? JUDGE.model, effort: opt("--judge-effort") ?? JUDGE.effort };
+  const rep = opt("--rep") ?? "1";
+  const setting = `取り出し ${ex.model.replace("claude-", "")} ${ex.effort}・採点 ${ju.model.replace("claude-", "")} ${ju.effort}`;
   const jobs = Number(opt("--jobs") ?? 5);
   const only = opt("--only")?.split(",").map(Number);
   const prompt = readFileSync(join(ROOT, promptPath), "utf-8");
@@ -237,16 +242,18 @@ async function main() {
     return;
   }
   const items = (final ? (JSON.parse(readFileSync(join(ROOT, HOLDOUT), "utf-8")) as Item[]) : tune).filter((i) => !only || only.includes(i.no));
-  const dir = privatePath("tune", final ? `${round}-final` : round);
+  const dir = privatePath("tune", final ? `${round}-final` : `${round}-${rep}`);
   mkdirSync(dir, { recursive: true });
   // 取り出す側も採点する側も、リポジトリの外の空のフォルダで動かす（リポジトリの指示や正解のファイルを読ませない）
   const cwd = privatePath("tune", "_empty");
   mkdirSync(cwd, { recursive: true });
   const t0 = Date.now();
   let failed = 0;
+  let extractUsd = 0;
   const per = await pool(items, jobs, async (it) => {
     try {
-      const x = await claudeP({ ...EXTRACT, system: prompt, schema: EXTRACT_SCHEMA, input: `元の文:\n${numberLines(it.text)}`, cwd });
+      const x = await claudeP({ ...ex, system: prompt, schema: EXTRACT_SCHEMA, input: `元の文:\n${numberLines(it.text)}`, cwd });
+      extractUsd += x.usd;
       const pred = toFields(x.out as Extracted);
       const counts = {} as Record<Field, Count>;
       const judged = {} as Record<Field, Judged>;
@@ -259,12 +266,12 @@ async function main() {
           }
           const list = (xs: string[]) => xs.map((s, i) => `${i}. ${s}`).join("\n") || "（なし）";
           const input = `欄: ${f === "do" ? "やること" : f === "dont" ? "やらないこと" : "なぜ"}\n\n正解:\n${list(gold)}\n\n答え:\n${list(pred[f])}`;
-          const j = await claudeP({ ...JUDGE, system: JUDGE_SYSTEM, schema: JUDGE_SCHEMA, input, cwd });
+          const j = await claudeP({ ...ju, system: JUDGE_SYSTEM, schema: JUDGE_SCHEMA, input, cwd });
           judged[f] = j.out as Judged;
           counts[f] = countJudged(gold.length, pred[f].length, judged[f]);
         }),
       );
-      if (!final) writeFileSync(join(dir, `${it.no}.json`), JSON.stringify({ no: it.no, pred, checks: (x.out as { rules: { check?: string }[] }).rules.map((r) => r.check ?? "").filter(Boolean), judged, counts, sec: x.sec }, null, 1));
+      if (!final) writeFileSync(join(dir, `${it.no}.json`), JSON.stringify({ no: it.no, pred, checks: (x.out as { rules: { check?: string }[] }).rules.map((r) => r.check ?? "").filter(Boolean), judged, counts, sec: x.sec, usd: x.usd }, null, 1));
       console.log(`${it.no}: ${FIELDS.map((f) => `${f} ${points(counts[f]).toFixed(2)}`).join("・")}（${x.sec.toFixed(0)} 秒）`);
       return counts;
     } catch (e) {
@@ -281,12 +288,12 @@ async function main() {
   const score = cells.reduce((s, x) => s + x, 0) / (items.length * FIELDS.length);
   const min = (Date.now() - t0) / 60000;
   const at = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 16);
-  console.log(`周 ${round}${final ? "（取っておく用）" : ""}: 点 ${score.toFixed(3)}・合う ${total.合う}・足りない ${total.足りない}・余計 ${total.余計}・違う ${total.違う}・失敗 ${failed}・${min.toFixed(1)} 分`);
+  console.log(`周 ${round}${final ? "（取っておく用）" : ""}: 点 ${score.toFixed(3)}・合う ${total.合う}・足りない ${total.足りない}・余計 ${total.余計}・違う ${total.違う}・失敗 ${failed}・${min.toFixed(1)} 分・取り出しの換算 ${extractUsd.toFixed(3)} USD（1 項目 ${(extractUsd / Math.max(1, items.length - failed)).toFixed(4)}）・${setting}`);
   if (only) return;
   const numbers = join(ROOT, NUMBERS);
-  if (!readFileSync(numbers, "utf-8").includes(HEADING)) appendFileSync(numbers, `\n${HEADING}\n\n点 = 項目 × 欄（やること・やらないこと・なぜ）ごとの 合う ÷（正解の数 + 余計）の平均。取り出しは ${EXTRACT.model}（深さ ${EXTRACT.effort}）、採点は ${JUDGE.model}。取っておく用は最後に 1 回だけ流す\n\n${TABLE_HEAD}\n`);
+  if (!readFileSync(numbers, "utf-8").includes(HEADING)) appendFileSync(numbers, `\n${HEADING}\n\n点 = 項目 × 欄（やること・やらないこと・なぜ）ごとの 合う ÷（正解の数 + 余計）の平均。同じ版を 2 回流して平均で比べる。換算費用は claude -p が出す API の値段での額（サブスクリプションなので払っていない）。確認用は前の合わせ込みで 2 回流し、2 項目の書き込みも読んでいるので、ここでの確認用の点は目隠しの点ではなく参考の点\n\n${TABLE_HEAD}\n`);
   const s = score.toFixed(3);
-  const row = `| ${round} | ${at} | ${promptPath.split("/").pop()} | ${final ? "" : s} | ${final ? s : ""} | ${total.合う} | ${total.足りない} | ${total.余計} | ${total.違う} | ${failed} | ${min.toFixed(1)} | ${opt("--note") ?? ""} |`;
+  const row = `| ${round} | ${at} | ${setting} | ${promptPath.split("/").pop()} | ${rep} | ${final ? "" : s} | ${final ? `${s}（参考）` : ""} | ${total.合う} | ${total.足りない} | ${total.余計} | ${total.違う} | ${failed} | ${min.toFixed(1)} | ${extractUsd.toFixed(3)} | ${opt("--note") ?? ""} |`;
   writeFileSync(numbers, insertRow(readFileSync(numbers, "utf-8"), HEADING, row));
 }
 
