@@ -20,8 +20,10 @@ import { PinGate } from "./pin/TenantPin";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
+import { MaterialSetup } from "./trial/MaterialSetup";
 import { NewTrial } from "./trial/NewTrial";
 import { ForecastScreen, PictureAnswerScreen } from "./trial/PicturesScreen";
+import { SelfScreen } from "./trial/SelfScreen";
 import { TimeScreen } from "./trial/TimeScreen";
 
 function useRoute() {
@@ -50,6 +52,9 @@ export function App() {
     // #/t/<テナント>/trial/<回>/forecast ・ #/t/<テナント>/trial/<回>/pictures/<参加者> ・ 絵だけの 8 枚と教育担当の勘（059）
     else if (r[4] === "forecast") body = <ForecastScreen tenant={tenant} id={r[3]} />;
     else if (r[4] === "pictures" && r[5]) body = <PictureAnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
+    // #/t/<テナント>/trial/<回>/material ・ #/t/<テナント>/trial/<回>/self/<参加者> ・ ① の交差の回（11/5）
+    else if (r[4] === "material") body = <MaterialSetup tenant={tenant} id={r[3]} />;
+    else if (r[4] === "self" && r[5]) body = <SelfScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
     // 会社のテナントでは、記録アプリも 2 段の PIN で入ってから開く（総点検の 2・3）。回答の記録の口は新入社員の役割では開かないので、作者・監修者・教育担当から選ぶ

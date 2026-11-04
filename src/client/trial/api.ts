@@ -4,14 +4,20 @@ import { authHeaders } from "../pin/TenantPin";
 export type Shown = "card" | "text";
 export interface Assignment {
   participant: string;
-  A: [Shown, Shown];
-  B: [Shown, Shown];
+  /** 前からの回は 2 つ（カードと文の順番）、交差の回（11/5）は 1 つ */
+  A: Shown[];
+  B: Shown[];
+  /** 交差の回だけ: 国籍と組 */
+  group?: string;
+  set?: 1 | 2;
 }
 export interface Trial {
   id: string;
   seed: string;
   participants: string[];
   assignments: Assignment[];
+  /** order: 前からの回（同じ項目をカードと文の両方で）。cross: 1 人がカードと文を 1 つずつ（11/5） */
+  design?: "order" | "cross";
 }
 export interface ResponseRow {
   seq: number;
@@ -58,7 +64,7 @@ export const csvUrl = (tenant: string, id: string) => `${base(tenant)}/${id}/ans
 /** その参加者・項目で次に見せるもの（済んでいれば null） */
 export function nextShown(a: Assignment, item: "A" | "B", rows: ResponseRow[]): Shown | null {
   const k = rows.filter((r) => r.participant === a.participant && r.item === item).length;
-  return k < 2 ? a[item][k] : null;
+  return k < a[item].length ? a[item][k] : null;
 }
 
 // 絵だけの 8 枚と教育担当の勘（059）
@@ -88,3 +94,33 @@ export const postPictureAnswer = (tenant: string, id: string, participant: strin
   req<{ seq: number; card_id: string }>(`${base(tenant)}/${id}/picture-answers`, { method: "POST", body: JSON.stringify({ participant, answer }) });
 export const listTenantCards = (tenant: string) =>
   req<{ cards: { id: string; body: { rule: string; motion: CardMotion }; status: string }[] }>(`/api/t/${encodeURIComponent(tenant)}/cards`).then((r) => r.cards);
+
+// ① で見せるもの（11/5 作者）: 交差の回の作り方と、項目ごとのカード・ページの画像
+export const createCrossTrial = (tenant: string, people: { id: string; group: string }[], seed?: string) =>
+  req<Trial>(base(tenant), { method: "POST", body: JSON.stringify({ design: "cross", participants: people, seed: seed || undefined }) });
+export interface MaterialItem {
+  item: "A" | "B";
+  shown: Shown;
+  /** 文の側: ページの画像の置き場の名前 */
+  page?: string;
+  /** カードの側: 絵とやさしい日本語だけ */
+  card?: { motion: CardMotion; words: { ja: string } | null };
+}
+export const getMaterial = (tenant: string, id: string, participant: string) =>
+  req<{ items: MaterialItem[] }>(`${base(tenant)}/${id}/material?participant=${encodeURIComponent(participant)}`).then((r) => r.items);
+export const getMaterialConfig = (tenant: string, id: string) =>
+  req<{ material: Record<"A" | "B", { card: string; page: string }> | null }>(`${base(tenant)}/${id}/material`).then((r) => r.material);
+export const putMaterial = (tenant: string, id: string, cfg: Record<"A" | "B", { card: string; page: string }>) =>
+  req<unknown>(`${base(tenant)}/${id}/material`, { method: "PUT", body: JSON.stringify(cfg) });
+
+/** 置き場の画像を、しるしを付けて読み、画面で使える URL にする（img にはしるしを付けられないため） */
+export async function fileUrl(tenant: string, path: string): Promise<string> {
+  const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/files/${path}`, { headers: authHeaders(tenant) });
+  if (!res.ok) throw new Error(`ページの画像が読めない（HTTP ${res.status}）`);
+  return URL.createObjectURL(await res.blob());
+}
+/** 置き場に画像を入れる */
+export async function putFile(tenant: string, path: string, file: Blob) {
+  const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/files/${path}`, { method: "PUT", headers: { ...authHeaders(tenant), "content-type": file.type || "application/octet-stream" }, body: file });
+  if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
+}

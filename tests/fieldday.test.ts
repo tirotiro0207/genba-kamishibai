@@ -53,11 +53,15 @@ describe.skipIf(!existsSync(FILE))("現場の確認の日の段取り表（042�
     }
   });
 
-  it("① は 2 列で ② より前、② は端末を分けて同時、教育担当の勘は ① より前", () => {
+  // 11/5 作者: ① は 1 人がカードの問題と文の問題を 1 つずつ、全員が同時に。② は ① の後
+  it("① は全員が同時で、1 人がカードと文を 1 つずつ。② より前、② は端末を分けて同時、教育担当の勘は ① より前", () => {
     const t = rows(sec.get("timeline")!).map(([a, b, room, side]) => ({ a: Number(a), b: Number(b), room, side }));
     const one = t.find((x) => x.room.startsWith("① 分かるまでの時間"))!;
     const two = t.find((x) => x.room.startsWith("② 絵だけ"))!;
-    expect(one.room).toMatch(/2 列/);
+    expect(one.room).toMatch(/全員が同時/);
+    expect(one.room).toMatch(/同じ項目を 2 回見せない/);
+    expect(sec.get("lanes")).toMatch(/国籍ごとに半分ずつ/);
+    expect(sec.get("lanes")).toMatch(/ページの画像/);
     expect(two.room).toMatch(/端末を分けて同時/);
     expect(one.b).toBeLessThanOrEqual(two.a);
     const trainer = t.find((x) => x.side.includes("教育担当の勘"))!;

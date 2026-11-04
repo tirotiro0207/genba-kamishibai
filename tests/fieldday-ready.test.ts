@@ -45,9 +45,9 @@ describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("当日の準備の�
   });
 
   it("端末の台数と時間の割り振りの ①・② は、段取り表と同じ", () => {
-    const n = Number(run.match(/端末 (\d+) 台/)?.[1]);
-    expect(n).toBeGreaterThan(0);
-    expect(sec.get("devices")).toContain(`端末 ${n} 台`);
+    // 11/5 作者: 端末は会社が用意する iPad を 1 人 1 台（台数は確定待ち）
+    expect(run).toMatch(/iPad/);
+    expect(sec.get("devices")).toMatch(/iPad（会社が用意）/);
     expect(run).toMatch(/① 分かるまでの時間/);
     expect(run).toMatch(/② 絵だけ/);
     expect(sec.get("app")).toMatch(/① 分かるまでの時間/);
@@ -57,7 +57,7 @@ describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("当日の準備の�
   it("記録アプリの画面のアドレスは、画面の分け方（App.tsx）にある画面", () => {
     const app = readFileSync("src/client/App.tsx", "utf-8");
     const paths = [...sec.get("app")!.matchAll(/#\/t\/<テナント>\/trial\/(?:<回>\/)?([a-z]+)/g)].map((m) => m[1]);
-    expect(paths.sort()).toEqual(["answer", "clocks", "forecast", "grade", "new", "pictures", "time"]);
+    expect(paths.sort()).toEqual(["answer", "clocks", "forecast", "grade", "new", "pictures", "self"]);
     for (const p of paths) expect(app, p).toMatch(new RegExp(`r\\[[34]\\] === "${p}"`));
   });
 
