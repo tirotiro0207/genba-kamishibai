@@ -5,7 +5,7 @@ import { freshTenant, sqlFile } from "./helpers/ok";
 // README の画面の写真（126）。架空の会社の種データ（demo/seed.sql）で、横長の 6 枚を docs/img に撮る。
 // 入口・経路・閲覧は架空の会社の署名済みのカードをそのまま撮る。カード・確認待ち・署名は、署名済みのカードしか無いので、
 // 使い捨ての架空のテナントに同じカードの中身と、そのカードの本物の確かめる AI の結果を写して撮る。API は呼ばない。
-// ふだんの録画では流さない。撮る: SHOTS=1 npx playwright test e2e/readme-shots.spec.ts（絵が決まったら撮り直す。※取り直し）
+// ふだんの録画では流さない。撮る: SHOTS=1 npx playwright test e2e/readme-shots.spec.ts（絵が決まったら撮り直す。※取り直し）。1 枚だけなら SHOTS_ONLY=6-read も付ける
 const OUT = "docs/img";
 
 interface Card {
@@ -16,6 +16,9 @@ interface Card {
 
 /** 縦に収まらない画面は、全体が横長の 1 枚に入るまで縮めてから撮る（写真のためだけ。画面そのものは変えない） */
 const shot = async (page: Page, name: string) => {
+  // SHOTS_ONLY=6-read のように名前を並べると、その写真だけを撮り直す（ほかの写真は変えない）
+  const only = process.env.SHOTS_ONLY?.split(",");
+  if (only && !only.includes(name)) return;
   await page.waitForTimeout(800);
   // 縮めると折り返しが変わるので、収まるまで 3 回まで測り直す
   for (let k = 0; k < 3; k++) {
@@ -98,5 +101,7 @@ test("README の画面の写真を 6 枚撮る", async ({ page, request }) => {
   // 6. 閲覧: 新入社員に届く、署名済みのカード
   await page.goto(`/#/t/demo/read`);
   await expect(page.getByTestId("read-card")).toBeVisible();
+  // 言葉はやさしい日本語だけ（11/5 の決定）。ベトナム語の字が写っていないことを見てから撮る
+  await expect(page.getByTestId("read-card")).not.toContainText(/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i);
   await shot(page, "6-read");
 });
