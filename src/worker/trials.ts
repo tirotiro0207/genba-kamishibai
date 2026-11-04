@@ -1,6 +1,7 @@
 // 回答の記録アプリの保存（011）。回を作ると種と割り当てが残り、答えは追記だけ受け付ける。
 import { Hono } from "hono";
 import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
+import { crossSummary } from "../shared/summary";
 import { assign, crossAssign, newSeed } from "../shared/assign";
 import { latestForecasts, pictureOrder, PICTURES_MAX } from "../shared/picture-order";
 import { appendAudit } from "./audit";
@@ -104,9 +105,14 @@ trials.get("/:id/grades", async (c) => {
 trials.post("/:id/grades", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
-  const b = await c.req.json<{ response_seq?: unknown; grader?: unknown; verdict?: unknown; answer_ja?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const b = await c.req.json<{ response_seq?: unknown; grader?: unknown; verdict?: unknown; answer_ja?: unknown; field?: unknown }>().catch(() => ({}) as Record<string, unknown>);
   if (!isGrader(b.grader)) return c.json({ error: "grader は g1 か g2" }, 400);
   if (!VERDICTS.includes(b.verdict as Verdict)) return c.json({ error: "verdict は correct・wrong・danger" }, 400);
+  // どちらの欄で判定したか（11/5）。自分の言葉の欄なら日本語の訳が要り、日本語の欄なら訳を入れない。印は訳のあるなしで読み戻す
+  const hasJa = typeof b.answer_ja === "string" && !!b.answer_ja.trim();
+  if (b.field !== undefined && b.field !== "ja" && b.field !== "own") return c.json({ error: "field は ja か own" }, 400);
+  if (b.field === "own" && !hasJa) return c.json({ error: "自分の言葉の欄で判定したときは、日本語の訳が要る" }, 400);
+  if (b.field === "ja" && hasJa) return c.json({ error: "日本語の欄で判定したときは、訳を入れない" }, 400);
   const r = await c.env.DB.prepare("SELECT seq FROM responses WHERE seq = ? AND trial_id = ? AND answer IS NOT NULL").bind(Number(b.response_seq), t.id).first();
   if (!r) return c.json({ error: "この回の答えが無い" }, 400);
   const answerJa = typeof b.answer_ja === "string" && b.answer_ja.trim() ? b.answer_ja.trim().slice(0, 2000) : null;
@@ -114,6 +120,19 @@ trials.post("/:id/grades", async (c) => {
     .bind(t.id, c.var.tenant.id, Number(b.response_seq), b.grader, b.verdict, answerJa)
     .first<{ seq: number }>();
   return c.json({ seq: row?.seq }, 201);
+});
+
+// 交差の回の結果（11/5）。項目ごと・カードか文かごとの数。国籍ごとの数はまとめた数だけで、1 人の国籍は「その他」。会社のテナントの中だけで返す
+trials.get("/:id/summary", async (c) => {
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const p = JSON.parse(t.participants) as Stored;
+  if (Array.isArray(p)) return c.json({ error: "交差の回ではない" }, 400);
+  const [rs, gs] = await Promise.all([
+    c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer FROM responses WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<ExportResponse>(),
+    c.env.DB.prepare("SELECT seq, response_seq, grader, verdict, answer_ja FROM grades WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<ExportGrade>(),
+  ]);
+  return c.json(crossSummary(p.people, rs.results, gs.results));
 });
 
 // 匿名の書き出し（docs/answers.csv の形）
@@ -211,7 +230,7 @@ trials.post("/:id/forecasts", async (c) => {
 trials.post("/:id/picture-answers", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
-  const b = await c.req.json<{ participant?: unknown; answer?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const b = await c.req.json<{ participant?: unknown; answer?: unknown; card_id?: unknown }>().catch(() => ({}) as Record<string, unknown>);
   const p = b.participant;
   if (typeof p !== "string" || !(participantIds(t.participants)).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
   const gone = await c.env.DB.prepare("SELECT (SELECT count(*) FROM responses WHERE trial_id = ?1 AND participant = ?2 AND erased = 1) + (SELECT count(*) FROM picture_answers WHERE trial_id = ?1 AND participant = ?2 AND erased = 1) AS n").bind(t.id, p).first<{ n: number }>();
@@ -219,8 +238,11 @@ trials.post("/:id/picture-answers", async (c) => {
   if (typeof b.answer !== "string" || !b.answer.trim()) return c.json({ error: "answer が要る" }, 400);
   const order = pictureOrder(t.seed, p, await pictureCards(c.env.DB, t.id));
   const done = new Set((await c.env.DB.prepare("SELECT card_id FROM picture_answers WHERE trial_id = ? AND participant = ?").bind(t.id, p).all<{ card_id: string }>()).results.map((r) => r.card_id));
+  // 送り直し（11/5）: どのカードへの答えかを付けて送ると、済んだカードには 2 つ目を入れず、別のカードの答えにもしない
+  if (typeof b.card_id === "string" && done.has(b.card_id)) return c.json({ error: "このカードの答えは済んでいる" }, 409);
   const next = order.find((x) => !done.has(x.id));
   if (!next) return c.json({ error: "絵の答えは済んでいる" }, 409);
+  if (typeof b.card_id === "string" && b.card_id !== next.id) return c.json({ error: "このカードは今の順番ではない" }, 400);
   const row = await c.env.DB.prepare("INSERT INTO picture_answers (trial_id, tenant_id, participant, card_id, answer) VALUES (?, ?, ?, ?, ?) RETURNING seq, created_at")
     .bind(t.id, c.var.tenant.id, p, next.id, b.answer.trim().slice(0, 2000))
     .first<{ seq: number; created_at: string }>();

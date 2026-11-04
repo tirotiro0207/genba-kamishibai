@@ -49,6 +49,11 @@ describe("回答の記録 1: 保存と順番の乱数（011）", () => {
     expect((await call(`${base}/${t.id}/responses`, json("POST", { participant: "v1", item: "A", ms: 1 }))).status).toBe(409);
     const b = (await (await call(`${base}/${t.id}/responses`, json("POST", { participant: "v1", item: "B", ms: 7000, answer: "下に入らない" }))).json()) as { shown: string };
     expect([a.shown, b.shown].sort()).toEqual(["card", "text"]);
+    // 結果は項目ごと・カードか文かごと。国籍ごとの数はまとめた数だけ
+    const s = (await (await call(`${base}/${t.id}/summary`)).json()) as { all: { n: number }[]; groups: { group: string; people: number }[] };
+    expect(s.all.reduce((x, c) => x + c.n, 0)).toBe(2);
+    expect(s.groups.map((g) => [g.group, g.people])).toEqual([["カンボジア", 2], ["ベトナム", 2]].sort());
+    expect((await call(`${base}/${(await newTrial()).id}/summary`)).status).toBe(400);
   });
 
   it("書き換えと消すことはサーバーが断り、DB でも断る", async () => {

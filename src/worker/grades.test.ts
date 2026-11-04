@@ -56,9 +56,9 @@ describe("回答の記録 3: 採点と書き出し（025）", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/csv/);
     const csv = (await res.text()).replace(/^﻿/, "");
     const lines = csv.trim().split("\r\n");
-    expect(lines[0]).toBe("respondent,item,shown,ms,answer,answer_ja,grader1,grader2,disagree");
+    expect(lines[0]).toBe("respondent,item,shown,ms,answer,answer_own,answer_ja,field1,field2,grader1,grader2,disagree");
     expect(csv).not.toMatch(/staff|\d{4}-\d{2}-\d{2}/);
-    expect(lines.find((l) => l.includes("dừng lại"))).toMatch(/^R0[12],B,(card|text),,dừng lại và báo,止めて知らせる,correct,wrong,yes$/);
+    expect(lines.find((l) => l.includes("dừng lại"))).toMatch(/^R0[12],B,(card|text),,dừng lại và báo,,止めて知らせる,own,ja,correct,wrong,yes$/);
     expect(csv).toContain('"chạm vào, ""không sao"""');
     expect(lines).toHaveLength(4);
   });
@@ -67,5 +67,14 @@ describe("回答の記録 3: 採点と書き出し（025）", () => {
     const t = await answered();
     expect((await call(`/api/t/demo/trials/${t.id}/answers.csv`)).status).toBe(404);
     expect((await call(`/api/t/demo/trials/${t.id}/grades`, json("POST", { response_seq: t.a1, grader: "g1", verdict: "correct" }))).status).toBe(404);
+  });
+
+  it("どちらの欄で判定したか（11/5）: 自分の言葉の欄なら訳が要り、日本語の欄なら訳を入れない", async () => {
+    const t = await answered();
+    expect((await grade(t.id, { response_seq: t.a1, grader: "g1", verdict: "correct", field: "own" })).status).toBe(400);
+    expect((await grade(t.id, { response_seq: t.a1, grader: "g1", verdict: "correct", field: "ja", answer_ja: "x" })).status).toBe(400);
+    expect((await grade(t.id, { response_seq: t.a1, grader: "g1", verdict: "correct", field: "maybe" })).status).toBe(400);
+    expect((await grade(t.id, { response_seq: t.a1, grader: "g1", verdict: "correct", field: "own", answer_ja: "止めて知らせる" })).status).toBe(201);
+    expect((await grade(t.id, { response_seq: t.a1, grader: "g2", verdict: "correct", field: "ja" })).status).toBe(201);
   });
 });
