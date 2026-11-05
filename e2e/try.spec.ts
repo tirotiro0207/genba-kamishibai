@@ -8,7 +8,7 @@ test("時間を計って答えると、あなたの秒が新入社員のカー�
   const sent: string[] = [];
   page.on("request", (r) => r.url().includes("/api/") && r.method() !== "GET" && sent.push(`${r.method()} ${r.url()}`));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/#/demo");
   await page.getByTestId("demo-try-time").click();
   await expect(page.getByTestId("try")).toHaveAttribute("data-mode", "time");
   await page.getByTestId("try-begin").click();
@@ -30,7 +30,7 @@ test("絵だけで答えると、決まりの文が出て、合っていたか�
   const sent: string[] = [];
   page.on("request", (r) => r.url().includes("/api/") && r.method() !== "GET" && sent.push(`${r.method()} ${r.url()}`));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/#/demo");
   await page.getByTestId("demo-try-picture").click();
   await expect(page.getByTestId("try")).toHaveAttribute("data-mode", "picture");
   await expect(page.getByTestId("read-frames")).toBeVisible();

@@ -22,6 +22,16 @@ app.get("/api/health", async (c) => {
   return c.json({ ok: true, tenants: row?.n ?? 0 });
 });
 
+// 入口の画面（11/5 作者）で「@ のあと」に打った名前から、テナントの ID を引く。名前は英小文字・数字・- だけ。
+// 会社のテナントだけを答える（練習用・架空の会社はゲストの入口から入る）
+app.get("/api/handle/:handle", async (c) => {
+  const h = c.req.param("handle");
+  if (!/^[a-z0-9-]{1,40}$/.test(h)) return c.json({ error: "名前は英小文字・数字・- で入れてください" }, 400);
+  const t = await c.env.DB.prepare("SELECT id FROM tenants WHERE handle = ? AND kind = 'company'").bind(h).first<{ id: string }>();
+  if (!t) return c.json({ error: "その名前の会社は見つかりません" }, 404);
+  return c.json({ tenant: t.id });
+});
+
 // 会社のテナントに PIN で入る
 app.post("/api/t/:tenant/session", async (c) => {
   const t = await c.env.DB.prepare("SELECT id, kind, name, pin_hash FROM tenants WHERE id = ?").bind(c.req.param("tenant")).first<TenantRow>();

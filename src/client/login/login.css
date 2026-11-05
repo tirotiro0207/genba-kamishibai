@@ -1,0 +1,11 @@
+/* 入口の画面（11/5 作者）。@ のあとに名前を入れて進むか、ゲストで始めるかの 2 択 */
+.login { max-width: 420px; margin: 48px auto 0; display: flex; flex-direction: column; gap: 16px; }
+.login h1 { font-size: 26px; margin: 0 0 8px; }
+.login-form { display: flex; flex-direction: column; gap: 10px; }
+.login-form label { font-size: 16px; }
+.login-handle { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.login-handle:focus-within { border-color: var(--accent); }
+.login-handle span { padding: 0 4px 0 12px; font-size: 24px; color: var(--muted); }
+.login-handle input { flex: 1; min-width: 0; border: 0; outline: none; font-size: 24px; padding: 8px 12px 8px 0; background: transparent; }
+.login-or { margin: 4px 0; text-align: center; color: var(--muted); font-size: 14px; }
+.login-guest { display: block; text-align: center; text-decoration: none; background: transparent; color: var(--fg); border: 1px solid var(--line); }

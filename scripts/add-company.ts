@@ -5,6 +5,7 @@
 //   npx tsx scripts/add-company.ts [テナント]      （既定は company。名前は「会社」）
 //   npx tsx scripts/add-company.ts company --new  # PIN を作り直す
 //   npx tsx scripts/add-company.ts company --remote  # 本番の D1 に入れる（028b）。PIN は手元と別で private/tenants/<テナント>.production.json
+//   npx tsx scripts/add-company.ts company --handle <名前>  # 入口の画面で「@ のあと」に打つ名前を付ける（11/5）。名前はコードに書かない
 import { execSync } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -51,7 +52,7 @@ export async function companySql(p: Pins, name: string): Promise<string> {
 
 async function main() {
   const args = process.argv.slice(2);
-  const tenant = args.find((a) => !a.startsWith("--")) ?? "company";
+  const tenant = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--handle") ?? "company";
   if (!/^[a-z][a-z0-9-]{1,30}$/.test(tenant)) throw new Error("テナントの名前は英小文字・数字・-");
   const remote = args.includes("--remote");
   const path = pinsPath(tenant, remote);
@@ -60,7 +61,11 @@ async function main() {
   writeFileSync(path, JSON.stringify(pins, null, 2) + "\n", "utf-8");
   const sql = privatePath("tmp", `add-${tenant}.sql`);
   mkdirSync(privatePath("tmp"), { recursive: true });
-  writeFileSync(sql, await companySql(pins, "会社"), "utf-8");
+  const hi = args.indexOf("--handle");
+  const handle = hi >= 0 ? args[hi + 1] : undefined;
+  if (handle !== undefined && !/^[a-z0-9-]{1,40}$/.test(handle)) throw new Error("--handle の名前は英小文字・数字・-");
+  const handleSql = handle ? `UPDATE tenants SET handle = ${q(handle)} WHERE id = ${q(tenant)};\n` : "";
+  writeFileSync(sql, (await companySql(pins, "会社")) + handleSql, "utf-8");
   const where = remote ? "--remote --env production" : "--local";
   execSync(`npx wrangler d1 execute DB ${where} --file "${sql}"`, { cwd: join(import.meta.dirname, ".."), stdio: "ignore" });
   console.log(`${remote ? "本番" : "手元"}の D1 に会社のテナント ${tenant} と役割 ${PEOPLE.length} つを入れた。PIN は ${path} にある`);

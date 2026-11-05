@@ -7,6 +7,7 @@ import { TryScreen } from "./demo/TryScreen";
 import { FixScreen } from "./fix/FixScreen";
 import { FoldScreen } from "./fold/FoldScreen";
 import { IssueScreen } from "./issue/IssueScreen";
+import { LoginScreen } from "./login/LoginScreen";
 import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
@@ -38,8 +39,9 @@ function useRoute() {
 
 export function App() {
   const r = useRoute();
-  // 何も無い URL と #/demo は、公開デモの入口（093b。架空の会社だけ）
-  let body = <DemoScreen />;
+  // 何も無い URL は入口の画面（11/5 作者）。@ のあとに会社の名前を入れて進むか、ゲストで始める（#/demo）
+  let body = r[0] === "" || r[0] === "login" ? <LoginScreen /> : <DemoScreen />;
+  // #/demo は、公開デモの入口（093b。架空の会社だけ）
   // #/demo/time ・ #/demo/picture ・ 見る人が答える公開デモ（094）
   if (r[0] === "demo" && (r[1] === "time" || r[1] === "picture")) body = <TryScreen mode={r[1]} />;
   // #/t/<テナント>/trial/new ・ #/t/<テナント>/trial/<回>/time ・ #/t/<テナント>/trial/<回>/answer/<参加者> ・ #/t/<テナント>/trial/<回>/grade/<g1|g2>

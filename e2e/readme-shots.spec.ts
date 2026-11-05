@@ -45,7 +45,7 @@ test("README の画面の写真を 6 枚撮る", async ({ page, request }) => {
   const main = cards.find((c) => c.verify) ?? cards[0];
 
   // 1. 公開デモの入口
-  await page.goto("/");
+  await page.goto("/#/demo");
   await expect(page.getByTestId("demo")).toBeVisible();
   await shot(page, "1-entrance");
 
