@@ -805,19 +805,23 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
     }
     // ここから 11/5 電気の現場の道具と保護具（docs/props-2026-11-05.md）。写真は比率だけを見て、上の決まりで描く
     case "aed": {
-      // AED: 上の取っ手、明るい箱、ふたの合わせ目、まん中の濃いハートと明るい稲妻、箱のつや。「AED」の字は入れない（作者に確かめる）。c は箱の真ん中
+      // AED: 上の取っ手、明るい箱、ふたの合わせ目、上の濃いハートと明るい稲妻、下の「AED」の字（線で描く。11/5 作者の判断で入れる）、
+      // 箱のつや。c は箱の真ん中
       const bw = s * 0.9;
       const bh = s * 0.7;
       const x0 = cx - bw / 2;
       const y0 = cy - bh / 2;
-      const r = s * 0.12;
-      const hy = cy - s * 0.04;
+      const r = s * 0.085;
+      const hy = cy - s * 0.12;
+      const gh = s * 0.13;
+      const gw = gh * 0.7;
+      const letters = icon ? "" : glyphs("AED", cx - glyphsWidth("AED", gw) / 2, cy + s * 0.04, gw, gh, W * 0.9);
       const heart = `M${n(cx)} ${n(hy + r * 1.6)}C${n(cx - r * 2.4)} ${n(hy + r * 0.2)} ${n(cx - r * 1.4)} ${n(hy - r * 1.7)} ${n(cx)} ${n(hy - r * 0.55)}` +
         `C${n(cx + r * 1.4)} ${n(hy - r * 1.7)} ${n(cx + r * 2.4)} ${n(hy + r * 0.2)} ${n(cx)} ${n(hy + r * 1.6)}Z`;
       const bolt = poly([[cx + r * 0.4, hy - r * 1.15], [cx - r * 0.42, hy + r * 0.12], [cx + r * 0.06, hy + r * 0.12], [cx - r * 0.34, hy + r * 1.15], [cx + r * 0.52, hy - r * 0.22], [cx + r * 0.06, hy - r * 0.22]]);
       return cord(`M${n(cx - s * 0.17)} ${n(y0)}V${n(y0 - s * 0.1)}H${n(cx + s * 0.17)}V${n(y0)}`, W * 2.6, DARK) +
         box(x0, y0, x0 + bw, y0 + bh, LIGHT, s * 0.1) + line(x0 + W, y0 + bh * 0.84, x0 + bw - W, y0 + bh * 0.84, INK, 0.6) +
-        path(heart, DARK) + path(bolt, PAPER, 0.6) + shine(x0 + bw * 0.1, y0 + bh * 0.16, x0 + bw * 0.1, y0 + bh * 0.42, LIGHT);
+        path(heart, DARK) + path(bolt, PAPER, 0.6) + letters + shine(x0 + bw * 0.1, y0 + bh * 0.16, x0 + bw * 0.1, y0 + bh * 0.42, LIGHT);
     }
     case "cubicle": {
       // キュービクル（屋外の受変電の箱）: 下の濃い台、明るい箱、扉 3 枚（合わせ目・窓・取っ手・下の通気の筋）、左の扉の危ないの印、
@@ -1100,6 +1104,10 @@ const GLYPH: Record<string, { w: number; d: string[]; dots?: [number, number][] 
   i: { w: 0.3, d: ["M0.15 0.4V1"], dots: [[0.15, 0.18]] },
   n: { w: 0.9, d: ["M0 1V0.4H0.9V1"] },
   h: { w: 0.9, d: ["M0 0V1", "M0 0.4H0.9V1"] },
+  // AED の箱の字（11/5 作者の判断で入れる）
+  A: { w: 0.9, d: ["M0 1L0.45 0L0.9 1", "M0.2 0.62H0.7"] },
+  E: { w: 0.72, d: ["M0.72 0H0V1H0.72", "M0 0.5H0.6"] },
+  D: { w: 0.85, d: ["M0 0H0.42L0.85 0.3V0.7L0.42 1H0Z"] },
 };
 const GAP = 0.35;
 function glyphsWidth(text: string, gw: number): number {
