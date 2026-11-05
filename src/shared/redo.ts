@@ -4,10 +4,11 @@
 // 部品 → 文 → 元の文の経路はそのまま残る。1 枚につき 5 回まで。
 import type Anthropic from "@anthropic-ai/sdk";
 import { partBoxes } from "./boxes";
-import type { CardBody, CardPart } from "./card";
+import type { CardBody, CardPart, CardScript } from "./card";
 import { type GuardedDeps, guardedCall, type Purpose } from "./claude";
 import type { FixBox } from "./fix";
 import { MAKER_MODEL } from "./make/maker";
+import { storyText } from "./make/script";
 import { FRAME_JSON_SCHEMA, type FrameJson, type MotionJson, validateMotion } from "./picto/motion";
 
 export const REDO_MAX = 5;
@@ -45,15 +46,43 @@ const SYSTEM = `あなたは安全の絵カードの直し係です。絵は人�
 変えてよいのは、「直してよい部品」に挙げた人の関節の角度と向き（facing の left・right。「〜の方を向いて」と頼まれたら向きを変える）と、挙げた小物の位置（dx・dy・x・y）と大きさ（size）だけです。
 ほかの人・小物・役・人数・小物の並び・持ち手（figure・joint）・吹き出しの中身は、受け取ったままの値で返してください。`;
 
-export function redoParams(key: FrameJson, targets: Targets, text: string): Anthropic.MessageCreateParamsNonStreaming {
+// 脚本のあるカード（11/5 から）は、作り直しにも物語とそのコマの役を渡す（11/6）。
+// 前は頼みと今の絵だけを渡していたので、直した絵がそのコマの役（場・きっかけ・山場・結果）や物語から外れることがあった。
+// 脚本の無いカード（11/5 より前）では、system も中身も今までのまま。
+const SCRIPT_RULE = `
+このカードには脚本があります。脚本のこのコマの役と物語から外れないように直してください（たとえば山場のコマなら、決まりの動きをしている瞬間のまま）。
+頼みと脚本がぶつかるときは、頼みを優先してください。変えてよい部品の決まりは上のとおりです。`;
+
+/** 作り直しに渡す脚本。frame は作り直すコマの番号、frameCount はカードのコマの数 */
+export interface RedoScript {
+  script: CardScript;
+  frame: number;
+  frameCount: number;
+}
+
+/**
+ * 脚本を、作り直しの係に渡す文にする。物語（無ければきっかけとなぜの見せ方）と、作り直すコマの役と中身。
+ * カードのコマ（body.frames）は動きの印の付いたキーフレームを時刻の順に並べたもので、作るときに脚本のコマの数と順のとおりに描かせている。
+ * なので数が合えば同じ番号が同じコマ。数が合わないときは、どのコマか決められないので役は渡さず物語だけにする
+ */
+export function redoScriptText({ script, frame, frameCount }: RedoScript): string {
+  const story = script.story ? storyText(script.story) : `きっかけ: ${script.trigger}\nなぜの見せ方: ${script.why_shown}`;
+  const f = script.frames?.length === frameCount ? script.frames[frame] : undefined;
+  const koma = f ? `\n\n作り直すコマ（${frame + 1} コマ目${f.role ? `・役は「${f.role}」` : ""}）: ${f.who}／${f.action}／見る人が分かること: ${f.viewer}` : "";
+  return `このカードの物語:\n${story}${koma}`;
+}
+
+/** plot は脚本のあるカードだけ（省ける）。無いときは今までと同じ中身を渡す */
+export function redoParams(key: FrameJson, targets: Targets, text: string, plot?: RedoScript): Anthropic.MessageCreateParamsNonStreaming {
   const list = [...targets.figures.map((i) => `figures[${i}]（${key.figures[i].role}）の関節の角度と向き`), ...targets.props.map((i) => `props[${i}]（${key.props[i].kind}）の位置と大きさ`)].join("\n");
+  const script = plot ? `\n\n${redoScriptText(plot)}` : "";
   return {
     model: MAKER_MODEL,
     max_tokens: 8000,
-    system: SYSTEM,
+    system: plot ? `${SYSTEM}${SCRIPT_RULE}` : SYSTEM,
     thinking: { type: "adaptive" },
     output_config: { effort: "medium", format: { type: "json_schema", schema: FRAME_JSON_SCHEMA } },
-    messages: [{ role: "user", content: `今の絵の JSON:\n${JSON.stringify(key)}\n\n直してよい部品:\n${list}\n\n監修者の頼み: ${text}` }],
+    messages: [{ role: "user", content: `今の絵の JSON:\n${JSON.stringify(key)}\n\n直してよい部品:\n${list}${script}\n\n監修者の頼み: ${text}` }],
   } as Anthropic.MessageCreateParamsNonStreaming;
 }
 
@@ -91,7 +120,7 @@ export async function redoCard(deps: GuardedDeps, purpose: Purpose, body: CardBo
   if (keyIndex < 0) throw new RedoError("そのコマのキーフレームが無い", 400);
   const targets = partsInBox(m, t!, body.parts, box);
   if (!targets.figures.length && !targets.props.length) throw new RedoError("枠の中に絵の部品が無い。部品を囲んで送り直す", 400);
-  const msg = await guardedCall(deps, { purpose, label: "その 1 枚の作り直し", params: redoParams(m.keyframes[keyIndex], targets, text) });
+  const msg = await guardedCall(deps, { purpose, label: "その 1 枚の作り直し", params: redoParams(m.keyframes[keyIndex], targets, text, body.script ? { script: body.script, frame, frameCount: body.frames.length } : undefined) });
   if (msg.stop_reason !== "end_turn") throw new RedoError(`作り直しが最後まで返らなかった: ${msg.stop_reason}`, 502);
   const got = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as FrameJson;
   const json = mergeRedo(m, keyIndex, got, targets);
