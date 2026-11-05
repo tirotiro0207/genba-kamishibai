@@ -5,10 +5,10 @@
 // 0:13.0（コマ 390）で枠が真ん中に止まっているのは、前の版と同じ（後ろの場面がそこから始まるため）
 import React from "react";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
-import { cut, type Facet, foldAll, FoldPaper, Facets, translateFacets } from "./fold";
-import { BODY_FOLDS, LEG_FOLDS } from "./fold-steps";
+import { cut, DIAMOND_BACK_M, foldAll, FoldPaper, Facets, translateFacets } from "./fold";
+import { ARM_PIVOT, BODY_FOLDS, CROTCH, FOOT_OUT, HEAD_TOP, LEG_DY, LEG_FOLDS, OUTLINE } from "./fold-steps";
 import { SheetPatterns } from "./origami";
-import { PAPER_EDGE, PaperDefs, type Pt, Shadow } from "./paper";
+import { PAPER_EDGE, PAPER_FAR, PaperDefs, type Pt, Shadow } from "./paper";
 import { Clocks, FONT_JP, FONT_PEN, FRAME, StageFrame, WobbleDefs } from "./parts";
 import { CLOCKS, FPS, GROUND, H, INK, PERSON_H, W } from "./timeline";
 
@@ -27,10 +27,10 @@ const PRINT = 24; // 1 枚 0.8 秒
 const P1 = 60;
 const P2 = P1 + PRINT;
 const SLIDE = 12;
-/** 折る: 1 手 12 コマ（0.4 秒）。体の紙は脚の紙から半手（6 コマ）遅れて折り始める */
+/** 折る: 1 手 12 コマ（0.4 秒）。体の紙は脚の紙から 1 手半（18 コマ）遅れて折り始める（脚が分かれる → 腕が出る → 頭が出る の順に見せる） */
 export const STEP = 12;
 const FOLD_START = 120;
-const BODY_LAG = 6;
+const BODY_LAG = 18;
 const LEG_END = FOLD_START + LEG_FOLDS.length * STEP;
 const BODY_END = FOLD_START + BODY_LAG + BODY_FOLDS.length * STEP;
 /** 組む: 2 つが寄る → 体を脚に差し込む → パチン */
@@ -53,33 +53,37 @@ const HALF = 100 * K;
 const SLOT_BODY = { x: 360, y: 400 };
 const SLOT_LEGS = { x: 920, y: 400 };
 const FIG_X = 640;
-/** 組んだ紙の人: 脚の紙はそのまま、体の紙は 80 上（腰から下の 75 は脚の紙の中に差し込まれる）。頭のてっぺん -180 から足の裏 100 まで */
-const BODY_DY = -80;
-const FK = PERSON_H / 280;
-const FIG_Y = GROUND - 100 * FK;
+/** 組んだ紙の人（手本の J1）: 体の紙が手前、脚の紙が奥。体の下の角が脚の紙の上から 0.37 の所まで重なる。紙の人の座標は体の紙の座標のまま、脚の紙は LEG_DY 下。手本のできあがりの形（幅 : 高さ = 0.46 : 1）に合わせてある */
+const FIG_TOP = HEAD_TOP[1];
+const FIG_FEET = FOOT_OUT[1];
+const FK = PERSON_H / (FIG_FEET - FIG_TOP);
+const FIG_Y = GROUND - FIG_FEET * FK;
 
 // ---- 折った紙 ----
-const LEG_S = foldAll(LEG_FOLDS);
-const BODY_S = foldAll(BODY_FOLDS);
+const LEG_S = foldAll(LEG_FOLDS, 100, DIAMOND_BACK_M, false);
+const BODY_S = foldAll(BODY_FOLDS, 100, DIAMOND_BACK_M, false);
 const LEGS_DONE = LEG_S[LEG_S.length - 1];
 const BODY_DONE = BODY_S[BODY_S.length - 1];
 const BIG = 400;
 const box = (x0: number, y0: number, x1: number, y1: number): Pt[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-/** 紙の人の部品（紙の人の座標。腰の 0・足の裏 100） */
-const BODY_FIG = translateFacets(BODY_DONE, 0, BODY_DY);
-/** 腕の付け根（肩の外の端） */
-const SHOULDER_X = 50;
+/** 紙の人の部品（紙の人の座標）。腕は凧の辺の外へめくり出した帯、胴と頭は凧の辺の内側、脚は脚の紙の左右の半分 */
+const [PX, PY] = ARM_PIVOT;
+const ARM_TOP = -60;
+/** 凧の右の辺（(82.8,-58.6) → (0,141.4)）を 0.4 外へずらした線の上の、高さ y の点の x */
+const edgeX = (y: number) => (82.8 * (141.42 - y)) / (141.42 + 58.58) + 0.4;
+const armRegion = (sgn: number): Pt[] => [[sgn * edgeX(ARM_TOP), ARM_TOP], [sgn * BIG, ARM_TOP], [sgn * BIG, BIG], [sgn * edgeX(BIG), BIG]];
+const LEGS_FIG = translateFacets(LEGS_DONE, 0, LEG_DY);
 const PART = {
-  // 肩（腕の帯の内側 50 まで）は胴に付ける。腕は肩の外から回す（肩ごと回すと耳のように立つため）
-  core: cut(BODY_FIG, box(-SHOULDER_X, -BIG, SHOULDER_X, BIG)),
-  armL: cut(BODY_FIG, box(-BIG, -BIG, -SHOULDER_X, BIG)),
-  armR: cut(BODY_FIG, box(SHOULDER_X, -BIG, BIG, BIG)),
-  legL: cut(LEGS_DONE, box(-BIG, -BIG, 0, BIG)),
-  legR: cut(LEGS_DONE, box(0, -BIG, BIG, BIG)),
+  core: [...cut(BODY_DONE, box(-BIG, -BIG, BIG, ARM_TOP)), ...cut(BODY_DONE, [[-edgeX(ARM_TOP), ARM_TOP], [edgeX(ARM_TOP), ARM_TOP], [0, 142]])],
+  armL: cut(BODY_DONE, armRegion(-1)),
+  armR: cut(BODY_DONE, armRegion(1)),
+  legL: cut(LEGS_FIG, box(-BIG, -BIG, 0, BIG)),
+  legR: cut(LEGS_FIG, box(0, -BIG, BIG, BIG)),
 };
-const SHOULDER_Y = -58 + BODY_DY;
-const HIP_Y = -40;
-const EYE_Y = -88 + BODY_DY;
+/** 腕の付け根から手の先までの長さ */
+const ARM_REACH = Math.max(...PART.armR.flatMap((f) => f.poly.map(([x, y]) => Math.hypot(x - PX, y - PY))));
+const HIP_Y = CROTCH[1] - 6;
+const EYE_Y = FIG_TOP + 30;
 
 // ---- 見出し・印刷口・刷られる紙 ----
 const Labels: React.FC<{ g: number; o: number }> = ({ g, o }) => {
@@ -147,32 +151,26 @@ const PrintingSheet: React.FC<{ q: number; pattern: string; id: string }> = ({ q
 interface Pose { armL: number; armR: number; legL: number; legR: number; lean: number }
 const REST: Pose = { armL: 0, armR: 0, legL: 0, legR: 0, lean: 0 };
 const FigureParts: React.FC<{ pose: Pose; eyes: number; id: string }> = ({ pose, eyes, id }) => (
-  <g transform={`rotate(${pose.lean} 0 100)`}>
-    <g transform={`rotate(${pose.legL} -12 ${HIP_Y})`}>
+  <g transform={`rotate(${pose.lean} 0 ${FIG_FEET})`}>
+    <g transform={`rotate(${pose.legL} -6 ${HIP_Y})`}>
       <Facets fs={PART.legL} pattern="sheet-legs" k={FK} id={`${id}-ll`} />
     </g>
-    <g transform={`rotate(${pose.legR} 12 ${HIP_Y})`}>
+    <g transform={`rotate(${pose.legR} 6 ${HIP_Y})`}>
       <Facets fs={PART.legR} pattern="sheet-legs" k={FK} id={`${id}-lr`} />
     </g>
-    <g transform={`rotate(${pose.armL} ${-SHOULDER_X} ${SHOULDER_Y})`}>
+    <Facets fs={PART.core} pattern="sheet-body" k={FK} id={`${id}-c`} />
+    <g transform={`rotate(${pose.armL} ${-PX} ${PY})`}>
       <Facets fs={PART.armL} pattern="sheet-body" k={FK} id={`${id}-al`} />
     </g>
-    <g transform={`rotate(${pose.armR} ${SHOULDER_X} ${SHOULDER_Y})`}>
+    <g transform={`rotate(${pose.armR} ${PX} ${PY})`}>
       <Facets fs={PART.armR} pattern="sheet-body" k={FK} id={`${id}-ar`} />
-    </g>
-    {/* 胴と頭は脚の紙の手前（腰から下は脚の紙の中に差し込んだので、腰の線で切る） */}
-    <clipPath id={`${id}-waist`}>
-      <rect x={-200} y={-400} width={400} height={400 - 55} />
-    </clipPath>
-    <g clipPath={`url(#${id}-waist)`}>
-      <Facets fs={PART.core} pattern="sheet-body" k={FK} id={`${id}-c`} />
     </g>
     {eyes > 0 && (
       <g>
-        {[-8, 8].map((x) => (
-          <ellipse key={x} cx={x} cy={EYE_Y} rx={2.6} ry={3.6 * Math.min(1, eyes)} fill={INK} />
+        {[-12, 12].map((x) => (
+          <ellipse key={x} cx={x} cy={EYE_Y} rx={3.2} ry={4.4 * Math.min(1, eyes)} fill={INK} />
         ))}
-        <path d={`M-6 ${EYE_Y + 9}Q0 ${EYE_Y + 13} 6 ${EYE_Y + 9}`} fill="none" stroke={INK} strokeWidth={1.6} strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.max(0, Math.min(1, eyes - 1))} 1`} />
+        <path d={`M-8 ${EYE_Y + 11}Q0 ${EYE_Y + 16} 8 ${EYE_Y + 11}`} fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" pathLength={1} strokeDasharray={`${Math.max(0, Math.min(1, eyes - 1))} 1`} />
       </g>
     )}
   </g>
@@ -180,8 +178,8 @@ const FigureParts: React.FC<{ pose: Pose; eyes: number; id: string }> = ({ pose,
 
 // ---- 枠を引っぱる（前の版の s6 と同じ道のり。11/5 夜 v4: 枠が大きいので 0.2 秒遅く着き、大きく弾む） ----
 const WALK_END = sec(0.5);
-/** 右腕の先が枠の端に届く間（腕は横にまっすぐ出ている） */
-const HAND = 76 * FK;
+/** 右腕の先が枠の端に届く間（右腕を肩から横へ上げる） */
+const HAND = (PX + ARM_REACH - 10) * FK;
 const PULL_END = sec(1.7);
 const RUN_AT = sec(2.0);
 const frameCx = (f: number) =>
@@ -192,7 +190,7 @@ const frameCx = (f: number) =>
 const BUBBLE_TEXT = "紙芝居にします！";
 
 /** 冒頭 0:00〜0:13 の 1 コマ（g は冒頭からのコマ） */
-export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
+export const Intro: React.FC<{ g?: number; outline?: "over" | "side" }> = ({ g: gIn, outline }) => {
   const cur = useCurrentFrame();
   const g = gIn ?? cur;
 
@@ -208,7 +206,8 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
   const out = { x: MOUTH_X, y: MOUTH_Y + 12 + HALF };
   const m1 = interpolate(g, [P1 + PRINT, P1 + PRINT + SLIDE], [0, 1], { ...clamp, easing: ease });
   const m2 = interpolate(g, [P2 + PRINT, P2 + PRINT + SLIDE], [0, 1], { ...clamp, easing: ease });
-  const at = (m: number, to: { x: number; y: number }) => ({ x: out.x + (to.x - out.x) * m, y: out.y + (to.y - out.y) * m - Math.sin(m * Math.PI) * 40, r: Math.sin(m * Math.PI) * -5 });
+  // 置き場へ動きながら 45° 回して菱形にし、裏返す（手本の L2・B3 と「裏返す」。刷った面が向こうになる）
+  const at = (m: number, to: { x: number; y: number }) => ({ x: out.x + (to.x - out.x) * m, y: out.y + (to.y - out.y) * m - Math.sin(m * Math.PI) * 40, r: -45 * m, s: Math.cos(m * Math.PI) });
 
   // 折る進み（手 i を終えた所が i）
   const legP = Math.max(0, Math.min(LEG_FOLDS.length, (g - FOLD_START) / STEP));
@@ -217,8 +216,9 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
   // 組む: 置き場から紙の人の場所へ寄る → 体を脚に差し込む
   const jm = interpolate(g, JOIN_MOVE, [0, 1], { ...clamp, easing: ease });
   const ins = interpolate(g, INSERT, [0, 1], { ...clamp, easing: Easing.in(Easing.quad) });
-  const legsT = { x: SLOT_LEGS.x + (FIG_X - SLOT_LEGS.x) * jm, y: SLOT_LEGS.y + (FIG_Y - SLOT_LEGS.y) * jm, k: K + (FK - K) * jm };
-  const bodyTo = { x: FIG_X, y: FIG_Y + (BODY_DY - 70 * (1 - ins)) * FK };
+  const legsTo = { x: FIG_X, y: FIG_Y + LEG_DY * FK };
+  const legsT = { x: SLOT_LEGS.x + (legsTo.x - SLOT_LEGS.x) * jm, y: SLOT_LEGS.y + (legsTo.y - SLOT_LEGS.y) * jm, k: K + (FK - K) * jm };
+  const bodyTo = { x: FIG_X, y: FIG_Y - 70 * (1 - ins) * FK };
   const bodyT = { x: SLOT_BODY.x + (bodyTo.x - SLOT_BODY.x) * jm, y: SLOT_BODY.y + (bodyTo.y - SLOT_BODY.y) * jm, k: K + (FK - K) * jm };
   const snap = g >= DONE && g < DONE + 6 ? Math.sin(((g - DONE) / 6) * Math.PI) : 0;
 
@@ -243,11 +243,11 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
   let x = FIG_X;
   let facing = 1;
   let bob = 0;
-  // 立っているとき: 腕を少し下ろし、右手を振る
+  // 立っているとき: 垂らした腕がぴょこっと動き、右手を上げて振る
   const wave = g >= BUBBLE ? Math.sin(((g - BUBBLE) / FPS) * Math.PI * 3) : 0;
   let pose: Pose = {
-    armL: -14 * wig - 55 * drop,
-    armR: 14 * wig + 55 * drop - (g >= BUBBLE ? interpolate(g, [BUBBLE, BUBBLE + 6], [0, 1], clamp) * (95 + 15 * wave) : 0),
+    armL: 16 * wig + 6 * drop,
+    armR: -16 * wig - 6 * drop - (g >= BUBBLE ? interpolate(g, [BUBBLE, BUBBLE + 6], [0, 1], clamp) * (135 + 18 * wave) : 0),
     legL: 10 * wig,
     legR: -10 * wig,
     lean: 0,
@@ -257,22 +257,22 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
     if (f < WALK_END) {
       x = interpolate(f, [0, WALK_END], [FIG_X, W + FRAME.w / 2 - 170 - FRAME.w / 2 - HAND], { ...clamp, easing: Easing.inOut(Easing.quad) });
       const ph = f / sec(0.5);
-      pose = { armL: -55 + swing(ph, 18), armR: interpolate(f, [0, WALK_END], [-40, 0], clamp), legL: swing(ph, 20), legR: -swing(ph, 20), lean: 0 };
+      pose = { armL: 6 + swing(ph, 14), armR: interpolate(f, [0, WALK_END], [-135, -92], clamp), legL: swing(ph, 16), legR: -swing(ph, 16), lean: 0 };
       bob = Math.abs(swing(ph, 6));
     } else if (f < PULL_END) {
       // 引く: 右腕で枠の端をつかみ、体を後ろへ預けて、足を交互に後ろへ運ぶ
       x = edgeX - HAND;
       const ph = (f - WALK_END) / sec(0.45);
-      pose = { armL: -70, armR: 4, legL: swing(ph, 16), legR: -swing(ph, 16), lean: -9 };
+      pose = { armL: 18, armR: -92, legL: swing(ph, 14), legR: -swing(ph, 14), lean: -9 };
     } else if (f < RUN_AT) {
       x = edgeX - HAND;
       const r = interpolate(f, [PULL_END, RUN_AT], [0, 1], clamp);
-      pose = { armL: -70 + 15 * r, armR: 4 + 50 * r, legL: 0, legR: 0, lean: -9 * (1 - r) };
+      pose = { armL: 18 - 8 * r, armR: -92 + 72 * r, legL: 0, legR: 0, lean: -9 * (1 - r) };
     } else {
       facing = -1;
       x = interpolate(f, [RUN_AT, sec(2.6)], [edgeX - HAND, -300], { ...clamp, easing: Easing.in(Easing.quad) });
       const ph = (f - RUN_AT) / sec(0.4);
-      pose = { armL: -50 + swing(ph, 30), armR: 50 + swing(ph, 30), legL: swing(ph, 32), legR: -swing(ph, 32), lean: 8 };
+      pose = { armL: swing(ph, 30), armR: swing(ph, 30), legL: swing(ph, 26), legR: -swing(ph, 26), lean: 8 };
       bob = Math.abs(swing(ph, 10));
     }
   }
@@ -323,9 +323,9 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
           (m1 <= 0 ? (
             <PrintingSheet q={q1} pattern="sheet-legs" id="a" />
           ) : (
-            <g transform={`translate(${at(m1, SLOT_LEGS).x} ${at(m1, SLOT_LEGS).y}) rotate(${at(m1, SLOT_LEGS).r}) scale(${K})`} filter="url(#sheet-shadow)">
+            <g transform={`translate(${at(m1, SLOT_LEGS).x} ${at(m1, SLOT_LEGS).y}) rotate(${at(m1, SLOT_LEGS).r}) scale(${K * Math.max(0.02, Math.abs(at(m1, SLOT_LEGS).s))} ${K})`} filter="url(#sheet-shadow)">
               <g filter="url(#grain)">
-                <FoldPaper steps={LEG_FOLDS} states={LEG_S} p={0} pattern="sheet-legs" k={K} id="pl" />
+                <rect x={-100} y={-100} width={200} height={200} fill={at(m1, SLOT_LEGS).s > 0 ? "url(#sheet-legs)" : PAPER_FAR} stroke={PAPER_EDGE} strokeWidth={1.6 / K} />
               </g>
             </g>
           ))}
@@ -333,9 +333,9 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
           (m2 <= 0 ? (
             <PrintingSheet q={q2} pattern="sheet-body" id="b" />
           ) : (
-            <g transform={`translate(${at(m2, SLOT_BODY).x} ${at(m2, SLOT_BODY).y}) rotate(${at(m2, SLOT_BODY).r}) scale(${K})`} filter="url(#sheet-shadow)">
+            <g transform={`translate(${at(m2, SLOT_BODY).x} ${at(m2, SLOT_BODY).y}) rotate(${at(m2, SLOT_BODY).r}) scale(${K * Math.max(0.02, Math.abs(at(m2, SLOT_BODY).s))} ${K})`} filter="url(#sheet-shadow)">
               <g filter="url(#grain)">
-                <FoldPaper steps={BODY_FOLDS} states={BODY_S} p={0} pattern="sheet-body" k={K} id="pb" />
+                <rect x={-100} y={-100} width={200} height={200} fill={at(m2, SLOT_BODY).s > 0 ? "url(#sheet-body)" : PAPER_FAR} stroke={PAPER_EDGE} strokeWidth={1.6 / K} />
               </g>
             </g>
           ))}
@@ -344,14 +344,14 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
         {g >= FOLD_START && !alive && (
           <>
             {jm > 0 && <Shadow x={FIG_X} ground={GROUND} w={110} opacity={0.18 * jm} />}
-            <g transform={`translate(${bodyT.x} ${bodyT.y}) scale(${bodyT.k})`} filter="url(#sheet-shadow)">
-              <g filter="url(#grain)">
-                {jm <= 0 ? <FoldPaper steps={BODY_FOLDS} states={BODY_S} p={bodyP} pattern="sheet-body" k={K} id="fb" /> : <Facets fs={BODY_DONE} pattern="sheet-body" k={bodyT.k} id="jb" />}
-              </g>
-            </g>
             <g transform={`translate(${legsT.x} ${legsT.y}) scale(${legsT.k})`} filter="url(#sheet-shadow)">
               <g filter="url(#grain)">
                 <FoldPaper steps={LEG_FOLDS} states={LEG_S} p={legP} pattern="sheet-legs" k={K} id="fl" />
+              </g>
+            </g>
+            <g transform={`translate(${bodyT.x} ${bodyT.y}) scale(${bodyT.k})`} filter="url(#sheet-shadow)">
+              <g filter="url(#grain)">
+                {jm <= 0 ? <FoldPaper steps={BODY_FOLDS} states={BODY_S} p={bodyP} pattern="sheet-body" k={K} id="fb" /> : <Facets fs={BODY_DONE} pattern="sheet-body" k={bodyT.k} id="jb" />}
               </g>
             </g>
           </>
@@ -365,6 +365,7 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
               <g filter="url(#grain)">
                 <FigureParts pose={pose} eyes={eyes} id="fig" />
               </g>
+              {outline === "over" && <path d={`M${OUTLINE.map((p) => p.join(" ")).join("L")}Z`} fill="none" stroke="#d0302a" strokeWidth={2.4 / FK} strokeDasharray={`${8 / FK} ${5 / FK}`} />}
             </g>
           </>
         )}
@@ -379,6 +380,13 @@ export const Intro: React.FC<{ g?: number }> = ({ g: gIn }) => {
           </g>
         )}
 
+        {/* 見比べ用: 手本の輪郭を紙の人の横に描く */}
+        {outline === "side" && alive && (
+          <g transform={`translate(${x + 330} ${FIG_Y}) scale(${FK})`}>
+            <path d={`M${OUTLINE.map((p) => p.join(" ")).join("L")}Z`} fill="#f3eee2" stroke={INK} strokeWidth={2.4 / FK} />
+            {OUTLINE.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={3 / FK} fill="#d0302a" />)}
+          </g>
+        )}
         {/* 説明の大きな字 */}
         {bigO > 0 && (
           <g opacity={bigO} transform={`translate(${W / 2} 88) scale(${0.6 + bigIn * 0.4})`}>

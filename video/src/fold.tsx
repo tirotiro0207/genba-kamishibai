@@ -20,6 +20,8 @@ export interface FoldOp {
   mask?: Pt[];
   /** 折る面を選ぶ（上に重なったフラップだけ、など） */
   pick?: (f: Facet) => boolean;
+  /** 折り込む: 向こうへ倒したあと、紙の間に入って見えなくなる（手本の「折り込む」「中割り」。山折りと一緒に使う） */
+  tuck?: boolean;
 }
 export interface FStep { id: string; label: string; ops: FoldOp[] }
 
@@ -110,6 +112,7 @@ function partition(facets: Facet[], op: FoldOp): { stay: Facet[]; mov: Facet[] }
 /** 動いた面を折り線で裏返して、重なりの順を付け直す */
 function land(stay: Facet[], mov: Facet[], op: FoldOp): Facet[] {
   if (op.crease || !mov.length) return [...stay, ...mov];
+  if (op.tuck) return stay;
   const T = turnMat(op.line, -1);
   const zs = [...stay, ...mov].map((f) => f.z);
   const hi = Math.max(...zs);
@@ -130,8 +133,14 @@ const renumber = (fs: Facet[]) => {
 };
 
 /** 手の列を折っていった、手ごとの紙（states[0] は折る前の正方形） */
-export function foldAll(steps: FStep[], half = 100): Facet[][] {
-  let cur: Facet[] = [{ poly: [[-half, -half], [half, -half], [half, half], [-half, half]], m: I, up: true, z: 0 }];
+/** 正方形を反時計回りに 45° 回した菱形（手本の向き。紙の絵も一緒に回す） */
+const C45 = Math.SQRT1_2;
+export const DIAMOND_M: Mat = [C45, -C45, C45, C45, 0, 0];
+/** 裏返して置いた菱形（刷った面が向こう。手本の「裏返す」）。見出しの帯が左上の辺に来る向き */
+export const DIAMOND_BACK_M: Mat = [-C45, C45, C45, C45, 0, 0];
+export function foldAll(steps: FStep[], half = 100, start: Mat = I, startUp = true): Facet[][] {
+  const sq: Pt[] = [[-half, -half], [half, -half], [half, half], [-half, half]];
+  let cur: Facet[] = [{ poly: sq.map((p) => ap(start, p)), m: start, up: startUp, z: 0 }];
   const states = [cur];
   for (const st of steps) {
     for (const op of st.ops) {
@@ -222,6 +231,8 @@ export const FoldPaper: React.FC<{ steps: FStep[]; states: Facet[][]; p: number;
     <g>
       {/* 山折りで向こうへ倒れる面は、残る紙の下に */}
       {moving.filter((m) => m.op.valley === false && !m.op.crease).map((m, j) => {
+        // 折り込む面は、倒れきる前に紙の間へ消えていく
+        if (m.op.tuck && th > Math.PI * 0.85) return null;
         const c = Math.cos(th);
         return <g key={`b${j}`}>{draw(m.mov, `b${j}-`, turnMat(m.op.line, c), c < 0, -0.15 * Math.sin(th))}</g>;
       })}

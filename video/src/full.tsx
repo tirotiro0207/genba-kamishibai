@@ -9,6 +9,7 @@ import { characterSvg } from "../../src/shared/picto/character";
 import { INDUSTRY_DRAFTS } from "../../src/shared/picto/industry-drafts";
 import { type Angles, POSES } from "../../src/shared/picto/poses";
 import { Dissolve } from "./dissolve";
+import { Intro, INTRO_FRAMES } from "./intro";
 import { L, LayerCtx } from "./layers";
 import { gait, mixAngles } from "./paper";
 import { BrushPaper, doorCover, doorDeg, FLOOR, FLOOR_Y, FONT_JP, FONT_PEN, FRAME, LightRings, StageFrame, StageLamps, WIN, WobbleDefs } from "./parts";
@@ -54,7 +55,6 @@ export interface FullProps { [key: string]: unknown; mark?: string }
 
 // ---- 字幕（冒頭からの秒。画面の下の帯に 1 行・34 字まで。1 字ずつ出す） ----
 const CUES: [number, number, string][] = [
-  [10, 13, "現場の安全の貼り紙や決まりを、紙芝居にします"],
   [19, 20.8, "むかしむかし、日本人のお父さんと、"],
   [20.8, 22.5, "ベトナム人のお母さんが出会いました。"],
   [22.5, 24.4, "長男のイチローは、ベトナムのホーチミンで生まれました。"],
@@ -901,16 +901,19 @@ const Stage: React.FC = () => {
   );
 };
 
-/** 冒頭（0:00〜0:19）は冒頭の 8 場面をそのまま並べる */
+/** 冒頭（0:00〜0:19）: 0:00〜0:13 の白地の段は intro.tsx の 1 本（時計・印刷・折り紙・紙の人。L3）。開演と題（0:13〜）は場面の中でレイヤーに分ける */
 const Opening: React.FC = () => (
   <>
-    {SCENES.map((s) => {
+    <Sequence durationInFrames={INTRO_FRAMES} name="冒頭の白地の段（折り紙）">
+      <L n={3}>
+        <Intro />
+      </L>
+    </Sequence>
+    {SCENES.filter((s) => s.id === "s7-curtain" || s.id === "s8-title").map((s) => {
       const C = SCENE_COMPONENTS[s.id];
-      // 0:00〜0:13 の白地の段（時計・紙・折り紙・紙の人）は L3。開演と題（0:13〜）は場面の中でレイヤーに分ける
-      const split = s.id === "s7-curtain" || s.id === "s8-title";
       return (
         <Sequence key={s.id} from={startOf(s.id)} durationInFrames={s.frames} name={s.title}>
-          {split ? <C /> : <L n={3}><C /></L>}
+          <C />
         </Sequence>
       );
     })}
