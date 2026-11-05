@@ -8,7 +8,7 @@
 // data-part は SVG の中だけの印で、確かめる AI に渡す PNG には残らない（006b）。
 
 export const RED_PARTS = new Set(["prohibit"]);
-export const WHITE_PARTS = new Set(["helmet-new", "bg", "bubble"]);
+export const WHITE_PARTS = new Set(["helmet-new", "bg", "bubble", "figure"]);
 
 const FORBIDDEN_TAGS = ["text", "tspan", "textPath", "foreignObject", "image", "font", "glyph"];
 const NAMED: Record<string, string> = { black: "#000000", white: "#ffffff", gray: "#808080", grey: "#808080", red: "#ff0000" };

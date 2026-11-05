@@ -7,6 +7,7 @@ import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, 
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
 import { type Angles, type Lengths, type LegShade, legShade, type Seg, torsoScale } from "./poses";
 import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
+import type { Joint } from "./skeleton";
 
 export { L, NECK_LEN, SPOT };
 
@@ -659,4 +660,43 @@ export function characterSvg(c: CharacterSpec): string {
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${wandOver ? wandHand() : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
+}
+
+/**
+ * 関節の位置（キャンバスの px）。characterSvg と同じ置き方で、場面の小物・視線・枠・手元のアップを人に合わせるのに使う。
+ * 名前は skeleton.ts の Joint と同じ: hip 腰・shoulder 肩（両肩のまん中）・neck 首の付け根・head 顔のまん中・
+ * elbow/hand/knee/foot（foot は足首）の near（手前）と far（奥）
+ */
+export function characterJoints(c: CharacterSpec): Record<Joint, [number, number]> {
+  const view = c.view ?? "quarter";
+  const r = rig(c.angles, view);
+  const look = c.look ?? "b";
+  const k = c.height / UNIT;
+  const d = c.facing === "right" ? 1 : -1;
+  const headwear = c.headwear ?? (look === "a" ? "cap" : "none");
+  const hairTop = HAIR_TOP[c.hair ?? "bob"] ?? -92;
+  const top = headwear === "none" ? hairTop : HEADWEAR[headwear].perch ? Math.min(hairTop, HEADWEAR[headwear].top) : HEADWEAR[headwear].top;
+  const low = lowest(c.angles, view, look, top, c.len);
+  const sl = segLen(c.len);
+  const kT = view === "front" ? torsoScale(c.angles.torso) : 1;
+  const xy = (m: M, x = 0, y = 0): [number, number] => [c.x + d * k * (m[0] * x + m[2] * y + m[4]), c.groundY - low * k + k * at(m, x, y)];
+  const torso = R(r.torso);
+  const j = {} as Record<Joint, [number, number]>;
+  j.hip = xy(T(0, 0));
+  j.shoulder = xy(mul(torso, T((SPOT[view].arm[0] + SPOT[view].arm[1]) / 2, -TORSO_TOP * kT + L.shoulderDrop)));
+  j.neck = xy(mul(torso, T(NECK_X[view], -TORSO_TOP * kT)));
+  j.head = xy(mul(torso, headMat(view, look, r.neck, kT)), 0, -35);
+  const side = (i: number) => (i === 1 ? "near" : "far");
+  r.arms.forEach((g, i) => {
+    const sh = mul(mul(torso, T(SPOT[view].arm[i], -TORSO_TOP * kT + L.shoulderDrop)), R(g.upper));
+    const elbow = mul(mul(sh, T(0, sl(`arm_${g.s}_upper`, L.upperArm))), R(g.lower));
+    j[`elbow_${side(i)}`] = xy(elbow);
+    j[`hand_${side(i)}`] = xy(elbow, 0, sl(`arm_${g.s}_lower`, L.lowerArm));
+  });
+  r.legs.forEach((g, i) => {
+    const knee = mul(mul(T(SPOT[view].leg[i], 0), R(g.thigh)), T(0, sl(`leg_${g.s}_upper`, L.thigh)));
+    j[`knee_${side(i)}`] = xy(knee);
+    j[`foot_${side(i)}`] = xy(mul(knee, R(g.shin)), 0, sl(`leg_${g.s}_lower`, L.shin));
+  });
+  return j;
 }

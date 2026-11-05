@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GROUND, renderFrame, SIZE } from "../src/shared/picto/scene";
-import { BONE_RANGE, BONES, type FigureSpec, posePoints, PROPORTION, STANDING, validateFigure } from "../src/shared/picto/skeleton";
+import { BONE_RANGE, BONES, type FigureSpec, posePoints, STANDING, validateFigure } from "../src/shared/picto/skeleton";
 import { checkStyle } from "../src/shared/picto/style";
 
 const fig = (over: Partial<FigureSpec> = {}): FigureSpec => ({ x: 0.5, height: 0.62, facing: "right", angles: { ...STANDING, arm_near_upper: 60 }, ...over });
@@ -25,25 +25,26 @@ describe("人形の骨格の正式版（015）", () => {
     expect(r.joints.hand_near[0]).toBeGreaterThan(r.joints.hip[0]);
   });
 
-  it("頭・胴・手足が塗りの形でつながり、地面の線がある", () => {
+  it("人は最新のキャラクター（髪・顔・服・かぶり物）で描き、関節の位置は頭・肩・腰の順に上から並ぶ（11/5）", () => {
     const { svg, posed } = renderFrame({ figures: [fig()] });
-    expect(svg).toMatch(/<circle [^>]*stroke="#000"/); // 縁取りの頭
-    expect(svg).toMatch(/stroke-linejoin="round"/); // 関節の角を丸めた 1 本の線
+    expect(svg).toContain('data-part="figure"');
     expect(svg).toContain('data-part="ground"');
+    expect(svg).toMatch(/<circle [^>]*r="15"[^>]*stroke="#000"/); // 丸い手
     const j = posed[0].joints;
-    // 手足は胴の端（肩・腰）から出る
-    expect(svg).toContain(`M${Math.round(j.shoulder[0] * 10) / 10} ${Math.round(j.shoulder[1] * 10) / 10}L`);
-    // 頭と胴のあいだはピクトグラムの首のすき間ぶんだけ空く
-    const gap = Math.hypot(j.head[0] - j.shoulder[0], j.head[1] - j.shoulder[1]) - PROPORTION.head * posed[0].h;
-    expect(gap / posed[0].h).toBeGreaterThan(0.01);
-    expect(gap / posed[0].h).toBeLessThan(0.08);
+    expect(j.head[1]).toBeLessThan(j.neck[1]);
+    expect(j.neck[1]).toBeLessThan(j.shoulder[1]);
+    expect(j.shoulder[1]).toBeLessThan(j.hip[1]);
+    // 右向きで前へ上げた手は、腰より右にある
+    expect(j.hand_near[0]).toBeGreaterThan(j.hip[0]);
   });
 
-  it("いちばん低いところが地面に乗る", () => {
+  it("いちばん低いところ（靴底）が地面に乗る", () => {
     const { posed } = renderFrame({ figures: [fig()] });
     const p = posed[0];
-    const lowest = Math.max(p.joints.foot_near[1], p.joints.foot_far[1]) + PROPORTION.limbWidth * p.h * 0.5;
-    expect(lowest).toBeCloseTo(GROUND * SIZE, 6);
+    // 足首（foot）の下に靴底がある。足首は地面より少し上
+    const gap = GROUND * SIZE - Math.max(p.joints.foot_near[1], p.joints.foot_far[1]);
+    expect(gap / p.h).toBeGreaterThan(0.02);
+    expect(gap / p.h).toBeLessThan(0.1);
   });
 
   it("絵柄の決まりを守り、同じ入力なら同じ SVG", () => {

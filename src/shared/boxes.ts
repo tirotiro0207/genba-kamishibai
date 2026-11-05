@@ -37,7 +37,9 @@ export function partBoxes(m: MotionJson, t: number, parts: CardPart[]): Box[] {
       const p = posed[tg.index];
       const pts = Object.values(p.joints);
       const pad = p.h * PROPORTION.head * 1.2;
-      r = rel(Math.min(...pts.map((q) => q[0])) - pad, Math.min(...pts.map((q) => q[1])) - pad, Math.max(...pts.map((q) => q[0])) + pad, Math.max(...pts.map((q) => q[1])) + pad * 0.3);
+      // 頭の関節は顔のまん中。髪とかぶり物の上まで入るよう、上だけ背の高さの 0.16 を足す（11/5 にキャラクターへ切り替えた）
+      const top = Math.min(...pts.map((q) => q[1]), p.joints.head[1] - p.h * 0.16);
+      r = rel(Math.min(...pts.map((q) => q[0])) - pad, top - pad, Math.max(...pts.map((q) => q[0])) + pad, Math.max(...pts.map((q) => q[1])) + pad * 0.3);
     } else if (tg.type === "prop" && shown[tg.index]) {
       const k = key.props[tg.index];
       const at = k.figure < 0 ? { x: k.x, y: k.y } : { figure: k.figure, joint: k.joint, dx: k.dx, dy: k.dy };

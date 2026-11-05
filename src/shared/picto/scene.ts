@@ -1,8 +1,13 @@
-// 1 コマの絵（015〜）。枠・左の薄いグレーの壁・床の線・人形を重ね、視線・距離・強調・手元のアップを数字で決める。
-// 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。役はかぶり物で見分ける（新人は白いヘルメット、上の人は黒い帽子、ほかの作業の人はグレーのヘルメット）。
-// 重ねる順: 壁と床 → 壁や床に置く小物 → 人形とかぶり物 → 人に付ける小物 → 吹き出し。
+// 1 コマの絵（015〜）。枠・左の薄いグレーの壁・床の線・人を重ね、視線・距離・強調・手元のアップを数字で決める。
+// 人は最新のキャラクター（character.ts の characterSvg。髪・顔・服・かぶり物・着る物）で描く。姿勢の数（skeleton.ts の角度）はそのまま使う（11/5 作者）。
+// 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。役はかぶり物と服で見分ける（新人は白いヘルメット、上の人は黒い帽子、ほかの作業の人はグレーのヘルメット）。
+// 重ねる順: 壁と床 → 壁や床に置く小物 → 人（かぶり物と着る物を含む） → 人に付ける小物 → 吹き出し。
+import { type CharacterRole, characterJoints, characterSvg, type CharacterSpec, type HeadwearKind } from "./character";
+import type { Outfit } from "./outfit";
+import { poseAngles } from "./poses";
 import { BUBBLES, type PropKind, type PropSpec, propsSvg, validateProps } from "./props";
-import { type FigureSpec, figureSvg, type Joint, type Posed, posePoints, type Pt } from "./skeleton";
+import type { FigureSpec, Joint, Posed, Pt } from "./skeleton";
+import { validateFigure } from "./skeleton";
 
 export const SIZE = 768;
 export const GROUND = 0.88;
@@ -12,7 +17,64 @@ export const WALL = 0.36;
 
 export const ROLES = ["new", "lead", "worker"] as const;
 export type Role = (typeof ROLES)[number];
-const HEADWEAR: Record<Role, PropKind> = { new: "helmet_new", lead: "cap_lead", worker: "helmet" };
+/**
+ * 役 → かぶり物と服（1 か所の表）。電気工事の業種の下絵（industry-drafts.ts の 01）と同じ服。
+ * かぶり物の明るさは役で決まる（新人は白・上の人は黒・ほかの作業の人はグレー。character.ts の ROLE_TONE）
+ */
+export const ROLE_LOOK: Record<Role | "none", { headwear: HeadwearKind | "none"; outfit: Outfit }> = {
+  new: { headwear: "helmet", outfit: { wear: [{ kind: "jacket", tone: "#ddd" }], sleeve: "#ddd", pants: "#bbb" } },
+  worker: { headwear: "helmet", outfit: { stripes: 2, armband: true, toolBelt: true, wear: [{ kind: "jacket", tone: "#444" }], sleeve: "#444", pants: "#444" } },
+  lead: { headwear: "cap", outfit: { wear: [{ kind: "jacket", tone: "#666" }], sleeve: "#666", pants: "#555" } },
+  none: { headwear: "none", outfit: { wear: [{ kind: "jacket", tone: "#ddd" }], sleeve: "#ddd", pants: "#bbb" } },
+};
+
+/**
+ * 人に着ける小物は、小物の絵を重ねずに、キャラクターの服とかぶり物にする（着る物の部品が全部ある）。
+ * 着けたと読むのは、付く関節が合うときだけ（頭の物は head、手の物は hand、足の物は foot、体の物はどこでも）。手に持ったヘルメットなどは小物のまま
+ */
+type Worn = { at: "head" | "hand" | "foot" | "body"; put: (o: Outfit, w: { headwear?: HeadwearKind; role?: CharacterRole }) => void };
+const WORN: Partial<Record<PropKind, Worn>> = {
+  helmet: { at: "head", put: (_, w) => { w.headwear = "helmet"; w.role = "worker"; } },
+  helmet_new: { at: "head", put: (_, w) => { w.headwear = "helmet"; w.role = "new"; } },
+  cap_lead: { at: "head", put: (_, w) => { w.headwear = "cap"; w.role = "lead"; } },
+  goggles: { at: "head", put: (o) => { o.eyewear = "goggles"; } },
+  dust_mask: { at: "head", put: (o) => { o.respirator = true; } },
+  gloves: { at: "hand", put: (o) => { o.gloves = "#999"; } },
+  cut_gloves: { at: "hand", put: (o) => { o.glove = "cut"; } },
+  insulated_gloves: { at: "hand", put: (o) => { o.glove = "insulated"; } },
+  wristband: { at: "hand", put: (o) => { o.wristband = true; } },
+  safety_shoes: { at: "foot", put: (o) => { o.shoes = "safety"; } },
+  insulated_boots: { at: "foot", put: (o) => { o.bootsHigh = true; } },
+  harness: { at: "body", put: (o) => { o.wear = [...(o.wear ?? []), { kind: "fullHarness" }]; } },
+  cooling_vest: { at: "body", put: (o) => { o.wear = [...(o.wear ?? []).filter((g) => g.kind !== "jacket"), { kind: "fanJacket" }]; } },
+  armband: { at: "body", put: (o) => { o.armband = "cross"; } },
+};
+const wornOn = (p: PropSpec): number | undefined => {
+  const w = WORN[p.kind];
+  if (!w || !("figure" in p.at)) return undefined;
+  const j = p.at.joint;
+  const ok = w.at === "body" || (w.at === "head" ? j === "head" : j.startsWith(w.at));
+  return ok ? p.at.figure : undefined;
+};
+
+/** 人に着せる小物か（小物の絵は描かず、服とかぶり物になる） */
+export const isWorn = (p: PropSpec) => wornOn(p) !== undefined;
+
+/** 1 人ぶんの CharacterSpec（役の表と、着けた小物から）。場面の人は斜め向きで描く */
+export function sceneCharacter(f: FrameFigure, worn: PropSpec[], size: number, groundY: number): CharacterSpec {
+  const base = ROLE_LOOK[f.role ?? "none"];
+  const outfit: Outfit = { ...base.outfit, wear: [...(base.outfit.wear ?? [])] };
+  const w: { headwear?: HeadwearKind; role?: CharacterRole } = {};
+  for (const p of worn) WORN[p.kind]!.put(outfit, w);
+  const view = "quarter";
+  const vp = poseAngles(f.angles, view);
+  return {
+    angles: vp.angles, len: vp.len, shade: vp.shade, view, x: f.x * size, groundY, height: f.height * size, facing: f.facing,
+    role: w.role ?? f.role ?? "new", headwear: w.headwear ?? base.headwear, outfit,
+  };
+}
+/** 強調の「太く」: 人の線を 1.3 倍の太さにする */
+const thicken = (svg: string) => svg.replace(/stroke-width="([\d.]+)"/g, (_, v) => `stroke-width="${n(Number(v) * 1.3)}"`);
 
 export interface Gaze {
   /** 視線の向き（度）。0 で向いている側へまっすぐ、正で上、負で下 */
@@ -84,7 +146,8 @@ function frameBox(p: Posed): string {
   const pad = p.h * 0.12;
   const x0 = Math.min(...ps.map((q) => q[0])) - pad;
   const x1 = Math.max(...ps.map((q) => q[0])) + pad;
-  const y0 = Math.min(...ps.map((q) => q[1])) - pad;
+  // 頭の関節は顔のまん中。髪とかぶり物の上まで囲む
+  const y0 = Math.min(...ps.map((q) => q[1]), p.joints.head[1] - p.h * 0.16) - pad;
   const y1 = Math.max(...ps.map((q) => q[1])) + pad * 0.6;
   const w = Math.max(3, p.h * 0.018);
   return `<g data-part="emphasis-frame"><rect x="${n(x0)}" y="${n(y0)}" width="${n(x1 - x0)}" height="${n(y1 - y0)}" rx="${n(pad * 0.5)}" fill="none" stroke="#000" stroke-width="${n(w)}"/></g>`;
@@ -108,19 +171,28 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
   if (errs.length) throw new Error(`コマの数字が範囲の外: ${errs.join(" / ")}`);
   const g = GROUND * size;
   const figs = frame.figures.map((f) => (f.emphasis?.includes("large") ? { ...f, height: Math.min(0.75, f.height * 1.2) } : f));
-  const posed = figs.map((f) => posePoints(f, size, g));
-  const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
+  // 姿勢の数の範囲は、今までの人形と同じ決まりで確かめる（posePoints と同じ言い方で断る）
+  for (const f of figs) {
+    const e = validateFigure(f);
+    if (e.length) throw new Error(`人形の数字が範囲の外: ${e.slice(0, 3).join(" / ")}`);
+  }
   const props = frame.props ?? [];
+  const worn = props.map(wornOn);
+  const chars = figs.map((f, i) => sceneCharacter(f, props.filter((_, k) => worn[k] === i), size, g));
+  const posed: Posed[] = chars.map((c) => ({ joints: characterJoints(c), h: c.height, d: c.facing === "right" ? 1 : -1 }));
+  const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
   const onCanvas = props.filter((p) => !("figure" in p.at) && !BUBBLES.has(p.kind));
-  const onFigure = props.filter((p) => "figure" in p.at && !BUBBLES.has(p.kind));
+  const onFigure = props.filter((p, k) => "figure" in p.at && !BUBBLES.has(p.kind) && worn[k] === undefined);
   const bubbles = props.filter((p) => BUBBLES.has(p.kind));
   const body = [backdrop(size, g)];
   if (onCanvas.length) body.push(propsSvg(onCanvas, posed, size));
   posed.forEach((p, i) => {
     const f = frame.figures[i];
     const faded = darkIdx >= 0 && darkIdx !== i;
-    body.push(figureSvg(p, { faded, width: f.emphasis?.includes("thick") ? 1.3 : 1 }));
-    if (f.role) body.push(propsSvg([{ kind: HEADWEAR[f.role], at: { figure: i, joint: "head" }, size: 0.1 }], posed, size));
+    // ほかの人を目立たせるときは、この人を薄く描く
+    const svg = characterSvg(chars[i]);
+    const one = f.emphasis?.includes("thick") ? thicken(svg) : svg;
+    body.push(faded ? `<g opacity="0.35">${one}</g>` : one);
     if (f.gaze) body.push(gazeSvg(p, f.gaze));
     if (f.emphasis?.includes("frame")) body.push(frameBox(p));
   });

@@ -4,7 +4,7 @@ import { characterSvg } from "../src/shared/picto/character";
 import type { Outfit } from "../src/shared/picto/outfit";
 import { A_POSE } from "../src/shared/picto/poses";
 import { anchorPoint, craneTip, DEFAULT_JOINT, PROP_KINDS, type PropKind, type PropSpec } from "../src/shared/picto/props";
-import { renderFrame } from "../src/shared/picto/scene";
+import { isWorn, renderFrame, ROLE_LOOK } from "../src/shared/picto/scene";
 import { checkStyle } from "../src/shared/picto/style";
 
 const F = (x = 0.4) => ({ x, height: 0.55, facing: "right" as const, angles: POSES.hands });
@@ -80,25 +80,24 @@ describe("小物の部品 1（017）", () => {
     for (const kind of KINDS) {
       const joint = DEFAULT_JOINT[kind];
       const at = joint ? { figure: 0, joint } : { x: 0.8, y: 0.86 };
-      const svg = renderFrame({ figures: [F()], props: [{ kind, at, size: 0.15 }] }).svg;
-      expect(svg, kind).toContain('data-part="prop"');
+      const p: PropSpec = { kind, at, size: 0.15 };
+      const svg = renderFrame({ figures: [F()], props: [p] }).svg;
+      // 人に着けるかぶり物と安全帯は、小物の絵でなくキャラクターの服とかぶり物になる（11/5）
+      if (isWorn(p)) expect(svg, kind).not.toBe(renderFrame({ figures: [F()] }).svg);
+      else expect(svg, kind).toContain('data-part="prop"');
       expect(checkStyle(svg), kind).toEqual([]);
     }
   });
 
-  it("新人の白いヘルメットと吹き出しの白は、決まった部品の中だけ", () => {
+  it("白は人（肌・シャツ・新人のヘルメット）・背景・吹き出しの中だけ。頭に着けたかぶり物は役の明るさで描き分ける", () => {
     const svg = renderFrame({ figures: [F()], props: [{ kind: "helmet_new", at: { figure: 0, joint: "head" }, size: 0.1 }, { kind: "bubble_question", at: { figure: 0, joint: "head", dy: -0.1 }, size: 0.12 }] }).svg;
-    expect(svg).toContain('data-part="helmet-new"');
     expect(svg).toContain('data-part="bubble"');
     expect(checkStyle(svg)).toEqual([]);
-    // 作業の人のヘルメットと上の人の帽子は白を使わない
-    for (const kind of ["helmet", "cap_lead"] as const) {
-      const svg = renderFrame({ figures: [F()], props: [{ kind, at: { figure: 0, joint: "head" }, size: 0.1 }] }).svg;
-      expect(svg.slice(svg.indexOf('data-part="prop"')), kind).not.toMatch(/#fff\b/);
-    }
+    const hat = (kind: "helmet" | "helmet_new" | "cap_lead") => renderFrame({ figures: [F()], props: [{ kind, at: { figure: 0, joint: "head" }, size: 0.1 }] }).svg;
+    expect(new Set([hat("helmet"), hat("helmet_new"), hat("cap_lead")]).size).toBe(3);
   });
 
-  it("かぶり物は頭に付けると頭の大きさに合わせ、size では変わらない", () => {
+  it("かぶり物は頭に着けるとキャラクターのかぶり物になり、size では変わらない", () => {
     const a = renderFrame({ figures: [F()], props: [{ kind: "helmet", at: { figure: 0, joint: "head" }, size: 0.05 }] }).svg;
     const b = renderFrame({ figures: [F()], props: [{ kind: "helmet", at: { figure: 0, joint: "head" }, size: 0.3 }] }).svg;
     expect(a).toBe(b);
@@ -119,19 +118,21 @@ describe("小物の部品 1（017）", () => {
 describe("作者のスケッチに合わせた見た目（11/2）", () => {
   const P = (kind: (typeof PROP_KINDS)[number], at: PropSpec["at"], size = 0.25, inner?: PropSpec["inner"]): PropSpec => ({ kind, at, size, ...(inner ? { inner } : {}) });
 
-  it("枠・左の壁・床の線があり、人は丸い頭に目と口、ベスト、丸い手で描く", () => {
+  it("枠・左の壁・床の線があり、人は最新のキャラクター（顔・服・丸い手）で描く（11/5 に古い人形から切り替えた）", () => {
     const svg = renderFrame({ figures: [F()] }).svg;
     for (const part of ["border", "wall", "ground", "figure"]) expect(svg, part).toContain(`data-part="${part}"`);
     const fig = svg.slice(svg.indexOf('data-part="figure"'));
-    expect((fig.match(/<circle /g) ?? []).length).toBeGreaterThanOrEqual(4); // 頭・目・手 2 つ
+    expect((fig.match(/<circle [^>]*r="15"/g) ?? []).length).toBe(2); // 丸い手 2 つ
+    expect(fig).toContain('id="part_jacket"'); // 服
     expect(checkStyle(svg)).toEqual([]);
   });
 
   it("役を決めるとかぶり物が自動で付く（新人は白、上の人は黒、ほかの作業の人はグレー）", () => {
     const svg = (role: "new" | "lead" | "worker") => renderFrame({ figures: [{ ...F(), role }] }).svg;
-    expect(svg("new")).toContain('data-part="helmet-new"');
-    expect(svg("lead")).not.toContain('data-part="helmet-new"');
-    expect(svg("lead")).not.toBe(svg("worker"));
+    expect(new Set([svg("new"), svg("lead"), svg("worker")]).size).toBe(3);
+    expect(ROLE_LOOK.new.headwear).toBe("helmet");
+    expect(ROLE_LOOK.lead.headwear).toBe("cap");
+    expect(ROLE_LOOK.worker.headwear).toBe("helmet");
     expect(() => renderFrame({ figures: [{ ...F(), role: "boss" as never }] })).toThrow(/role/);
   });
 
@@ -167,11 +168,12 @@ describe("伝わらない絵を直すために足した小物（058）", () => {
     }
   });
 
-  it("人に付けた安全帯は肩とももにもベルトが付く（置いた安全帯はフルハーネスの形を線でなくパスで描く）", () => {
+  it("人に付けた安全帯はキャラクターのフルハーネスになり、置いた安全帯は小物の絵のまま（11/5）", () => {
     const on = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { figure: 0, joint: "hip" }, size: 0.16 }] }).svg;
     const off = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { x: 0.5, y: 0.5 }, size: 0.16 }] }).svg;
-    // 肩から腰へ 2 本・胸 1 本・もも 2 本を、縁と中の 2 本の線で描く
-    expect(on.split("<line").length - off.split("<line").length).toBe(10);
+    expect(on).toContain('id="part_fullHarness"');
+    expect(on).not.toContain('data-part="prop"');
+    expect(off).toContain('data-part="prop"');
   });
 
   it("吊り元の綱は天井の線まで届く", () => {
