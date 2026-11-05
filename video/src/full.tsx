@@ -6,6 +6,7 @@
 import React from "react";
 import { AbsoluteFill, Easing, Freeze, Img, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
 import { characterSvg } from "../../src/shared/picto/character";
+import { guideLook, guidePose } from "../../src/shared/picto/guide";
 import { INDUSTRY_DRAFTS } from "../../src/shared/picto/industry-drafts";
 import { type Angles, POSES } from "../../src/shared/picto/poses";
 import { Dissolve } from "./dissolve";
@@ -14,7 +15,7 @@ import { L, LayerCtx } from "./layers";
 import { gait, mixAngles } from "./paper";
 import { BrushPaper, doorCover, doorDeg, FLOOR, FLOOR_Y, FONT_JP, FONT_PEN, FRAME, LightRings, StageFrame, StageLamps, WIN, WobbleDefs } from "./parts";
 import { SCENE_COMPONENTS } from "./scenes";
-import { BigPack, Bulb, Clawd, picto, StoryStrip } from "./story";
+import { BigPack, Clawd, picto, StoryStrip } from "./story";
 import { FPS, H, INK, PURPLE, SCENES, startOf, TOTAL, W } from "./timeline";
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -503,26 +504,20 @@ const Hero: React.FC<{ x: number; ground: number; h: number; angles: Angles; fac
     </g>
   );
 };
-const GUIDE_OUTFIT = { ...INDUSTRY_DRAFTS[0].roles[1].outfit, toolBelt: true };
+const G_STAND = guidePose("quarter").angles;
+const G_WAVE = guidePose("quarter", true).angles;
 const YOUNG_OUTFIT = INDUSTRY_DRAFTS[0].roles[1].outfit;
 const CRAFT_OUTFIT = INDUSTRY_DRAFTS[0].roles[0].outfit;
 const SUP_OUTFIT = { ...CRAFT_OUTFIT, armband: true, sleeve: "#a4a4a4", pants: "#8c8c8c" };
-/** 電気工事の案内人（白いヘルメットの前に小さなライト・長袖の作業服・腰の道具・電球の杖・うっすら金色のふち）。rev は下から組み上がる割合 */
-const Guide: React.FC<{ x: number; ground: number; h: number; angles: Angles; facing: "left" | "right"; rev?: number; f: number; helmet?: boolean; dy?: number }> = ({ x, ground, h, angles, facing, rev = 1.3, f, helmet = true, dy = 0 }) => {
-  const dir = facing === "right" ? 1 : -1;
-  const sx = x + dir * h * 0.32;
-  return (
-    <g transform={`translate(0 ${dy})`}>
-      <clipPath id="guide-rev"><rect x={x - h} y={ground - h * rev} width={h * 2} height={h * rev + 4} /></clipPath>
-      <g clipPath="url(#guide-rev)" style={{ filter: "drop-shadow(0 0 4px rgba(255,214,110,0.9))" }}>
-        {rev > 0.55 && <line x1={sx} y1={ground} x2={sx} y2={ground - h * 0.92} stroke="#8a5a1e" strokeWidth={Math.max(3, h * 0.028)} strokeLinecap="round" />}
-        <g dangerouslySetInnerHTML={{ __html: characterSvg({ angles, x, groundY: ground, height: h, facing, view: "quarter", role: "new", headwear: helmet ? "helmet" : "none", outfit: GUIDE_OUTFIT }) }} />
-        {helmet && <circle cx={x + dir * h * 0.16} cy={ground - h * 0.9} r={h * 0.03} fill="#fff59a" stroke="#555" strokeWidth={1.5} />}
-        {rev > 0.55 && <Bulb x={sx} y={ground - h * 1.02} s={h / 300} lit={1} f={f} />}
-      </g>
+/** 案内人（動画だけの特別なキャラ。見た目と短い杖は picto の guideLook が持つ）。うっすら金色のふち。rev は下から組み上がる割合。helmet でかぶる */
+const Guide: React.FC<{ x: number; ground: number; h: number; angles: Angles; facing: "left" | "right"; rev?: number; helmet?: boolean; dy?: number }> = ({ x, ground, h, angles, facing, rev = 1.3, helmet = true, dy = 0 }) => (
+  <g transform={`translate(0 ${dy})`}>
+    <clipPath id="guide-rev"><rect x={x - h} y={ground - h * rev} width={h * 2} height={h * rev + 4} /></clipPath>
+    <g clipPath="url(#guide-rev)" style={{ filter: "drop-shadow(0 0 4px rgba(255,214,110,0.9))" }}>
+      <g dangerouslySetInnerHTML={{ __html: characterSvg({ ...guideLook("quarter", helmet), angles, x, groundY: ground, height: h, facing, view: "quarter" }) }} />
     </g>
-  );
-};
+  </g>
+);
 /** 床の線の下からポンと出る人（0.3 秒・ほこり）。out で下へ引っ込む */
 const PopUp: React.FC<{ id: string; t: number; at: number; out?: number; x: number; h: number; children: React.ReactNode }> = ({ id, t, at, out = 999, x, h, children }) => {
   const p = interpolate(t, [at, at + 0.3], [0, 1], { ...clamp, easing: Easing.out(Easing.back(1.6)) });
@@ -671,15 +666,16 @@ const FloorActors: React.FC<{ t: number; f: number }> = ({ t, f }) => {
   const rev = interpolate(t, [49.9, 50.0, 50.5, 51.0, 51.5, 51.8], [0, 0.1, 0.42, 0.75, 1.0, 1.3], clamp);
   const gWalk = walking(t) && t >= 58.0;
   const gFacing: "left" | "right" = t >= 57.0 && t < 66.0 ? "right" : "left";
-  let gAngles: Angles = POSES.stand;
+  // 立つ姿は杖を持つ腕を GUIDE_HOLD に合わせた形、「ようこそ」（0:54.0〜0:55.0）は手を振る形（どちらも picto の guidePose）
+  let gAngles: Angles = G_STAND;
   if (gWalk) gAngles = gait("walk", t / 0.6 + 0.3);
-  else if (t >= 54.0 && t < 54.6) gAngles = POSES.wave;
+  else if (t >= 54.0 && t < 55.0) gAngles = G_WAVE;
   else if (t >= 55.0 && t < 55.6) gAngles = POSES.point; // ヘルメットを差し出す
   else if (t >= 57.2 && t < 58.0) gAngles = POSES.point; // 右を指す
   else if (t >= 71.5 && t < 72.5) gAngles = POSES.point; // 肩に手
   else if (t >= 74.0 && t < 140) gAngles = POSES.look_up;
   const gw = waveAt(t, 3);
-  if (gw >= 0) gAngles = mixAngles(POSES.stand, POSES.wave, gw);
+  if (gw >= 0) gAngles = mixAngles(G_STAND, G_WAVE, gw);
   const beat = t >= 76 && t < 116 ? Math.floor((t - 76) / 2) : -1;
   const gNod = bump(t, 57.0, 0.3) * 4 + (beat % 3 === 1 ? bump(t, 76 + beat * 2, 0.4) * 3 : 0);
   // ---- 光と粒（0:45.5〜0:52.5）----
@@ -756,7 +752,7 @@ const FloorActors: React.FC<{ t: number; f: number }> = ({ t, f }) => {
       <Dust t={t} t0={47.0} x={220} n={6} />
       {t >= 47.0 && <ellipse cx={hx} cy={G + 4} rx={h * 0.36} ry={6} fill="#000" opacity={0.2} />}
       {rev > 0 && <ellipse cx={gx} cy={G + 4} rx={h * 0.3} ry={6} fill="#000" opacity={0.2} />}
-      {rev > 0 && <Guide x={gx} ground={G} h={h} angles={gAngles} facing={gFacing} rev={rev} f={f} helmet={t >= 52.0} dy={gNod} />}
+      {rev > 0 && <Guide x={gx} ground={G} h={h} angles={gAngles} facing={gFacing} rev={rev} helmet={t >= 52.0} dy={gNod} />}
       {helmetPop > 0 && <circle cx={gx} cy={G - h * 0.95} r={h * 0.12 + helmetPop * 10} fill="none" stroke="#fff3b0" strokeWidth={3} opacity={helmetPop} />}
       {ring > 0 && <ellipse cx={gx} cy={G - h * 0.5} rx={h * (0.3 + ring * 0.9)} ry={h * (0.55 + ring * 0.5)} fill="none" stroke="#fff3b0" strokeWidth={6 * (1 - ring)} opacity={1 - ring} />}
       {/* 職人さん（1:02〜1:06 は x 1033 に出て左を向く。2:21 にまた出て、一歩前へ） */}
