@@ -113,4 +113,17 @@ describe("20 枚の選び方と記入欄（064）", () => {
     expect(all.short).toBe(false);
     expect(all.picked.map((p) => p.id)).not.toContain("card-029");
   });
+  it("--method noscript は脚本の無いカードだけから選び、--status と --exclude で絞る（11/6）", async () => {
+    const { db, exec } = memExec();
+    const card = db.prepare("INSERT INTO cards (id, tenant_id, body, status) VALUES (?, ?, ?, ?)");
+    // 30 枚: 脚本ありが 12 枚、脚本なしが 18 枚（うち 2 枚は下書きの状態）
+    ids.slice(0, 30).forEach((id, i) => card.run(id, "practice", JSON.stringify(i < 12 ? { rule: `決まり ${i}`, script } : { rule: `古い ${i}` }), i >= 28 ? "draft" : "pending"));
+    const r = await makeForm(exec, "practice", "s1", { method: "noscript", status: "pending", exclude: [ids[12], ids[13]] });
+    expect(r.method).toBe("noscript");
+    expect(r.filteredOut).toBe(4);
+    expect(r.eligible).toBe(14);
+    expect(r.droppedScript).toBe(12);
+    expect(r.droppedNoScript).toBe(0);
+    expect(r.picked.map((p) => p.id).sort()).toEqual(ids.slice(14, 28));
+  });
 });
