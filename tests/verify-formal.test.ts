@@ -4,6 +4,7 @@ import { MemoryCallLog } from "../src/shared/claude";
 import { makerParams } from "../src/shared/make/maker";
 import { AGENT, bandOf, evidenceOf, type FormalReading, hasEvidence, judgeParams, rateOf, readParams, verifyCard } from "../src/shared/verify/formal";
 import { droppableFrame, passes, verifyWithDrop } from "../src/shared/verify/drop";
+import { verifyPair } from "../src/shared/verify/pair";
 import { sampleCard } from "./fixtures/card";
 
 // 確かめる AI の正式版（047）
@@ -128,5 +129,42 @@ describe("1 コマ抜いた版（11/5）", () => {
     expect(passes({ ...r.full, rate: 85, dangerous: false } as never)).toBe(true);
     expect(passes({ ...r.full, rate: 84, dangerous: false } as never)).toBe(false);
     expect(passes({ ...r.full, rate: 100, dangerous: true } as never)).toBe(false);
+  });
+});
+
+describe("○× の 2 枚の組（11/6）", () => {
+  const j = { points: [{ id: "s1", credit: "full" as const, frame: 7, reason: "知らせる" }, { id: "s2", credit: "partial" as const, frame: 99, reason: "早く" }], dangerous: false, danger_reason: null, summary: "伝わる" };
+  it("2 枚のコマを通しの番号で 1 回だけ読ませ、カードの文と ○× の別は渡さない。照らすのはカードごと", async () => {
+    const reads: Anthropic.MessageCreateParamsNonStreaming[] = [];
+    let judges = 0;
+    const client = {
+      messages: {
+        create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          if (String(p.system).includes("新入社員です")) {
+            reads.push(p);
+            return reply(READING);
+          }
+          judges++;
+          return reply(j);
+        },
+      },
+    };
+    const r = await verifyPair({ client, log: new MemoryCallLog() }, "app", [
+      { card, images: [IMG, IMG, IMG, IMG] },
+      { card, images: [IMG, IMG, IMG, IMG] },
+    ]);
+    expect(reads).toHaveLength(1);
+    expect(judges).toBe(2);
+    const c = reads[0].messages[0].content as { type: string; text?: string }[];
+    expect(c.filter((b) => b.type === "image")).toHaveLength(8);
+    expect(c[0].text).toBe("1 枚目のカード・1 コマ目（通しの 1 コマ目）");
+    expect(c[14].text).toBe("2 枚目のカード・4 コマ目（通しの 8 コマ目）");
+    const all = JSON.stringify(reads[0]);
+    for (const s of [card.rule, card.why, "○", "×", "してはいけない"]) expect(all).not.toContain(s);
+    expect(r.evidence).toHaveLength(2);
+    expect(r.evidence[0].frames).toBe(8);
+    expect(r.evidence[0].cited).toEqual([7]);
+    expect(r.pass).toBe(r.evidence.every(passes));
+    await expect(verifyPair({ client, log: new MemoryCallLog() }, "app", [{ card, images: [IMG] }])).rejects.toThrow(/2 枚/);
   });
 });
