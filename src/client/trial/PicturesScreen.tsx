@@ -197,6 +197,11 @@ export function PictureAnswerScreen({ tenant, id, participant }: { tenant: strin
       <p className="who">
         参加者 {participant} ・ {done.size + 1} / {cards.length} 枚
       </p>
+      {next.words && (
+        <p className="read-words pic-words" data-testid="pic-words">
+          {next.words}
+        </p>
+      )}
       <Frames key={next.id} motion={next.motion} />
       <AnswerBoxes value={text} onChange={setText} testid="pic-text" />
       <button className="big" disabled={!canSend(text)} data-testid="pic-submit">

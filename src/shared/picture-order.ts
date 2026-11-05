@@ -3,6 +3,16 @@ import { rng } from "./assign";
 
 export const PICTURES_MAX = 8;
 
+/**
+ * 絵の 8 枚のうち、やさしい日本語の文も一緒に見せるか（11/6 朝 作者「半分は言葉も付けて、半分は絵だけ」）。
+ * 回に結んだ順（pos。0 から）の偶数番を、① の組 1 の人には文つき・組 2 の人には絵だけにし、奇数番はその逆。
+ * どのカードも、文つきで見た人と絵だけで見た人が半分ずつになる。組の無い回（前からの回）はいつも絵だけ
+ */
+export function withWords(set: 1 | 2 | undefined, pos: number): boolean {
+  if (set !== 1 && set !== 2) return false;
+  return (pos % 2 === 0) === (set === 1);
+}
+
 export function pictureOrder<T>(seed: string, participant: string, cards: T[]): T[] {
   const r = rng(`${seed}:pictures:${participant}`);
   const out = [...cards];

@@ -11,5 +11,6 @@
 .pic-choose label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .pic-items { border-top: 1px solid #ddd; padding-top: 8px; }
 .pic-answer .read-frames { margin: 8px 0; }
+.pic-words { font-size: 22px; margin: 8px 0 0; text-align: center; }
 /* 絵だけの 8 枚も横 1 列の 4 コマ（11/6 朝 作者） */
 .pic-answer .read-frames { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }

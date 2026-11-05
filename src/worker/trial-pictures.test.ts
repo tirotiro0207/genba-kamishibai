@@ -84,3 +84,33 @@ describe("記録アプリの 8 枚と教育担当の勘（059）", () => {
     expect((await call(`${base}/${t.id}/picture-answers`, json("POST", { participant: "p2", answer: "もう一度" }))).status).toBe(409);
   });
 });
+
+describe("絵の 8 枚の半分に文を付ける（11/6 朝 作者）", () => {
+  it("交差の回では、組 1 は偶数番・組 2 は奇数番のカードに文が付き、どのカードも文つきと絵だけが半分ずつ。答えにも文つきかの印が付く", async () => {
+    const ids: string[] = [];
+    for (let i = 1; i <= 8; i++) ids.push(((await (await call("/api/t/practice/cards", json("POST", { card: { ...sampleCard(), rule: `文 ${i} の決まり`, words: { ja: `ことば ${i}`, vi: "x" } } }))).json()) as { id: string }).id);
+    const people = ["student_V_1", "student_V_2", "student_C_1", "student_C_2"].map((id) => ({ id, group: id.includes("_V_") ? "ベトナム" : "カンボジア" }));
+    const t = (await (await call(base, json("POST", { design: "cross", participants: people, seed: "half-words" }))).json()) as { id: string; assignments: { participant: string; set: 1 | 2 }[] };
+    expect((await call(`${base}/${t.id}/cards`, json("POST", { cards: ids }))).status).toBe(201);
+    const shownTo = new Map<string, number>();
+    for (const a of t.assignments) {
+      const r = (await (await call(`${base}/${t.id}/pictures?participant=${a.participant}`)).json()) as { cards: { id: string; words?: string }[] };
+      const withText = r.cards.filter((c) => c.words).map((c) => ids.indexOf(c.id)).sort();
+      expect(withText).toEqual(a.set === 1 ? [0, 2, 4, 6] : [1, 3, 5, 7]);
+      for (const c of r.cards) if (c.words) expect(c.words).toBe(`ことば ${ids.indexOf(c.id) + 1}`);
+      for (const i of withText) shownTo.set(ids[i], (shownTo.get(ids[i]) ?? 0) + 1);
+    }
+    // 4 人のうち、どのカードも 2 人が文つきで見る
+    expect(ids.map((id) => shownTo.get(id))).toEqual(ids.map(() => 2));
+    const a = t.assignments[0];
+    await call(`${base}/${t.id}/picture-answers`, json("POST", { participant: a.participant, answer: "こたえ" }));
+    const got = (await (await call(`${base}/${t.id}/picture-answers`)).json()) as { answers: { card_id: string; words: boolean }[] };
+    expect(got.answers[0].words).toBe(ids.indexOf(got.answers[0].card_id) % 2 === (a.set === 1 ? 0 : 1));
+  });
+
+  it("組の無い回（前からの回）は、いつも絵だけ", async () => {
+    const { t } = await setup("half-words-order");
+    const r = (await (await call(`${base}/${t.id}/pictures?participant=p1`)).json()) as { cards: { words?: string }[] };
+    expect(r.cards.every((c) => c.words === undefined)).toBe(true);
+  });
+});

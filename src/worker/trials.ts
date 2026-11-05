@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
 import { crossSummary } from "../shared/summary";
 import { assign, crossAssign, newSeed } from "../shared/assign";
-import { latestForecasts, pictureOrder, PICTURES_MAX } from "../shared/picture-order";
+import { latestForecasts, pictureOrder, PICTURES_MAX, withWords } from "../shared/picture-order";
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import { fileKey } from "./files";
@@ -246,8 +246,8 @@ trials.post("/:id/erase", async (c) => {
 // 絵だけの 8 枚と 2 項目と教育担当の勘（059）
 const pictureCards = async (db: D1Database, trialId: string) =>
   (await db.prepare("SELECT tc.card_id AS id, c.body FROM trial_cards tc JOIN cards c ON c.id = tc.card_id WHERE tc.trial_id = ? ORDER BY tc.pos").bind(trialId).all<{ id: string; body: string }>()).results.map((r) => {
-    const body = JSON.parse(r.body) as { rule: string; motion: unknown };
-    return { id: r.id, rule: body.rule, motion: body.motion };
+    const body = JSON.parse(r.body) as { rule: string; motion: unknown; words?: { ja?: string } };
+    return { id: r.id, rule: body.rule, motion: body.motion, words: body.words?.ja ?? "" };
   });
 const answeredCount = async (db: D1Database, trialId: string) =>
   (await db.prepare("SELECT count(*) AS n FROM picture_answers WHERE trial_id = ?").bind(trialId).first<{ n: number }>())?.n ?? 0;
@@ -282,7 +282,10 @@ trials.get("/:id/pictures", async (c) => {
   if (p !== undefined) {
     if (!(participantIds(t.participants)).includes(p)) return c.json({ error: "この回の参加者ではない" }, 400);
     const done = await c.env.DB.prepare("SELECT card_id FROM picture_answers WHERE trial_id = ? AND participant = ?").bind(t.id, p).all<{ card_id: string }>();
-    return c.json({ cards: pictureOrder(t.seed, p, cards).map(({ id, motion }) => ({ id, motion })), answered: done.results.map((r) => r.card_id) });
+    // 半分のカードは文つき（11/6 朝 作者）。① の組と、回に結んだ順で決まる
+    const set = (view(t).assignments as { participant: string; set?: 1 | 2 }[]).find((a) => a.participant === p)?.set;
+    const shown = cards.map((x, pos) => ({ id: x.id, motion: x.motion, ...(withWords(set, pos) && x.words ? { words: x.words } : {}) }));
+    return c.json({ cards: pictureOrder(t.seed, p, shown), answered: done.results.map((r) => r.card_id) });
   }
   const fs = await c.env.DB.prepare("SELECT seq, card_id, rate, created_at FROM forecasts WHERE trial_id = ?").bind(t.id).all<{ seq: number; card_id: string; rate: number; created_at: string }>();
   const items = await c.env.DB.prepare("SELECT item, ja, vi FROM trial_items WHERE trial_id = ? ORDER BY item").bind(t.id).all();
@@ -331,8 +334,11 @@ trials.post("/:id/picture-answers", async (c) => {
 trials.get("/:id/picture-answers", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
-  const { results } = await c.env.DB.prepare("SELECT seq, participant, card_id, answer, created_at FROM picture_answers WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all();
-  return c.json({ answers: results });
+  const { results } = await c.env.DB.prepare("SELECT seq, participant, card_id, answer, created_at FROM picture_answers WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<{ participant: string; card_id: string }>();
+  // その答えが文つきで見たカードか（11/6 朝 作者）。数えるときに文つきと絵だけを分ける
+  const sets = new Map((view(t).assignments as { participant: string; set?: 1 | 2 }[]).map((a) => [a.participant, a.set]));
+  const pos = new Map((await pictureCards(c.env.DB, t.id)).map((x, i) => [x.id, i]));
+  return c.json({ answers: results.map((r) => ({ ...r, words: withWords(sets.get(r.participant), pos.get(r.card_id) ?? -1) })) });
 });
 
 // 2 項目の元のページの訳。会社のテナント（と練習用）の中だけに置く。公開デモには置かない

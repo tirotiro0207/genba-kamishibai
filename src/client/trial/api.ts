@@ -73,6 +73,8 @@ export interface PictureCard {
   id: string;
   rule?: string;
   motion: CardMotion;
+  /** 文つきで見せるカードのやさしい日本語（11/6 朝。半分のカードだけ） */
+  words?: string;
 }
 export interface Forecast {
   card_id: string;
