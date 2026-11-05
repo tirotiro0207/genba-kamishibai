@@ -2,8 +2,8 @@
 // 長さと太さは新しい絵柄のまま（胴 142・もも 85・すね 77・上腕 70・前腕 52、単位は背の高さ 434 の中の値）、
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
-import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
-import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, type Mood, SKIN_TONE, type Vowel } from "./avatar";
+import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, gloveCuffSvg, gloveTipSvg, gogglesSvg, headMarks, hem, maskSvg, type Outfit, outfitTorso, respiratorSvg, toeCapSvg, visorSvg, wristbandSvg } from "./outfit";
+import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, landmarks, type Mood, SKIN_TONE, type Vowel } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
 import { type Angles, type Lengths, type LegShade, legShade, type Seg, torsoScale } from "./poses";
 import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
@@ -497,7 +497,7 @@ const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: Ch
     headMarks(headwear, view, o, headwearTone(headwear, role));
   // 耳はどの髪でも髪の前の層の上に描く
   const ears = earsSvg(view, f);
-  return `${h.back}${faceSvg(view, f, tilt, mood)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
+  return `${h.back}${faceSvg(view, f, tilt, mood)}${o.mask ? maskSvg(view, k) : ""}${o.respirator ? respiratorSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${o.eyewear ? gogglesSvg(view, landmarks(f.face, view, f.faceSize).eyes.map((e) => e.x), k) : ""}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
 const ANKLE_MAX = 25;
@@ -606,23 +606,27 @@ export function characterSvg(c: CharacterSpec): string {
     // 奥の足は、奥行きの分だけ暗くする（shade。1 で今までの奥の足の色）
     const t = (c.shade ?? legShade(c.angles, view))[g.s] ?? 0;
     const fill = mixTone(o.pants ?? cloth.leg, o.pants ? farTone(o.pants) : cloth.legFar, t);
-    const shoeFill = mixTone(o.boots ?? cloth.shoe, o.boots ? farTone(o.boots) : cloth.shoeFar, t);
+    // 絶縁の長靴（bootsHigh）は、明るさの指定が無ければ #333（11/5）
+    const bootTone = o.boots ?? (o.bootsHigh ? "#333" : undefined);
+    const shoeFill = mixTone(bootTone ?? cloth.shoe, bootTone ? farTone(bootTone) : cloth.shoeFar, t);
     const [th, sh] = [sl(`leg_${g.s}_upper`, L.thigh), sl(`leg_${g.s}_lower`, L.shin)].map((v) => +n(v));
-    const boot = o.boots ? bootSvg(sh, shoeFill) : "";
+    const boot = bootTone ? bootSvg(sh, shoeFill, o.bootsHigh) : "";
     // 正面で、すねが後ろへ向く足（ひざをつく・走る後ろの足）は、すねと靴がももの後ろに隠れる。靴を足より先に、床と平行に描く
     const hidden = view === "front" && Math.abs(g.thigh + g.shin) > 90;
-    const shoeAt = (ankle: number) => `<g transform="translate(0 ${sh})">${view === "front" ? shoeFront(i, ankle, shoeFill) : shoe(ankle, shoeFill)}</g>`;
+    const shoeAt = (ankle: number) => `<g transform="translate(0 ${sh})">${view === "front" ? shoeFront(i, ankle, shoeFill) : shoe(ankle, shoeFill)}${o.shoes === "safety" ? toeCapSvg(view, i, ankle) : ""}</g>`;
     const chain = (pass: Pass) =>
       `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(th, 40, pass, fill)}<g transform="translate(0 ${th})${rot(g.shin)}">${seg(sh, 40, pass, fill)}${pass === "fill" && !hidden ? `${boot}${shoeAt(g.ankle)}` : ""}</g></g>`;
     const back = !hidden ? "" : `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}"><g transform="translate(0 ${th})${rot(g.shin)}">${shoeAt(-(g.thigh + g.shin))}</g></g>`;
     return back + chain("edge") + chain("fill");
   };
+  // 手袋の明るさ。形（glove）だけ決めたときは、絶縁は #555、切創防止は #999（11/5）
+  const glove = o.gloves ?? (o.glove === "insulated" ? "#555" : o.glove === "cut" ? "#999" : undefined);
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const [ua, la] = [sl(`arm_${g.s}_upper`, L.upperArm), sl(`arm_${g.s}_lower`, L.lowerArm)].map((v) => +n(v));
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${o.gloves ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve, o.armband === "cross") : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" && spot === 1 && o.wristband ? wristbandSvg(la) : ""}${pass === "fill" && o.glove === "insulated" ? gloveCuffSvg(la, glove ?? "#555") : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}${pass === "fill" && o.glove === "cut" ? gloveTipSvg(la) : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const hm = headMat(view, look, r.neck, kT);

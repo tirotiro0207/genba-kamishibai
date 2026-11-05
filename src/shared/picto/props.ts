@@ -5,6 +5,8 @@
 // 置き場所は数字で決める: 人形の関節に付ける（関節と、背の高さに対するずれ）か、キャンバスの上の位置。
 // 吹き出しは、考える（点線と小さい丸）と話す（しっぽ）の 2 つ。中に道具の絵と「？」か「✓」を描く。
 import { type Joint, type Posed, PROPORTION, type Pt } from "./skeleton";
+// 11/5: 電気の現場の道具と保護具 17 個を足し、安全帯（置いたとき）と保護めがね（持つ・置くとき）を写真に合わせて描き直した。
+// クレーンの先の近くに置いた吊り荷は、先の真下へ寄せてワイヤーでつなぐ
 
 export const PROP_KINDS = [
   // 017
@@ -24,6 +26,9 @@ export const PROP_KINDS = [
   // 11/5 脚本の段で足りなかった物: 火花（電気の異常）、記号の無い話す吹き出し・「！」の吹き出し（異常を知らせる）、
   // たった時間の札（時計と「10min」。数字と min・h だけは線で描いて絵に入れる。作者の判断）
   "spark", "bubble_say", "bubble_alert", "elapsed_1min", "elapsed_5min", "elapsed_10min", "elapsed_30min", "elapsed_1h",
+  // 11/5 電気の現場の道具と保護具（docs/props-2026-11-05.md）。着る物は outfit.ts にも人に着せた絵がある
+  "aed", "cubicle", "wristband", "work_platform", "rolling_scaffold", "safety_shoes", "cut_gloves", "insulated_gloves",
+  "voltage_detector", "cooling_vest", "step_stool", "armband", "crane", "insulated_boots", "dust_mask", "power_drill", "aerial_platform",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -49,6 +54,7 @@ export const INNER_KINDS = [
   "panel", "tester", "outlet", "wire", "harness", "lock", "tag", "box", "toolbox", "checklist", "suspended_load", "broom", "clock",
   "fire_extinguisher", "first_aid", "gloves", "goggles", "cone", "ladder", "chemical", "knife", "gear",
   "spark",
+  "aed", "voltage_detector", "insulated_gloves", "dust_mask", "power_drill", "armband",
 ] as const;
 export type InnerKind = (typeof INNER_KINDS)[number];
 
@@ -117,10 +123,33 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   elapsed_10min: null,
   elapsed_30min: null,
   elapsed_1h: null,
+  aed: null,
+  cubicle: null,
+  wristband: "hand_near",
+  work_platform: null,
+  rolling_scaffold: null,
+  safety_shoes: "foot_near",
+  cut_gloves: "hand_near",
+  insulated_gloves: "hand_near",
+  voltage_detector: "hand_near",
+  cooling_vest: null,
+  step_stool: null,
+  armband: null,
+  crane: null,
+  insulated_boots: "foot_near",
+  dust_mask: "head",
+  power_drill: "hand_near",
+  aerial_platform: null,
 };
 
 /** c が部品の下の真ん中（床に置く）の部品。吹き出しの中では真ん中へずらして描く */
-const ON_FLOOR = new Set<PropKind>(["toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder"]);
+const ON_FLOOR = new Set<PropKind>([
+  "toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder",
+  "cubicle", "work_platform", "rolling_scaffold", "safety_shoes", "step_stool", "crane", "insulated_boots", "aerial_platform",
+]);
+
+/** クレーンのブームの先（ワイヤーの出る所）。c は車体の下の真ん中、d は向き。吊り荷を先の真下に置くとワイヤーがつながる */
+export const craneTip = ([cx, cy]: Pt, s: number, d: number): Pt => [cx + d * s * 0.6, cy - s * 1.05];
 
 /** 天井の線の高さ（scene.ts の CEILING と同じ。吊り元の綱が天井まで届く） */
 const CEIL = 0.06;
@@ -177,10 +206,18 @@ interface Opt {
   W: number;
   icon?: boolean;
   worn?: boolean;
+  /** 人の体に付けた（安全帯は腰のベルトだけにして、肩とももは harnessStraps が描く） */
+  body?: boolean;
+  /** 手に着けたとき、ひじの位置（袖口・リストバンドの向き） */
+  elbow?: Pt;
+  /** 吊り荷のワイヤーの上の端（クレーンの先につなぐとき） */
+  topY?: number;
+  /** クレーンに吊り荷がつながっている（クレーンは自分のワイヤーとフックを描かない） */
+  linked?: boolean;
 }
 
 /** 部品の形。c は部品の「持つところ」（手に付けるときは手の位置。床に置く部品は下の真ん中） */
-function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = false, worn = false }: Opt): string {
+function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = false, worn = false, body = false, elbow, topY, linked = false }: Opt): string {
   const h = s / 2;
   /** 向いている側を正にした横の位置 */
   const X = (v: number) => cx + d * v;
@@ -246,7 +283,23 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
       // 上の人の黒い帽子: 丸い形と、前へ長く出るつば
       return dome(COAL, 0.75, true);
     case "harness": {
-      // 安全帯: 腰のベルトと前のバックル、背中側から出る綱と、先のフック（縦長の輪）
+      if (!body) {
+        // 安全帯（フルハーネス・正面。11/5 写真に合わせて描き直し）: 背中の D の環から出る綱と先のフック、肩から腰へ下りる 2 本のベルトと
+        // 肩の上のつなぎ、胸の横のベルトと留め具、腰のベルトと前の留め具、ももを回る 2 つの輪。人に付けたときは腰のベルトだけ（下）
+        const t = W * 2.6;
+        const loop = (x: number, y: number, rx: number, ry: number) => `M${n(x - rx)} ${n(y)}A${n(rx)} ${n(ry)} 0 1 0 ${n(x + rx)} ${n(y)}A${n(rx)} ${n(ry)} 0 1 0 ${n(x - rx)} ${n(y)}Z`;
+        const hx = X(h * 1.0);
+        const hy = cy + h * 0.2;
+        return cord(`M${n(cx)} ${n(cy - h * 1.36)}Q${n(X(h * 1.2))} ${n(cy - h * 1.3)} ${n(hx)} ${n(hy - h * 0.26)}`, W * 2.2, MID) +
+          cord(rr(hx - h * 0.13, hy - h * 0.25, hx + h * 0.13, hy + h * 0.28, h * 0.13), W * 2.4, LIGHT) +
+          [-1, 1].map((k) => cord(loop(cx + k * h * 0.3, cy + h * 0.5, h * 0.22, h * 0.3), t, DEEP)).join("") +
+          cord(`M${n(cx - h * 0.22)} ${n(cy)}L${n(cx - h * 0.32)} ${n(cy - h * 1.22)}Q${n(cx)} ${n(cy - h * 1.46)} ${n(cx + h * 0.32)} ${n(cy - h * 1.22)}L${n(cx + h * 0.22)} ${n(cy)}`, t, DEEP) +
+          cord(`M${n(cx - h * 0.4)} ${n(cy - h * 0.72)}H${n(cx + h * 0.4)}`, t, DEEP) +
+          ring(cx, cy - h * 1.36, h * 0.09, MID, 0.8) +
+          box(cx - h * 0.62, cy - h * 0.13, cx + h * 0.62, cy + h * 0.13, DEEP, h * 0.06) +
+          box(cx - h * 0.1, cy - h * 0.82, cx + h * 0.1, cy - h * 0.62, LIGHT, h * 0.04, 0.8) + box(cx - h * 0.12, cy - h * 0.2, cx + h * 0.12, cy + h * 0.2, LIGHT, h * 0.05, 0.8);
+      }
+      // 安全帯（人の腰）: 腰のベルトと前のバックル、背中側から出る綱と、先のフック（縦長の輪）
       const bk = X(-h * 0.7);
       const hx = X(-h * 1.3);
       const hy = cy - h * 1.05;
@@ -353,7 +406,7 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
     }
     case "suspended_load": {
       // 上の端から吊った荷: ワイヤー、フック、2 本の吊り具、板を組んだ荷
-      const top = Math.max(0, cy - h * 2.2);
+      const top = topY ?? Math.max(0, cy - h * 2.2);
       const hy = cy - h * 0.78;
       return line(cx, top, cx, hy - h * 0.18, INK, 1.2) +
         `<path d="M${n(cx)} ${n(hy - h * 0.2)}V${n(hy)}A${n(h * 0.12)} ${n(h * 0.12)} 0 1 1 ${n(cx - h * 0.2)} ${n(hy - h * 0.04)}" fill="none" stroke="${INK}" stroke-width="${n(W * 1.6)}" stroke-linecap="round"/>` +
@@ -554,9 +607,14 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         return cord(`M${n(X(r * 0.2))} ${n(ly - r * 0.05)}Q${n(X(-r * 0.5))} ${n(ly - r * 0.25)} ${n(X(-r * 0.98))} ${n(ly - r * 0.15)}`, W * 2.4, DARK) +
           box(lx - r * 0.34, ly - r * 0.24, lx + r * 0.34, ly + r * 0.22, LIGHT, r * 0.14) + shine(lx - r * 0.14, ly - r * 0.1, lx + r * 0.04, ly - r * 0.1, LIGHT);
       }
-      return cord(`M${n(cx - h * 0.95)} ${n(cy)}H${n(cx + h * 0.95)}`, W * 2.4, DARK) +
-        merge([[rr(cx - h * 0.82, cy - h * 0.32, cx - h * 0.06, cy + h * 0.3, h * 0.2), LIGHT], [rr(cx + h * 0.06, cy - h * 0.32, cx + h * 0.82, cy + h * 0.3, h * 0.2), LIGHT], [rr(cx - h * 0.14, cy - h * 0.2, cx + h * 0.14, cy - h * 0.04, h * 0.05), LIGHT]]) +
-        shine(cx - h * 0.6, cy - h * 0.12, cx - h * 0.36, cy - h * 0.12, LIGHT) + shine(cx + h * 0.28, cy - h * 0.12, cx + h * 0.52, cy - h * 0.12, LIGHT);
+      // 持つ・置くとき（11/5 写真に合わせて描き直し）: 両目を 1 枚で覆うレンズ（まん中の下に鼻の切れ込み）、上のふち、後ろへ回るバンド
+      const lens = `M${n(cx - h * 0.86)} ${n(cy - h * 0.3)}Q${n(cx)} ${n(cy - h * 0.44)} ${n(cx + h * 0.86)} ${n(cy - h * 0.3)}` +
+        `Q${n(cx + h * 0.92)} ${n(cy + h * 0.26)} ${n(cx + h * 0.55)} ${n(cy + h * 0.3)}Q${n(cx + h * 0.22)} ${n(cy + h * 0.32)} ${n(cx + h * 0.13)} ${n(cy + h * 0.08)}` +
+        `Q${n(cx)} ${n(cy - h * 0.04)} ${n(cx - h * 0.13)} ${n(cy + h * 0.08)}Q${n(cx - h * 0.22)} ${n(cy + h * 0.32)} ${n(cx - h * 0.55)} ${n(cy + h * 0.3)}` +
+        `Q${n(cx - h * 0.92)} ${n(cy + h * 0.26)} ${n(cx - h * 0.86)} ${n(cy - h * 0.3)}Z`;
+      return cord(`M${n(cx - h * 1.0)} ${n(cy - h * 0.08)}H${n(cx + h * 1.0)}`, W * 2.4, DARK) + path(lens, LIGHT) +
+        cord(`M${n(cx - h * 0.8)} ${n(cy - h * 0.3)}Q${n(cx)} ${n(cy - h * 0.43)} ${n(cx + h * 0.8)} ${n(cy - h * 0.3)}`, W * 2.2, DARK) +
+        shine(cx - h * 0.62, cy - h * 0.1, cx - h * 0.38, cy - h * 0.1, LIGHT) + shine(cx + h * 0.3, cy - h * 0.1, cx + h * 0.54, cy - h * 0.1, LIGHT);
     }
     case "knife": {
       // 包丁: 手に持つ濃い柄と鋲 2 つ、明るい刃（背はまっすぐ、刃先は切っ先へ上がる）、刃のつや。c は柄の真ん中
@@ -745,6 +803,287 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         [0.6, 0.76, 0.92].map((f) => line(cx - h * 0.16, y0 + h * f, cx + h * 0.16, y0 + h * f, STEEL, 0.8)).join("") +
         shine(X(-h * 0.2), y0 + h * 0.56, X(-h * 0.2), y0 + h * 0.9, DEEP);
     }
+    // ここから 11/5 電気の現場の道具と保護具（docs/props-2026-11-05.md）。写真は比率だけを見て、上の決まりで描く
+    case "aed": {
+      // AED: 上の取っ手、明るい箱、ふたの合わせ目、まん中の濃いハートと明るい稲妻、箱のつや。「AED」の字は入れない（作者に確かめる）。c は箱の真ん中
+      const bw = s * 0.9;
+      const bh = s * 0.7;
+      const x0 = cx - bw / 2;
+      const y0 = cy - bh / 2;
+      const r = s * 0.12;
+      const hy = cy - s * 0.04;
+      const heart = `M${n(cx)} ${n(hy + r * 1.6)}C${n(cx - r * 2.4)} ${n(hy + r * 0.2)} ${n(cx - r * 1.4)} ${n(hy - r * 1.7)} ${n(cx)} ${n(hy - r * 0.55)}` +
+        `C${n(cx + r * 1.4)} ${n(hy - r * 1.7)} ${n(cx + r * 2.4)} ${n(hy + r * 0.2)} ${n(cx)} ${n(hy + r * 1.6)}Z`;
+      const bolt = poly([[cx + r * 0.4, hy - r * 1.15], [cx - r * 0.42, hy + r * 0.12], [cx + r * 0.06, hy + r * 0.12], [cx - r * 0.34, hy + r * 1.15], [cx + r * 0.52, hy - r * 0.22], [cx + r * 0.06, hy - r * 0.22]]);
+      return cord(`M${n(cx - s * 0.17)} ${n(y0)}V${n(y0 - s * 0.1)}H${n(cx + s * 0.17)}V${n(y0)}`, W * 2.6, DARK) +
+        box(x0, y0, x0 + bw, y0 + bh, LIGHT, s * 0.1) + line(x0 + W, y0 + bh * 0.84, x0 + bw - W, y0 + bh * 0.84, INK, 0.6) +
+        path(heart, DARK) + path(bolt, PAPER, 0.6) + shine(x0 + bw * 0.1, y0 + bh * 0.16, x0 + bw * 0.1, y0 + bh * 0.42, LIGHT);
+    }
+    case "cubicle": {
+      // キュービクル（屋外の受変電の箱）: 下の濃い台、明るい箱、扉 3 枚（合わせ目・窓・取っ手・下の通気の筋）、左の扉の危ないの印、
+      // 箱より少し広い屋根と上の換気口。c は下の真ん中
+      const bw = s * 0.96;
+      const x0 = cx - bw / 2;
+      const yb = cy - s * 0.07;
+      const yt = cy - s * 0.72;
+      let out = box(cx - s * 0.5, yb, cx + s * 0.5, cy, DARK, s * 0.015) + box(x0, yt, x0 + bw, yb, LIGHT, s * 0.03);
+      for (const f of [1 / 3, 2 / 3]) out += line(x0 + bw * f, yt + W, x0 + bw * f, yb - W, INK, 0.6);
+      for (let k = 0; k < 3; k++) {
+        const dx = x0 + (bw * k) / 3;
+        const dw = bw / 3;
+        if (k > 0) out += box(dx + dw * 0.26, yt + s * 0.1, dx + dw * 0.74, yt + s * 0.19, DEEP, s * 0.02, 0.6);
+        for (const v of [0.76, 0.83, 0.9]) out += line(dx + dw * 0.28, yt + (yb - yt) * v, dx + dw * 0.72, yt + (yb - yt) * v, INK, 0.5);
+        out += line(dx + dw * (k === 2 ? 0.18 : 0.82), yt + (yb - yt) * 0.42, dx + dw * (k === 2 ? 0.18 : 0.82), yt + (yb - yt) * 0.54, INK, 0.9);
+      }
+      const mx = x0 + bw / 6;
+      const my = yt + s * 0.15;
+      const q = s * 0.055;
+      out += path(poly([[mx, my - q], [mx + q, my], [mx, my + q], [mx - q, my]]), PAPER, 0.6) +
+        `<path d="${poly([[mx + q * 0.22, my - q * 0.62], [mx - q * 0.3, my + q * 0.06], [mx + q * 0.04, my + q * 0.06], [mx - q * 0.2, my + q * 0.62], [mx + q * 0.34, my - q * 0.1], [mx, my - q * 0.1]])}" fill="${INK}"/>`;
+      return out + box(cx - s * 0.13, yt - s * 0.1, cx + s * 0.13, yt - s * 0.02, STEEL, s * 0.015, 0.8) +
+        box(cx - s * 0.52, yt - s * 0.04, cx + s * 0.52, yt + s * 0.025, STEEL, s * 0.012) + line(cx - s * 0.08, yt - s * 0.065, cx + s * 0.08, yt - s * 0.065, INK, 0.5);
+    }
+    case "wristband":
+    case "armband": {
+      // リストバンド・腕章: 腕に巻いた輪を少し上から見た形（奥の内側は濃く、手前の帯は明るい）。腕章は帯が広く、左寄りに小さい十字の印。
+      // 写真の字・会社名は入れない。手に着けたときは、手首の上を横切る帯。c は輪の真ん中
+      if (worn && kind === "wristband") {
+        const [ex, ey] = elbow ?? [cx, cy - s];
+        const len = Math.hypot(cx - ex, cy - ey) || 1;
+        const [ux, uy] = [(cx - ex) / len, (cy - ey) / len];
+        const [bx, by] = [cx - ux * s * 0.42, cy - uy * s * 0.42];
+        const l = s * 0.3;
+        return cord(`M${n(bx - uy * l)} ${n(by + ux * l)}L${n(bx + uy * l)} ${n(by - ux * l)}`, s * 0.26, DARK);
+      }
+      const arm = kind === "armband";
+      const w = h * (arm ? 0.85 : 0.62);
+      const t = h * (arm ? 0.36 : 0.3);
+      const bow = h * 0.18;
+      const fill = arm ? PAPER : MID;
+      const front = `M${n(cx - w)} ${n(cy - t)}Q${n(cx)} ${n(cy - t + bow)} ${n(cx + w)} ${n(cy - t)}V${n(cy + t)}Q${n(cx)} ${n(cy + t + bow)} ${n(cx - w)} ${n(cy + t)}Z`;
+      const inner = `M${n(cx - w)} ${n(cy - t)}Q${n(cx)} ${n(cy - t - bow * 1.4)} ${n(cx + w)} ${n(cy - t)}Q${n(cx)} ${n(cy - t + bow)} ${n(cx - w)} ${n(cy - t)}Z`;
+      let out = path(inner, arm ? MID : DEEP) + path(front, fill);
+      if (arm) {
+        const q = h * 0.09;
+        const mx = cx - w * 0.45;
+        const my = cy + bow * 0.4;
+        out += `<path d="M${n(cx - w + W)} ${n(cy - t + h * 0.12)}Q${n(cx)} ${n(cy - t + h * 0.12 + bow)} ${n(cx + w - W)} ${n(cy - t + h * 0.12)}M${n(cx - w + W)} ${n(cy + t - h * 0.12)}Q${n(cx)} ${n(cy + t - h * 0.12 + bow)} ${n(cx + w - W)} ${n(cy + t - h * 0.12)}" fill="none" stroke="${MID}" stroke-width="${n(W * 0.7)}" stroke-linecap="round"/>` +
+          path(poly([[mx - q, my - q * 3], [mx + q, my - q * 3], [mx + q, my - q], [mx + q * 3, my - q], [mx + q * 3, my + q], [mx + q, my + q], [mx + q, my + q * 3], [mx - q, my + q * 3], [mx - q, my + q], [mx - q * 3, my + q], [mx - q * 3, my - q], [mx - q, my - q]]), DEEP, 0.5);
+      } else out += shine(cx - w * 0.7, cy - t * 0.2, cx - w * 0.7, cy + t * 0.5, MID);
+      return out;
+    }
+    case "work_platform": {
+      // 可搬式作業台（立馬）: 奥の手すり（2 本の柱と上の横棒）、両はしに外へ開く、はしごの形の脚（2 本の柱と 3 段の桟）、足の台、平らな天板。c は下の真ん中
+      const ty = cy - s * 0.55;
+      let out = cord(`M${n(cx - s * 0.34)} ${n(ty)}V${n(cy - s * 0.95)}H${n(cx + s * 0.34)}V${n(ty)}`, W * 2.2, STEEL);
+      for (const k of [-1, 1]) {
+        const rail = (top: number, foot: number) => cord(`M${n(cx + k * s * top)} ${n(ty)}L${n(cx + k * s * foot)} ${n(cy - W)}`, W * 2.6, MID);
+        for (const f of [0.3, 0.55, 0.8]) {
+          const y = ty + (cy - ty) * f;
+          out += cord(`M${n(cx + k * s * (0.3 + 0.08 * f))} ${n(y)}H${n(cx + k * s * (0.42 + 0.1 * f))}`, W * 2.2, STEEL);
+        }
+        out += rail(0.3, 0.38) + rail(0.42, 0.52) +
+          box(cx + k * s * 0.38 - s * 0.035, cy - s * 0.035, cx + k * s * 0.38 + s * 0.035, cy, DEEP, s * 0.01, 0.7) +
+          box(cx + k * s * 0.52 - s * 0.035, cy - s * 0.035, cx + k * s * 0.52 + s * 0.035, cy, DEEP, s * 0.01, 0.7);
+      }
+      return out + box(cx - s * 0.47, ty - s * 0.04, cx + s * 0.47, ty + s * 0.03, STEEL, s * 0.012) + shine(cx - s * 0.4, ty - s * 0.005, cx - s * 0.2, ty - s * 0.005, STEEL);
+    }
+    case "rolling_scaffold": {
+      // 可搬式移動足場: 下の段の X の筋かい、下の横棒、中の細いはしご（左の柱の内側）、両はしの柱、上の手すり 2 本、作業床、下の車輪。c は下の真ん中
+      const L = cx - s * 0.34;
+      const R = cx + s * 0.34;
+      const yw = cy - s * 0.11;
+      const yd = cy - s * 0.66;
+      const yr = cy - s * 1.0;
+      let out = cord(`M${n(L)} ${n(yw)}L${n(R)} ${n(yd)}M${n(R)} ${n(yw)}L${n(L)} ${n(yd)}`, W * 2.2, STEEL) + cord(`M${n(L)} ${n(yw)}H${n(R)}`, W * 2.2, STEEL);
+      for (let k = 1; k <= 4; k++) {
+        const y = yw - ((yw - yd) * k) / 5;
+        out += cord(`M${n(L)} ${n(y)}H${n(L + s * 0.15)}`, W * 2.2, STEEL);
+      }
+      out += cord(`M${n(L + s * 0.15)} ${n(yw)}V${n(yd)}`, W * 2.2, STEEL) + cord(`M${n(L)} ${n(yr)}H${n(R)}M${n(L)} ${n(yr + s * 0.16)}H${n(R)}`, W * 2.4, MID);
+      for (const x of [L, R]) out += cord(`M${n(x)} ${n(yw)}V${n(yr)}`, W * 2.8, MID);
+      out += box(L - s * 0.05, yd - s * 0.035, R + s * 0.05, yd + s * 0.03, DARK, s * 0.01) + shine(L, yd - s * 0.003, L + s * 0.16, yd - s * 0.003, DARK);
+      for (const x of [L, R]) out += cord(`M${n(x)} ${n(yw)}V${n(cy - s * 0.07)}`, W * 2.2, DARK) + ring(x, cy - s * 0.055, s * 0.05, COAL) + dot(x, cy - s * 0.055, s * 0.017, MID);
+      return out;
+    }
+    case "safety_shoes":
+    case "insulated_boots": {
+      // 安全靴（短い靴・つま先の芯の線・甲のベルト）と、絶縁の長靴（ひざ下までの筒・口の明るい帯）。横から、つま先は向いている側。c は靴底の真ん中
+      const tall = kind === "insulated_boots";
+      const u = s / (tall ? 100 : 66);
+      const P = (x: number, y: number) => `${n(X(x * u))} ${n(cy + y * u)}`;
+      const top = tall ? -92 : -30;
+      const back = tall ? -20 : -30;
+      const shin = tall ? 8 : -6;
+      const body = `M${P(back, -5)}L${P(back, top + 5)}Q${P(back, top)} ${P(back + 5, top)}L${P(shin - 5, top)}Q${P(shin, top)} ${P(shin, top + 5)}` +
+        `L${P(shin, -24)}Q${P(32, -20)} ${P(33, -5)}Z`;
+      let out = path(body, tall ? DEEP : DARK);
+      if (tall) out += box(X(back * u), cy + top * u, X(shin * u), cy + (top + 12) * u, LIGHT, 2 * u, 0.8) + shine(X((back + 6) * u), cy + (top + 22) * u, X((back + 6) * u), cy + (top + 46) * u, DEEP);
+      else {
+        out += `<path d="M${P(14, -19)}Q${P(9, -12)} ${P(13, -6)}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.6)}" stroke-linecap="round"/>` +
+          path(`M${P(-12, -30)}L${P(-2, -30)}L${P(6, -18)}L${P(-6, -16)}Z`, DEEP, 0.6) + shine(X(-24 * u), cy - 22 * u, X(-24 * u), cy - 13 * u, DARK);
+      }
+      return out + box(X((back - 1.5) * u), cy - 6 * u, X(34 * u), cy, COAL, 2.5 * u);
+    }
+    case "cut_gloves":
+    case "insulated_gloves": {
+      // 手袋（11/5）。切創防止は薄い灰の手袋で、指先から手のひらが濃い（つけた樹脂）と、明るい編みの袖口。絶縁は濃いゴムの太い手袋で、
+      // ひじの近くまで広がる長い袖口と口の巻き。着けたときは手の丸を覆う丸と親指（絶縁は前腕へのびる袖口も）。c は手
+      const ins = kind === "insulated_gloves";
+      const fill = ins ? DARK : MID;
+      if (worn) {
+        const [ex, ey] = elbow ?? [cx, cy - s];
+        const len = Math.hypot(cx - ex, cy - ey) || 1;
+        const [ux, uy] = [(cx - ex) / len, (cy - ey) / len];
+        const r = s * 0.3;
+        const cuff = ins ? cord(`M${n(cx)} ${n(cy)}L${n(cx - ux * Math.min(len * 0.6, s * 1.1))} ${n(cy - uy * Math.min(len * 0.6, s * 1.1))}`, s * 0.62, fill) : "";
+        const hand = merge([[circ(cx, cy, r), fill], [circ(X(s * 0.22), cy - s * 0.2, s * 0.13), fill]]);
+        if (ins) return cuff + hand;
+        // 指先の側（ひじと反対）の半分を濃くする
+        const rr2 = r * 0.92;
+        const p1: Pt = [cx + uy * rr2, cy - ux * rr2];
+        const pm: Pt = [cx + ux * rr2, cy + uy * rr2];
+        const p2: Pt = [cx - uy * rr2, cy + ux * rr2];
+        return hand + `<path d="M${n(p1[0])} ${n(p1[1])}A${n(rr2)} ${n(rr2)} 0 0 1 ${n(pm[0])} ${n(pm[1])}A${n(rr2)} ${n(rr2)} 0 0 1 ${n(p2[0])} ${n(p2[1])}Z" fill="${DEEP}"/>`;
+      }
+      const fw = s * (ins ? 0.075 : 0.065);
+      const fx = ins ? [-0.22, -0.075, 0.075, 0.22] : [-0.21, -0.07, 0.07, 0.21];
+      const fing = fx.map((f, i): [string, string] => [rr(cx + f * s - fw, cy - s * (0.46 - (i === 0 || i === 3 ? 0.07 : 0)), cx + f * s + fw, cy, fw), fill]);
+      const thumb = `M${n(X(s * 0.16))} ${n(cy + s * 0.18)}L${n(X(s * 0.38))} ${n(cy - s * 0.1)}A${n(fw)} ${n(fw)} 0 0 ${d > 0 ? 1 : 0} ${n(X(s * 0.38 + fw * 1.4))} ${n(cy - s * 0.1 + fw * 1.1)}L${n(X(s * 0.26))} ${n(cy + s * 0.22)}Z`;
+      const palm: [string, string] = [rr(cx - s * 0.3, cy - s * 0.18, cx + s * 0.3, cy + s * 0.24, s * 0.12), fill];
+      if (ins) {
+        const cuff: [string, string] = [`M${n(cx - s * 0.28)} ${n(cy + s * 0.12)}L${n(cx - s * 0.38)} ${n(cy + s * 0.78)}H${n(cx + s * 0.38)}L${n(cx + s * 0.28)} ${n(cy + s * 0.12)}Z`, fill];
+        return merge([...fing, palm, [thumb, fill], cuff]) + box(cx - s * 0.4, cy + s * 0.72, cx + s * 0.4, cy + s * 0.82, STEEL, s * 0.04, 0.8) +
+          shine(cx - s * 0.26, cy + s * 0.3, cx - s * 0.3, cy + s * 0.56, DARK);
+      }
+      // 指先の濃い樹脂（指ごとに上の 4 割）と、手のひらの下の端までの濃い面
+      const tips = fx.map((f, i) => {
+        const top = cy - s * (0.46 - (i === 0 || i === 3 ? 0.07 : 0));
+        return `<path d="${rr(cx + f * s - fw + W * 0.5, top + W * 0.5, cx + f * s + fw - W * 0.5, top + s * 0.17, fw - W * 0.5)}" fill="${DEEP}"/>`;
+      }).join("");
+      return merge([...fing, palm, [thumb, fill]]) + tips + box(cx - s * 0.27, cy + s * 0.2, cx + s * 0.27, cy + s * 0.4, LIGHT, s * 0.04) +
+        line(cx - s * 0.27 + W, cy + s * 0.3, cx + s * 0.27 - W, cy + s * 0.3, INK, 0.5);
+    }
+    case "voltage_detector": {
+      // 検電器（ペンの形・11/5。今の tester とは別の名前）: 後ろのクリップ、細い先と先端、向いている側へ細くなる明るい頭（光る窓）、
+      // 手に持つ濃い軸とボタン、頭のまわりの光の短い線 3 本、軸のつや。c は軸の握るところ
+      const r = h * 0.17;
+      const b0 = X(-h * 0.95);
+      const b1 = X(h * 0.5);
+      return cord(`M${n(X(-h * 0.75))} ${n(cy - r)}V${n(cy - r * 1.75)}H${n(X(-h * 0.15))}`, W * 2.2, STEEL) +
+        cord(`M${n(X(h * 1.0))} ${n(cy)}H${n(X(h * 1.55))}`, W * 2, MID) + dot(X(h * 1.58), cy, W * 0.9) +
+        path(`M${n(b1)} ${n(cy - r)}L${n(X(h * 1.05))} ${n(cy - r * 0.45)}V${n(cy + r * 0.45)}L${n(b1)} ${n(cy + r)}Z`, LIGHT) +
+        box(b0, cy - r, b1, cy + r, DEEP, r) + ring(X(-h * 0.1), cy, r * 0.42, MID, 0.6) +
+        [[0.6, -1.6, 0.52, -2.5], [0.82, -1.5, 0.86, -2.4], [1.02, -1.2, 1.18, -1.9]].map(([a, b, c2, e]) => line(X(h * a), cy + r * b, X(h * c2), cy + r * e, INK, 0.8)).join("") +
+        shine(X(-h * 0.7), cy - r * 0.35, X(-h * 0.35), cy - r * 0.35, DEEP);
+    }
+    case "cooling_vest": {
+      // 空調服（背中から）: 明るい上着の胴と両袖（重なりは 2 回描き）、上の襟、裾の線、腰の後ろの丸いファン 2 つ（濃い輪・羽根・軸）。c は胴の真ん中
+      const sleeve = (k: number): [string, string] => [poly([[cx + k * h * 0.45, cy - h * 0.8], [cx + k * h * 0.76, cy - h * 0.7], [cx + k * h * 1.0, cy + h * 0.26], [cx + k * h * 0.72, cy + h * 0.33], [cx + k * h * 0.52, cy - h * 0.2]]), LIGHT];
+      let out = merge([sleeve(-1), sleeve(1), [rr(cx - h * 0.6, cy - h * 0.85, cx + h * 0.6, cy + h * 0.85, h * 0.2), LIGHT]]) +
+        box(cx - h * 0.28, cy - h * 0.95, cx + h * 0.28, cy - h * 0.76, STEEL, h * 0.07, 0.8) + line(cx - h * 0.6 + W, cy + h * 0.68, cx + h * 0.6 - W, cy + h * 0.68, INK, 0.6);
+      for (const k of [-1, 1]) {
+        const fx = cx + k * h * 0.29;
+        const fy = cy + h * 0.32;
+        const R = h * 0.2;
+        out += ring(fx, fy, R, DEEP);
+        for (let b = 0; b < 3; b++) {
+          const a = (b * 2 * Math.PI) / 3 - Math.PI / 2;
+          out += line(fx, fy, fx + Math.cos(a) * R * 0.72, fy + Math.sin(a) * R * 0.72, STEEL, 0.7);
+        }
+        out += dot(fx, fy, R * 0.22, MID);
+      }
+      return out;
+    }
+    case "step_stool": {
+      // 簡易作業台（低い踏み台）: 下の足、少し下の広い明るい胴、横の持ち手の穴、縦の筋 2 本、上の天板とつや。c は下の真ん中
+      const yt = cy - s * 0.42;
+      return [-1, 1].map((k) => box(cx + k * s * 0.36 - s * 0.05, cy - s * 0.04, cx + k * s * 0.36 + s * 0.05, cy, DEEP, s * 0.01, 0.8)).join("") +
+        path(`M${n(cx - s * 0.41)} ${n(yt)}H${n(cx + s * 0.41)}L${n(cx + s * 0.46)} ${n(cy - s * 0.04)}H${n(cx - s * 0.46)}Z`, LIGHT) +
+        box(cx - s * 0.15, yt + s * 0.1, cx + s * 0.15, yt + s * 0.17, DEEP, s * 0.035, 0.6) +
+        [-1, 1].map((k) => line(cx + k * s * 0.27, yt + s * 0.24, cx + k * s * 0.29, cy - s * 0.09, INK, 0.5)).join("") +
+        box(cx - s * 0.47, yt - s * 0.06, cx + s * 0.47, yt + s * 0.02, STEEL, s * 0.02) + shine(cx - s * 0.4, yt - s * 0.025, cx - s * 0.2, yt - s * 0.025, STEEL);
+    }
+    case "crane": {
+      // 重機（クレーン・横から、向いている側へブーム）: 後ろの張り出しの足、車体と車輪 3 つ、前の運転席と窓、上の回る台、ブームを起こす筒、
+      // 2 段のブーム（中の細い段 → 外の太い段）、先の滑車、先から垂れるワイヤーとフック。吊り荷がつながっているときは、ワイヤーは吊り荷が描く。c は下の真ん中
+      const [tx, ty] = craneTip([cx, cy], s, d);
+      const px = X(-s * 0.2);
+      const py = cy - s * 0.33;
+      const at = (f: number): Pt => [px + (tx - px) * f, py + (ty - py) * f];
+      const [mx, my] = at(0.55);
+      const [qx, qy] = at(0.3);
+      const wheel = (x: number) => ring(x, cy - s * 0.07, s * 0.07, COAL) + dot(x, cy - s * 0.07, s * 0.025, MID);
+      let out = cord(`M${n(X(-s * 0.48))} ${n(cy - s * 0.16)}L${n(X(-s * 0.58))} ${n(cy - s * 0.04)}`, W * 2.2, DARK) + box(X(-s * 0.64), cy - s * 0.04, X(-s * 0.52), cy, DEEP, s * 0.01, 0.7) +
+        box(X(-s * 0.52), cy - s * 0.22, X(s * 0.5), cy - s * 0.1, STEEL, s * 0.02) +
+        box(X(s * 0.3), cy - s * 0.4, X(s * 0.5), cy - s * 0.17, LIGHT, s * 0.03) + box(X(s * 0.36), cy - s * 0.36, X(s * 0.46), cy - s * 0.27, DEEP, s * 0.015, 0.6) +
+        wheel(X(-s * 0.38)) + wheel(X(-s * 0.2)) + wheel(X(s * 0.34)) +
+        box(X(-s * 0.32), cy - s * 0.36, X(s * 0.08), cy - s * 0.21, DARK, s * 0.03) +
+        cord(`M${n(X(s * 0.02))} ${n(cy - s * 0.26)}L${n(qx)} ${n(qy)}`, W * 2.4, DEEP) +
+        cord(`M${n(px)} ${n(py)}L${n(tx)} ${n(ty)}`, W * 3.2, LIGHT) + cord(`M${n(px)} ${n(py)}L${n(mx)} ${n(my)}`, W * 4.6, MID) +
+        ring(tx, ty, s * 0.03, DARK, 0.8);
+      if (!linked) {
+        const hy = cy - s * 0.5;
+        out += line(tx, ty + s * 0.03, tx, hy - s * 0.05, INK, 1.1) +
+          `<path d="M${n(tx)} ${n(hy - s * 0.05)}V${n(hy)}A${n(s * 0.04)} ${n(s * 0.04)} 0 1 1 ${n(tx - s * 0.07)} ${n(hy - s * 0.015)}" fill="none" stroke="${INK}" stroke-width="${n(W * 1.6)}" stroke-linecap="round"/>`;
+      }
+      return out;
+    }
+    case "dust_mask": {
+      // 防塵マスク: 鼻と口を覆う濃い面体、両側の丸いフィルター（明るい輪と内の輪）、上と下のしめ紐、前の排気の丸、面体のつや。
+      // 頭に着けたときは横から（顔の前の面体と、ほおのフィルター 1 つ、後ろへ回る紐）。c は面体の真ん中（頭に着けたときは頭）
+      if (worn) {
+        const r = s / 2.5;
+        const fx = X(r * 0.62);
+        const fy = cy + r * 0.56;
+        return cord(`M${n(X(r * 0.4))} ${n(fy - r * 0.2)}Q${n(X(-r * 0.4))} ${n(cy - r * 0.05)} ${n(X(-r * 0.95))} ${n(cy - r * 0.1)}`, W * 2.2, DARK) +
+          path(`M${n(X(r * 0.42))} ${n(fy - r * 0.32)}L${n(X(r * 0.86))} ${n(fy - r * 0.16)}Q${n(X(r * 0.96))} ${n(fy + r * 0.1)} ${n(X(r * 0.8))} ${n(fy + r * 0.3)}L${n(X(r * 0.42))} ${n(fy + r * 0.3)}Z`, DARK) +
+          ring(X(r * 0.4), fy + r * 0.02, r * 0.2, LIGHT) + ring(X(r * 0.4), fy + r * 0.02, r * 0.09, LIGHT, 0.5);
+      }
+      const body = `M${n(cx)} ${n(cy - h * 0.62)}Q${n(cx + h * 0.42)} ${n(cy - h * 0.55)} ${n(cx + h * 0.45)} ${n(cy - h * 0.05)}Q${n(cx + h * 0.4)} ${n(cy + h * 0.45)} ${n(cx)} ${n(cy + h * 0.5)}` +
+        `Q${n(cx - h * 0.4)} ${n(cy + h * 0.45)} ${n(cx - h * 0.45)} ${n(cy - h * 0.05)}Q${n(cx - h * 0.42)} ${n(cy - h * 0.55)} ${n(cx)} ${n(cy - h * 0.62)}Z`;
+      return [-1, 1].map((k) => cord(`M${n(cx + k * h * 0.3)} ${n(cy - h * 0.42)}L${n(cx + k * h * 0.95)} ${n(cy - h * 0.8)}M${n(cx + k * h * 0.6)} ${n(cy + h * 0.2)}L${n(cx + k * h * 0.98)} ${n(cy + h * 0.1)}`, W * 2, DARK)).join("") +
+        path(body, DARK) + shine(cx - h * 0.22, cy - h * 0.38, cx - h * 0.3, cy - h * 0.12, DARK) +
+        [-1, 1].map((k) => ring(cx + k * h * 0.56, cy + h * 0.14, h * 0.3, LIGHT) + ring(cx + k * h * 0.56, cy + h * 0.14, h * 0.15, LIGHT, 0.5)).join("") +
+        ring(cx, cy + h * 0.24, h * 0.1, DEEP, 0.6);
+    }
+    case "power_drill": {
+      // 電動工具（ドリル・横から）: 前の細い刃とねじれの筋、下の電池、手に持つ黒い握り、握りの前の引き金、上の濃い胴と後ろの通気の筋、
+      // 前のチャック、胴のつや。会社の色やロゴは描かない。c は握るところ
+      const yb = cy - h * 0.62;
+      const by = yb - h * 0.22;
+      return cord(`M${n(X(h * 0.95))} ${n(by)}H${n(X(h * 1.62))}`, W * 2.2, LIGHT) +
+        [0, 1, 2].map((k) => line(X(h * (1.1 + k * 0.17)), by - h * 0.07, X(h * (1.18 + k * 0.17)), by + h * 0.07, INK, 0.5)).join("") +
+        box(X(-h * 0.55), cy + h * 0.44, X(h * 0.32), cy + h * 0.78, STEEL, h * 0.06) +
+        path(poly([[X(-h * 0.05), yb], [X(h * 0.28), yb], [X(h * 0.12), cy + h * 0.5], [X(-h * 0.22), cy + h * 0.5]]), COAL) +
+        box(X(h * 0.24), cy - h * 0.52, X(h * 0.36), cy - h * 0.3, DEEP, h * 0.03, 0.7) +
+        box(X(-h * 0.62), yb - h * 0.44, X(h * 0.62), yb + h * 0.02, DARK, h * 0.2) +
+        [-0.45, -0.32].map((k) => line(X(h * k), yb - h * 0.3, X(h * k), yb - h * 0.12, INK, 0.6)).join("") +
+        box(X(h * 0.6), yb - h * 0.38, X(h * 0.96), yb - h * 0.06, DEEP, h * 0.06, 0.8) + line(X(h * 0.78), yb - h * 0.34, X(h * 0.78), yb - h * 0.1, INK, 0.5) +
+        shine(X(-h * 0.2), yb - h * 0.34, X(h * 0.25), yb - h * 0.34, DARK);
+    }
+    case "aerial_platform": {
+      // 高所作業車（シザー式・横から）: 交差する腕 3 段とまん中のピン、かごの手すり（柱と上と中の横棒）、作業床、かごの操作盤、
+      // 下の濃い車体と車輪 2 つ、車体のつや。c は下の真ん中
+      const yb = cy - s * 0.2;
+      const yd = cy - s * 0.74;
+      const L = cx - s * 0.32;
+      const R = cx + s * 0.32;
+      let arms = "";
+      let pins = "";
+      for (let k = 0; k < 3; k++) {
+        const y0 = yb - ((yb - yd) * k) / 3;
+        const y1 = yb - ((yb - yd) * (k + 1)) / 3;
+        arms += `M${n(L)} ${n(y0)}L${n(R)} ${n(y1)}M${n(R)} ${n(y0)}L${n(L)} ${n(y1)}`;
+        pins += dot(cx, (y0 + y1) / 2, W * 0.8);
+      }
+      return cord(arms, W * 2.4, MID) + pins +
+        cord(`M${n(L - s * 0.08)} ${n(yd)}V${n(cy - s * 1.04)}H${n(R + s * 0.08)}V${n(yd)}M${n(L - s * 0.08)} ${n(cy - s * 0.9)}H${n(R + s * 0.08)}`, W * 2.2, STEEL) +
+        box(X(s * 0.18), cy - s * 0.98, X(s * 0.3), cy - s * 0.88, DEEP, s * 0.015, 0.7) +
+        box(L - s * 0.12, yd - s * 0.04, R + s * 0.12, yd + s * 0.03, DARK, s * 0.01) +
+        box(cx - s * 0.46, cy - s * 0.24, cx + s * 0.46, cy - s * 0.1, DARK, s * 0.03) + shine(cx - s * 0.38, cy - s * 0.2, cx - s * 0.18, cy - s * 0.2, DARK) +
+        [-0.3, 0.3].map((f) => ring(cx + f * s, cy - s * 0.08, s * 0.08, COAL) + dot(cx + f * s, cy - s * 0.08, s * 0.028, MID)).join("");
+    }
   }
 }
 
@@ -787,8 +1126,8 @@ function glyphs(text: string, x0: number, y0: number, gw: number, gh: number, sw
 }
 
 /** かぶり物と保護めがねは頭に付けたとき、手袋は手に付けたとき、size ではなく頭・手の大きさに合わせる */
-const HEADWEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead", "goggles"]);
-const HANDWEAR = new Set<PropKind>(["gloves"]);
+const HEADWEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead", "goggles", "dust_mask"]);
+const HANDWEAR = new Set<PropKind>(["gloves", "cut_gloves", "insulated_gloves", "wristband"]);
 
 /**
  * 吹き出し。c は箱の真ん中（キャンバスの中に収める）、to はしっぽの向かう先（人の頭。無ければ真下）。
@@ -864,9 +1203,23 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
 
 export function propsSvg(props: PropSpec[], posed: Posed[], size: number): string {
   const W = lineWidth(size);
+  // クレーンと吊り荷をつなぐ（11/5）: 吊り荷がクレーンの先の近く（横に吊り荷の大きさの 0.8 倍まで）で先より下にあれば、
+  // 吊り荷を先の真下へ寄せ、ワイヤーを先から垂らす。クレーンは自分のワイヤーとフックを描かない
+  const tips = props.map((p) => (p.kind === "crane" ? (() => { const a = anchorPoint(p.at, posed, size); return craneTip(a.c, p.size * size, a.d); })() : null));
+  const link = new Map<number, number>(); // 吊り荷の番号 → クレーンの番号
+  props.forEach((p, i) => {
+    if (p.kind !== "suspended_load") return;
+    const { c } = anchorPoint(p.at, posed, size);
+    const j = tips.findIndex((t) => t !== null && Math.abs(t[0] - c[0]) <= p.size * size * 0.8 && t[1] < c[1]);
+    if (j >= 0) link.set(i, j);
+  });
+  const linkedCranes = new Set(link.values());
   return props
-    .map((p) => {
-      const { c, d } = anchorPoint(p.at, posed, size);
+    .map((p, i) => {
+      const a = anchorPoint(p.at, posed, size);
+      const d = a.d;
+      const j = link.get(i);
+      const c: Pt = j === undefined ? a.c : [tips[j]![0], a.c[1]];
       if (BUBBLES.has(p.kind)) {
         let to: Pt | null = null;
         if ("figure" in p.at) {
@@ -882,8 +1235,11 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
         : p.size * size;
       if (p.kind === "anchor_line") return `<g data-part="prop">${anchorLine(c, s, d, size, W)}</g>`;
       // 人に付けた安全帯は、腰のベルトに加えて肩のベルトともものベルトを体に沿って描く（058）
-      const straps = p.kind === "harness" && "figure" in p.at ? harnessStraps(posed[p.at.figure], W) : "";
-      return `<g data-part="prop">${straps}${shape(p.kind, c, s, d, { W, worn: onHead || onHand })}</g>`;
+      const onBody = "figure" in p.at;
+      const straps = p.kind === "harness" && onBody ? harnessStraps(posed[(p.at as { figure: number }).figure], W) : "";
+      const elbow = onHand ? posed[(p.at as { figure: number }).figure].joints[(p.at as { joint: Joint }).joint.replace("hand", "elbow") as Joint] : undefined;
+      const opt: Opt = { W, worn: onHead || onHand, body: onBody, elbow, linked: linkedCranes.has(i), topY: j === undefined ? undefined : tips[j]![1] };
+      return `<g data-part="prop">${straps}${shape(p.kind, c, s, d, opt)}</g>`;
     })
     .join("");
 }

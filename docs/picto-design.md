@@ -96,11 +96,19 @@
   - 手袋は、手に着けると手の丸を覆う形と向いている側の親指、持つ・置くときは正面の手の形。
 - 小物の「持つところ」（c）: 手に持つ道具は握るところ、床に置くものは下の真ん中、壁に付くものは真ん中か壁の台、頭に付けるものは頭。
 
-## 8. 小物の一覧（55）
+## 8. 小物の一覧（80）
 
 - **初めからの 30:** helmet・helmet_new・cap_lead・harness・tester・wire・panel・bubble_question・bubble_check・suspended_load・arrow_down・broom・box・lock・tag・clock・checklist・prohibit・circle_mark・cross_mark・outlet・toolbox・check_mark・think_question・think_check・unwell・span_arrow・edge・anchor_line・trash_bin。名前は変えずに、この決まりで描き直しました。
 - **業種が増えた分の 25:** 下の表で多くの業種に出る順に選びました。cone（カラーコーン）・barrier（立入禁止のバー）・ladder（はしご）・stepladder（脚立）・fire_extinguisher（消火器）・first_aid（救急箱）・gloves（手袋）・goggles（保護めがね）・knife（包丁）・hot_pot（熱い鍋）・cart（台車）・forklift（フォークリフト）・spill（こぼれた水・油）・bucket（バケツ）・mop（モップ）・chemical（薬品の容器）・gas_cylinder（ガスのボンベ）・hammer（金づち）・wrench（スパナ）・grinder（ディスクグラインダー）・gear（回る機械・巻き込まれ）・sun（暑さ）・water_bottle（水の入れ物）・faucet（手洗いの蛇口）・radio（無線機）。
 - 吹き出しの中に描ける道具に、消火器・救急箱・手袋・保護めがね・カラーコーン・はしご・薬品の容器・包丁・歯車を足しました。
+- **脚本の段で足りなかった 8:** spark（火花）・bubble_say・bubble_alert・elapsed_1min〜elapsed_1h（たった時間の札 5 つ）。
+- **電気の現場の道具と保護具 21（11/5。表は `docs/props-2026-11-05.md`）:** 新しく 17 を足しました。aed・cubicle（キュービクル）・wristband・work_platform（立馬）・rolling_scaffold（可搬式移動足場）・safety_shoes・cut_gloves・insulated_gloves・voltage_detector（ペン形の検電器。今の tester とは別）・cooling_vest（空調服）・step_stool（簡易作業台）・armband・crane・insulated_boots・dust_mask・power_drill・aerial_platform（高所作業車）。
+  - 今の名前のまま使うもの: cart・stepladder。写真に合わせて描き直したもの: harness（置いたときはフルハーネスの形。人に付けたときは今までどおり腰のベルトと体に沿うベルト）・goggles（持つ・置くときは両目を 1 枚で覆うレンズ）。
+  - 着る物 10 は、新しい人の絵（`character.ts`）にも着せられます（`outfit.ts`）: `eyewear: "goggles"`・`respirator`・`wear: fullHarness`・`wear: fanJacket`・`armband: "cross"`・`wristband`・`glove: "cut" | "insulated"`・`shoes: "safety"`・`bootsHigh`。どれも付けないときは、今までの絵と 1 文字も変わりません。
+  - 場面の人（`scene.ts`）では、頭（保護めがね・防塵マスク）と手（2 つの手袋・リストバンド）に付けると、着けた形で描きます。
+  - クレーンの先（`craneTip`）の近くに吊り荷（`suspended_load`）を置くと、吊り荷は先の真下へ寄り、ワイヤーが先から垂れます。
+  - 吹き出しの中に描ける道具に、AED・検電器（ペン形）・絶縁の手袋・防塵マスク・電動ドリル・腕章を足しました。
+  - 1 つずつの SVG は `assets/props/<名前>.svg`（`npx tsx scripts/export-props.ts` で書き出し直す）。
 
 ## 9. 業種 → 小物の候補
 
@@ -108,8 +116,8 @@
 
 | 業種 | 済み（使える小物） | まだ |
 |---|---|---|
-| 01 電気工事 | tester・wire・panel・outlet・harness・anchor_line・lock・tag・ladder・stepladder・gloves・toolbox | 絶縁の手袋の印・電柱 |
-| 02 建設 | harness・anchor_line・suspended_load・edge・cone・barrier・ladder・hammer・grinder・sun・water_bottle | 足場・開口部のふた・ミキサー車 |
+| 01 電気工事 | tester・voltage_detector・wire・panel・cubicle・outlet・harness・anchor_line・lock・tag・ladder・stepladder・work_platform・rolling_scaffold・step_stool・aerial_platform・gloves・insulated_gloves・cut_gloves・insulated_boots・safety_shoes・goggles・armband・wristband・cooling_vest・power_drill・aed・toolbox | 電柱 |
+| 02 建設 | harness・anchor_line・suspended_load・crane・rolling_scaffold・work_platform・aerial_platform・edge・cone・barrier・ladder・hammer・grinder・power_drill・safety_shoes・cut_gloves・dust_mask・armband・cooling_vest・sun・water_bottle・aed | 開口部のふた・ミキサー車 |
 | 03 造船・舶用工業 | harness・suspended_load・grinder・gas_cylinder・goggles・ladder・edge | 溶接の火・船の手すり |
 | 04 工場の製造 | gear・gloves・goggles・forklift・cart・lock・tag・chemical | 機械の非常停止の押しボタン・安全カバー |
 | 05 自動車の整備 | wrench・spill・chemical・gloves・goggles・fire_extinguisher | ジャッキ・リフトに上げた車・タイヤ |
@@ -138,9 +146,9 @@
 | 28 縫製・繊維 | gear・gloves | ミシン・はさみ・針 |
 | 29 印刷・製本 | gear・lock・tag・box | 印刷の機械のローラー・断裁の機械 |
 | 30 プラスチック成形・包装 | gear・gloves・hot_pot・box・cart | 成形の機械・カッター |
-| 31 解体 | grinder・hammer・goggles・cone・barrier・suspended_load・edge | 重機・崩れるもの |
-| 32 配管・設備・空調 | wrench・gas_cylinder・ladder・stepladder・goggles・gloves | 管・溶接の火 |
-| 33 内装 | stepladder・ladder・hammer・goggles・cart | 電動ドリル・カッター・ボード |
+| 31 解体 | grinder・hammer・goggles・dust_mask・crane・cone・barrier・suspended_load・edge・safety_shoes・armband | 崩れるもの |
+| 32 配管・設備・空調 | wrench・gas_cylinder・ladder・stepladder・work_platform・aerial_platform・power_drill・goggles・gloves | 管・溶接の火 |
+| 33 内装 | stepladder・ladder・step_stool・work_platform・rolling_scaffold・hammer・power_drill・goggles・cart | カッター・ボード |
 | 34 パン・製菓 | hot_pot・gear・gloves・faucet・knife | オーブン・ミキサー |
 | 35 精肉・鮮魚 | knife・gloves・faucet・spill・gear | 切る機械・まな板 |
 | 36 畜産 | bucket・gloves・sun・water_bottle・faucet | 牛・柵 |

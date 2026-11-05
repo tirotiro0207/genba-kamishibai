@@ -82,6 +82,23 @@ export const PROP_JA: Record<PropKind, string> = {
   elapsed_10min: "たった時間の札（10min）",
   elapsed_30min: "たった時間の札（30min）",
   elapsed_1h: "たった時間の札（1h）",
+  aed: "AED",
+  cubicle: "キュービクル（屋外の受変電の箱）",
+  wristband: "リストバンド",
+  work_platform: "可搬式作業台（立馬）",
+  rolling_scaffold: "可搬式移動足場",
+  safety_shoes: "安全靴",
+  cut_gloves: "切創防止の手袋",
+  insulated_gloves: "絶縁の手袋",
+  voltage_detector: "検電器（ペン形）",
+  cooling_vest: "空調服",
+  step_stool: "簡易作業台（低い踏み台）",
+  armband: "腕章",
+  crane: "クレーン（重機）",
+  insulated_boots: "絶縁の長靴",
+  dust_mask: "防塵マスク",
+  power_drill: "電動ドリル",
+  aerial_platform: "高所作業車",
 };
 
 const HEADGEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead"]);

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { POSES } from "../src/shared/picto/poses";
-import { anchorPoint, DEFAULT_JOINT, PROP_KINDS, type PropSpec } from "../src/shared/picto/props";
+import { characterSvg } from "../src/shared/picto/character";
+import type { Outfit } from "../src/shared/picto/outfit";
+import { A_POSE } from "../src/shared/picto/poses";
+import { anchorPoint, craneTip, DEFAULT_JOINT, PROP_KINDS, type PropKind, type PropSpec } from "../src/shared/picto/props";
 import { renderFrame } from "../src/shared/picto/scene";
 import { checkStyle } from "../src/shared/picto/style";
 
@@ -164,7 +167,7 @@ describe("伝わらない絵を直すために足した小物（058）", () => {
     }
   });
 
-  it("人に付けた安全帯は肩とももにもベルトが付き、吹き出しの中の安全帯は腰のベルトだけ", () => {
+  it("人に付けた安全帯は肩とももにもベルトが付く（置いた安全帯はフルハーネスの形を線でなくパスで描く）", () => {
     const on = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { figure: 0, joint: "hip" }, size: 0.16 }] }).svg;
     const off = renderFrame({ figures: [F()], props: [{ kind: "harness", at: { x: 0.5, y: 0.5 }, size: 0.16 }] }).svg;
     // 肩から腰へ 2 本・胸 1 本・もも 2 本を、縁と中の 2 本の線で描く
@@ -177,3 +180,40 @@ describe("伝わらない絵を直すために足した小物（058）", () => {
   });
 });
 
+
+describe("電気の現場の道具と保護具（11/5）", () => {
+  const NEW: PropKind[] = ["aed", "cubicle", "wristband", "work_platform", "rolling_scaffold", "safety_shoes", "cut_gloves", "insulated_gloves",
+    "voltage_detector", "cooling_vest", "step_stool", "armband", "crane", "insulated_boots", "dust_mask", "power_drill", "aerial_platform"];
+
+  it("17 個の新しい小物と、今の名前の 4 個（保護めがね・台車・安全帯・脚立）がそろい、置いても手・頭に付けても絵柄のテストが通る", () => {
+    for (const kind of [...NEW, "goggles", "cart", "harness", "stepladder"] as PropKind[]) {
+      expect(PROP_KINDS, kind).toContain(kind);
+      const placed = renderFrame({ figures: [F()], props: [{ kind, at: { x: 0.7, y: 0.86 }, size: 0.2 }] }).svg;
+      expect(checkStyle(placed), kind).toEqual([]);
+      const joint = DEFAULT_JOINT[kind];
+      if (joint) expect(checkStyle(renderFrame({ figures: [F()], props: [{ kind, at: { figure: 0, joint }, size: 0.12 }] }).svg), kind).toEqual([]);
+    }
+  });
+
+  it("クレーンの先の近くに置いた吊り荷は、先の真下へ寄ってワイヤーが先から垂れる（クレーンは自分のフックを描かない）", () => {
+    const crane: PropSpec = { kind: "crane", at: { x: 0.4, y: 0.88 }, size: 0.4 };
+    const tip = craneTip([0.4 * 768, 0.88 * 768], 0.4 * 768, 1);
+    const alone = renderFrame({ figures: [F(0.15)], props: [crane] }).svg;
+    const both = renderFrame({ figures: [F(0.15)], props: [crane, { kind: "suspended_load", at: { x: 0.66, y: 0.6 }, size: 0.14 }] }).svg;
+    expect(both).toContain(`<line x1="${Math.round(tip[0] * 10) / 10}" y1="${Math.round(tip[1] * 10) / 10}"`);
+    // 離れた吊り荷はつながず、上の端から吊る
+    const far = renderFrame({ figures: [F(0.15)], props: [crane, { kind: "suspended_load", at: { x: 0.2, y: 0.5 }, size: 0.1 }] }).svg;
+    expect(far).not.toContain(`y1="${Math.round(tip[1] * 10) / 10}"`);
+    expect(alone.split("<line").length).toBeGreaterThan(1);
+  });
+
+  it("着る物は新しい人の絵にも着せられ、着せないときは今までの絵と 1 文字も変わらない", () => {
+    const base = (outfit?: Outfit) => characterSvg({ angles: A_POSE.quarter, x: 100, groundY: 300, height: 270, facing: "right", view: "quarter", hair: "short", ...(outfit ? { outfit } : {}) } as never);
+    const plain = base();
+    expect(base({})).toBe(plain);
+    const worn: Outfit[] = [{ eyewear: "goggles" }, { respirator: true }, { wear: [{ kind: "fullHarness" }] }, { wear: [{ kind: "fanJacket" }] }, { armband: "cross" },
+      { wristband: true }, { glove: "cut" }, { glove: "insulated" }, { shoes: "safety" }, { bootsHigh: true }];
+    for (const o of worn) expect(base(o), JSON.stringify(o)).not.toBe(plain);
+    expect(base({ armband: "cross" })).not.toBe(base({ armband: true }));
+  });
+});

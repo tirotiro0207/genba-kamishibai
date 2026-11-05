@@ -22,7 +22,9 @@ export type Garment =
   | "coverall" // つなぎ（上着とズボンを同じ明るさに。腰に帯）
   | "tunic" // 襟の無い上衣（看護・リネン）
   | "lifeJacket" // 救命胴衣
-  | "checked"; // チェックのシャツ
+  | "checked" // チェックのシャツ
+  | "fanJacket" // 空調服（作業着の上着と、腰の後ろの丸いファン 2 つ）
+  | "fullHarness"; // フルハーネス（肩と胸のベルトに、腰のベルトと背中の D の環）
 
 export interface Outfit {
   /** 胴に重ねる服。tone は灰色の明るさ（初めの値は部品ごと） */
@@ -35,7 +37,7 @@ export interface Outfit {
   tag?: "clip" | "lanyard";
   toolBelt?: boolean;
   /** 腕章（手前の腕の二の腕） */
-  armband?: boolean;
+  armband?: boolean | "cross";
   /** かぶり物の線の本数（安全帽・つばの帽子・衛生キャップ） */
   stripes?: 0 | 1 | 2 | 3;
   /** 若葉の印（安全帽の前） */
@@ -51,6 +53,19 @@ export interface Outfit {
   cuffs?: 1 | 2 | 3;
   /** 手袋の明るさ */
   gloves?: string;
+  // 11/5 電気の現場の保護具（docs/props-2026-11-05.md）。どれも無ければ今までの絵と同じ
+  /** 保護めがね（両目を 1 枚で覆うレンズと、耳へ回るバンド） */
+  eyewear?: "goggles";
+  /** 防塵マスク（鼻と口を覆う濃い面体と、両側の丸いフィルター） */
+  respirator?: boolean;
+  /** 手袋の形: 絶縁（ひじの近くまでの長い袖口）・切創防止（指先の側が濃い） */
+  glove?: "insulated" | "cut";
+  /** 安全靴（つま先の芯の線） */
+  shoes?: "safety";
+  /** 絶縁の長靴（ひざ下までの筒と口の帯）。boots の明るさが無ければ #333 */
+  bootsHigh?: boolean;
+  /** リストバンド（手前の腕の手首） */
+  wristband?: boolean;
 }
 
 const n = (v: number) => String(Math.round(v * 10) / 10);
@@ -227,6 +242,26 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
         `<rect x="${c - 6}" y="-100" width="12" height="12" fill="#999" ${S(3)}/>`;
     },
   },
+  // 空調服（11/5）: 作業着の上着に、腰の後ろの丸いファン。真横・斜めは背中の側（画面の左）から半分出し、正面は両脇から少しのぞかせる
+  fanJacket: {
+    tone: "#ccc",
+    draw: (v, t) => {
+      const w = W(v);
+      const fan = (x: number, r: number) => `<circle cx="${n(x)}" cy="-28" r="${r}" fill="#333" ${S(5)}/><circle cx="${n(x)}" cy="-28" r="${n(r * 0.42)}" fill="#777" ${S(3)}/>`;
+      const fans = v === "front" ? fan(-w - 6, 11) + fan(w + 6, 11) : fan(-w - 2, 15);
+      return GARMENT.jacket.draw(v, t) + fans;
+    },
+  },
+  // フルハーネス（11/5）: 今の安全帯の肩と胸のベルトに、腰のベルトと留め具、背中の D の環を足す
+  fullHarness: {
+    tone: "#222",
+    draw: (v, t) => {
+      const w = W(v);
+      const ring = v === "front" ? "" : `<circle cx="${-w + 8}" cy="-128" r="7" fill="none" stroke="#000" stroke-width="7"/><circle cx="${-w + 8}" cy="-128" r="7" fill="none" stroke="#999" stroke-width="3"/>`;
+      return GARMENT.harness.draw(v, t) + `<path d="M${-w + 2} -30H${w - 2}" stroke="#000" stroke-width="14"/><path d="M${-w + 4} -30H${w - 4}" stroke="${t}" stroke-width="8"/>` +
+        `<rect x="${CX[v] - 8}" y="-38" width="16" height="16" rx="3" fill="#999" ${S(3)}/>` + ring;
+    },
+  },
   apronLong: {
     tone: "#fff",
     draw: (v, t) => {
@@ -333,13 +368,69 @@ export const visorSvg = (view: View, kind: "clear" | "mesh", k = 1) => {
   return part("visor", frame + inner);
 };
 
-/** 腕章（腕の座標。肩から 18〜34 下）。袖が暗いと白、明るいと濃い灰色 */
-export const armbandSvg = (sleeve: string) =>
-  part("armband", `<rect x="-17" y="18" width="34" height="17" fill="${lum(sleeve) < 0x80 ? "#eee" : "#333"}" ${S(3)}/>`);
+/** 腕章（腕の座標。肩から 18〜34 下）。袖が暗いと白、明るいと濃い灰色。cross で帯のまん中に小さい十字の印（11/5） */
+export const armbandSvg = (sleeve: string, cross = false) => {
+  const band = lum(sleeve) < 0x80 ? "#eee" : "#333";
+  const mark = cross ? `<path d="M-2 21H2V25H6V29H2V33H-2V29H-6V25H-2Z" fill="${band === "#eee" ? "#333" : "#eee"}"/>` : "";
+  return part("armband", `<rect x="-17" y="18" width="34" height="17" fill="${band}" ${S(3)}/>${mark}`);
+};
 
-/** 長靴の筒（すねの座標。足首から 48 上まで）。靴は同じ明るさで描く */
-export const bootSvg = (shin: number, tone: string) =>
-  part("boots", `<rect x="-21" y="${shin - 48}" width="42" height="50" rx="4" fill="${tone}" ${S(5)}/>`);
+/** 長靴の筒（すねの座標。足首から 48 上まで）。靴は同じ明るさで描く。high は絶縁の長靴で、ひざ下まで上げて口に明るい帯（11/5） */
+export const bootSvg = (shin: number, tone: string, high = false) => {
+  if (!high) return part("boots", `<rect x="-21" y="${shin - 48}" width="42" height="50" rx="4" fill="${tone}" ${S(5)}/>`);
+  const top = Math.round(shin * 0.18);
+  return part("boots", `<rect x="-22" y="${top}" width="44" height="${shin - top + 2}" rx="5" fill="${tone}" ${S(5)}/><rect x="-22" y="${top}" width="44" height="11" rx="3" fill="#ccc" ${S(4)}/>`);
+};
+
+/**
+ * 手の部品（11/5。前腕の座標。la は手首＝手の丸の中心）。絶縁の手袋は手首からひじの近くまでの長い袖口、
+ * 切創防止の手袋は手の丸の先の半分（指の側）を濃くする。リストバンドは手首の上の帯
+ */
+export const gloveCuffSvg = (la: number, tone: string) =>
+  part("glove_cuff", `<rect x="-22" y="${Math.round(la * 0.08)}" width="44" height="${n(la * 0.92 - 6)}" rx="6" fill="${tone}" ${S(5)}/><path d="M-20 ${Math.round(la * 0.08) + 9}H20" stroke="#999" stroke-width="4"/>`);
+export const gloveTipSvg = (la: number) => part("glove_tip", `<path d="M-12.5 ${la}A12.5 12.5 0 0 0 12.5 ${la}Z" fill="#333"/>`);
+export const wristbandSvg = (la: number) => part("wristband", `<rect x="-19" y="${la - 31}" width="38" height="13" rx="3" fill="#555" ${S(4)}/>`);
+
+/** 安全靴のつま先の芯の線（11/5。靴の座標。character.ts の shoe と同じく ankle で回す）。正面はつま先の上の弧 */
+export const toeCapSvg = (view: View, i: number, ankle: number) => {
+  if (view === "front") {
+    const s = i === 0 ? 1 : -1;
+    return part("toecap", `<g transform="rotate(${n(ankle)})"><path d="M${n(-14 * s)} 13Q0 7 ${n(13 * s)} 13" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round"/></g>`);
+  }
+  const r = (ankle * Math.PI) / 180;
+  const f = (x: number, y: number) => `${n(x * Math.cos(r) - y * Math.sin(r))} ${n(x * Math.sin(r) + y * Math.cos(r))}`;
+  return part("toecap", `<path d="M${f(20, 6)}Q${f(14, 15)} ${f(19, 23)}" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round"/>`);
+};
+
+/**
+ * 保護めがね（11/5。頭の座標）。両目を 1 枚で覆う透明のレンズ（縁と上の濃いふち、光の線）と、耳へ回るバンド。
+ * eyes は目の x（landmarks の値）。真横は目の後ろから顔の前の端まで
+ */
+export const gogglesSvg = (view: View, eyes: number[], k = 1) => {
+  const a = view === "side" ? eyes[0] - 10 : Math.min(...eyes) - 14;
+  const b = view === "side" ? 52 * k : Math.max(...eyes) + 14;
+  const ears = EAR_MARK[view].map((x) => x * k);
+  const band = ears.map((e) => `<path d="M${n(e < a ? a : b)} -40L${n(e)} -38" stroke="#333" stroke-width="5" stroke-linecap="round"/>`).join("");
+  const m = (a + b) / 2;
+  // 正面はまん中の下に鼻の切れ込み
+  const nose = view === "front" ? `H${n(m + 8)}Q${n(m)} -36 ${n(m - 8)} -26` : "";
+  const lens = `<path d="M${n(a)} -48H${n(b)}V-30Q${n(b)} -26 ${n(b - 5)} -26${nose}H${n(a + 5)}Q${n(a)} -26 ${n(a)} -30Z" fill="none" ${S(4)}/>`;
+  return part("goggles", band + lens + `<path d="M${n(a + 2)} -49H${n(b - 2)}" stroke="#333" stroke-width="5" stroke-linecap="round"/><path d="M${n(a + 6)} -42L${n(a + 12)} -34" stroke="#999" stroke-width="3"/>`);
+};
+
+/** 防塵マスク（11/5。頭の座標）。マスクと同じ所に濃い面体、両側（斜め・真横は見える側）に丸いフィルター、耳へ向かう紐 */
+export const respiratorSvg = (view: View, k = 1) => {
+  const [l, r, t, b] = MASK[view].map((v, i) => (i < 2 ? Number(n(v * k)) : v));
+  const strap = (ear0: number) => {
+    const ear = Number(n(ear0 * k));
+    const edge = ear < l ? l : r;
+    return `<path d="M${edge} ${t + 4}L${ear} ${EAR_TOP + 2}M${edge} ${b - 4}L${ear} ${EAR_BOTTOM - 2}" stroke="#000" stroke-width="4"/>`;
+  };
+  const body = `<rect x="${l - 2}" y="${t - 2}" width="${r - l + 4}" height="${b - t + 6}" rx="11" fill="#555" ${S(4)}/>`;
+  const filt = (x: number, rr: number) => `<circle cx="${n(x)}" cy="${b - 8}" r="${rr}" fill="#ccc" ${S(4)}/><circle cx="${n(x)}" cy="${b - 8}" r="${n(rr * 0.45)}" fill="none" stroke="#000" stroke-width="2.5"/>`;
+  const filters = view === "front" ? filt(l - 2, 10) + filt(r + 2, 10) : view === "quarter" ? filt(l, 11) : filt(l + 4, 11);
+  return part("respirator", EAR_MARK[view].map(strap).join("") + body + filters);
+};
 
 /**
  * マスク（頭の座標。口を覆う）。[左の端, 右の端, 上, 下]。目の下・鼻の上から口までを覆う。
