@@ -3,6 +3,7 @@
 // 会社のテナントは、テナントの PIN のあとに役割の PIN でも入る（052 の続き）。役割のしるしは role:<テナント> に残す。
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Backdrop } from "../login/Backdrop";
+import { RolePicker } from "./RolePicker";
 import "./pin.css";
 
 export const tokenKey = (tenant: string) => `token:${tenant}`;
@@ -129,16 +130,10 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
     <form className="pin" onSubmit={enter} data-testid="tenant-pin" data-step={step}>
       <h1>{step === "tenant" ? "会社のテナントに入る" : "役割で入る"}</h1>
       {step === "role" && roles.length > 1 && (
-        <label>
-          役割
-          <select value={who} onChange={(e) => setWho(e.target.value)} data-testid="tenant-pin-role">
-            {roles.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="pin-field">
+          <span className="pin-cap">役割</span>
+          <RolePicker roles={roles} value={who} onChange={setWho} />
+        </div>
       )}
       <label>
         {step === "tenant" ? "PIN" : `${roles.find((r) => r.value === who)?.label ?? ""}の PIN`}

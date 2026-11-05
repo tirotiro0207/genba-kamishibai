@@ -35,7 +35,10 @@ async function enter(p: Page, T: string, path: string, role: string | null, tena
   await p.getByTestId("tenant-pin-input").fill(tenantPin);
   await p.getByTestId("tenant-pin-enter").click();
   await expect(p.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
-  if (role) await p.getByTestId("tenant-pin-role").selectOption(role);
+  if (role) {
+    await p.getByTestId("tenant-pin-role").click();
+    await p.getByTestId(`tenant-pin-role-${role}`).click();
+  }
   await p.getByTestId("tenant-pin-input").fill(rolePin);
   await p.getByTestId("tenant-pin-enter").click();
 }

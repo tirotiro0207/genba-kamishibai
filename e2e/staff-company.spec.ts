@@ -29,7 +29,10 @@ test("会社のテナントの発行・監査・署名の画面は、テナン�
     await p.waitForTimeout(400);
     await p.getByTestId("tenant-pin-enter").click();
     await expect(p.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
-    if (role) await p.getByTestId("tenant-pin-role").selectOption(role);
+    if (role) {
+      await p.getByTestId("tenant-pin-role").click();
+      await p.getByTestId(`tenant-pin-role-${role}`).click();
+    }
     await p.getByTestId("tenant-pin-input").fill(rolePin);
     await p.waitForTimeout(400);
     await p.getByTestId("tenant-pin-enter").click();

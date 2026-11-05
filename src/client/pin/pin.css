@@ -3,8 +3,22 @@
 .pin h1 { font-size: 22px; margin: 0; }
 .pin label { display: flex; flex-direction: column; gap: 6px; font-size: 18px; color: rgba(255, 255, 255, 0.85); }
 .pin input { font-size: 24px; letter-spacing: 0.2em; padding: 8px 12px; color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
-.pin select { font-size: 20px; padding: 8px 12px; color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
-.pin select option { color: #000; }
 .pin .err { color: #ff8a8a; }
 /* 押せないときの「入る」は透かすと後ろのカードが透けて見えるので、入口の「進む」と同じく透かさない暗い緑 */
 .pin .big.go:disabled { opacity: 1; background: #1d4a3a; color: rgba(255, 255, 255, 0.45); }
+/* 役割を選ぶ欄（11/5 作者「ドロップダウンを同じテイストに」）。欄と一覧を同じ暗い半透明にし、一覧はぼかしを敷いて少し浮かせる */
+.pin-field { display: flex; flex-direction: column; gap: 6px; }
+.pin-cap { font-size: 18px; color: rgba(255, 255, 255, 0.85); }
+.role-pick { position: relative; }
+.role-pick-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; font: inherit; font-size: 20px; padding: 10px 12px; color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; cursor: pointer; text-align: left; }
+.role-pick-btn:hover { border-color: rgba(255, 255, 255, 0.6); }
+.role-pick-btn:focus-visible, .role-pick.open .role-pick-btn { outline: none; border-color: var(--accent); }
+.role-pick-chev { width: 18px; height: 18px; flex: none; color: rgba(255, 255, 255, 0.7); transition: transform 160ms ease; }
+.role-pick.open .role-pick-chev { transform: rotate(180deg); }
+.role-pick-list { position: absolute; z-index: 2; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px; list-style: none; background: rgba(18, 18, 18, 0.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); animation: role-pick-in 140ms ease-out; }
+.role-pick-list li { display: flex; align-items: center; justify-content: space-between; font-size: 18px; padding: 10px 12px; border-radius: 5px; color: rgba(255, 255, 255, 0.88); cursor: pointer; }
+.role-pick-list li.hi { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.role-pick-list li.on { color: #6ee0b0; }
+.role-pick-list li svg { width: 16px; height: 16px; }
+@keyframes role-pick-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .role-pick-list { animation: none; } .role-pick-chev { transition: none; } }
