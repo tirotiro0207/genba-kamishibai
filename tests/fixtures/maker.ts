@@ -1,14 +1,21 @@
 // 作成（034a）のテスト用の偽の client。動きは tests/fixtures/card の MOTION、経路は部品ごとに s1 を指す
 import type Anthropic from "@anthropic-ai/sdk";
-import { MOTION } from "./card";
+import { isScriptCall, MOTION, SCRIPT } from "./card";
 
 export function fakeMaker(opts: { dropPart?: boolean; why?: string | null } = {}) {
   const sent: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const scripts: Anthropic.MessageCreateParamsNonStreaming[] = [];
   let n = 0;
   return {
     sent,
+    scripts,
     messages: {
       create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+        // 脚本の段（11/5）は先に 1 回。sent には絵の数字の段だけを積む
+        if (isScriptCall(p.system)) {
+          scripts.push(p);
+          return { model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(SCRIPT) }], usage: { input_tokens: 1000, output_tokens: 800 } } as unknown as Anthropic.Message;
+        }
         sent.push(p);
         const parts = [
           { type: "figure", index: 0, statement: "s1", reason: "確かめる人" },

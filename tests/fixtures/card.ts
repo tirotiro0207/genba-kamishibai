@@ -33,3 +33,18 @@ export function sampleCard(): CardBody {
     ],
   };
 }
+
+/** 脚本の段（11/5）の偽の答え。偽の client は system に「脚本を書く係」があればこれを返す */
+export const SCRIPT = {
+  trigger: "壁の盤の前に新人が来る",
+  frames: [
+    { who: "新人（左）", action: "盤の前に立つ", viewer: "盤を触る場面" },
+    { who: "新人", action: "検電器を盤に当てる", viewer: "先に検電する" },
+    { who: "新人", action: "✓ の印", viewer: "電気が来ていないと確かめた" },
+  ],
+  why_shown: "3 コマ目の ✓",
+  avoid: [],
+  drawable: true,
+  missing: null,
+};
+export const isScriptCall = (system: unknown) => String(system).includes("脚本を書く係");

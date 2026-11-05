@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MOTION } from "../../tests/fixtures/card";
+import { isScriptCall, MOTION, SCRIPT } from "../../tests/fixtures/card";
 import { setClientFactory } from "./claude-client";
 import { allowed, hashKey, newKey } from "./mcp";
 
@@ -34,6 +34,7 @@ describe("MCP サーバー", () => {
     setClientFactory(() => ({
       messages: {
         create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          if (isScriptCall(p.system)) return reply(SCRIPT);
           if (String(p.system).includes("言葉」の欄")) return reply({ ja: "けんでん します。", vi: "Kiểm tra điện.", terms: [] });
           if (String(p.system).includes("カードの下ごしらえ")) return reply({ rules: [RULE("盤に触る前に検電する", 2), RULE("脚立は二人で使う", 3)] });
           return reply({ motion: MOTION, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s2", reason: "盤" }], why: null });

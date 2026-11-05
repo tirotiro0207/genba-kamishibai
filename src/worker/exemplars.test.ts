@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MOTION, sampleCard } from "../../tests/fixtures/card";
+import { isScriptCall, MOTION, sampleCard, SCRIPT } from "../../tests/fixtures/card";
 import { categoryOf, exemplarText, usedLine, whoLabel } from "../shared/exemplars";
 import { setClientFactory } from "./claude-client";
 import { addCardSession, cleanupCardSessions, gatherExemplars, setSessionDeleter } from "./exemplars";
@@ -72,6 +72,7 @@ describe("手本の渡し方（086・§5 L3・L6）", () => {
     setClientFactory(() => ({
       messages: {
         create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          if (isScriptCall(p.system)) return reply(SCRIPT);
           const sys = String(p.system);
           if (sys.includes("言葉」の欄")) return reply({ ja: "けんでん", vi: "kiểm tra điện", terms: [] });
           if (sys.includes("カードの下ごしらえ"))

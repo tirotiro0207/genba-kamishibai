@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { env, exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it } from "vitest";
-import { MOTION } from "../../tests/fixtures/card";
+import { isScriptCall, MOTION, SCRIPT } from "../../tests/fixtures/card";
 import { setClientFactory } from "./claude-client";
 import { app } from "./index";
 
@@ -14,6 +14,7 @@ const stub = () =>
   setClientFactory(() => ({
     messages: {
       create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+        if (isScriptCall(p.system)) return reply(SCRIPT);
         if (String(p.system).includes("言葉」の欄")) return reply({ ja: "盤に さわる 前に 検電を します。", vi: "Kiểm tra điện trước khi chạm vào tủ điện.", terms: [{ ja: "検電", vi: "kiểm tra điện" }] });
         if (String(p.system).includes("カードの下ごしらえ")) return reply({ rules: [rule("盤に触る前に検電する", 2), rule("感電のおそれ", 3)] });
         return reply({ motion: MOTION, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s2", reason: "盤" }], why: null });
@@ -43,8 +44,10 @@ describe("その場で作る（093b）", () => {
     expect(card.rules).toBe(2);
     expect(card.body.words).toBeTruthy();
     expect(await demoCards()).toBe(before + 1);
-    const calls = await env.DB.prepare("SELECT label FROM api_calls WHERE purpose = 'demo' ORDER BY id DESC LIMIT 3").all<{ label: string }>();
+    const calls = await env.DB.prepare("SELECT label FROM api_calls WHERE purpose = 'demo' ORDER BY id DESC LIMIT 4").all<{ label: string }>();
     expect(calls.results.map((r) => r.label)).toContain("取り出し（公開デモ）");
+    // 絵の数字の前に脚本を書かせる（11/5）
+    expect(calls.results.map((r) => r.label)).toContain("脚本");
   });
 
   it("その日の公開デモの費用が多くても止まらない（1 日の USD の上限は付けない）", async () => {

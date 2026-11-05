@@ -1,8 +1,9 @@
 // 正式な流れの作成（034a・工程 4）。OK した 1 項目を、カードの文（守ること・なぜ）に割り付け、
-// Opus 5.5 に動き（キーフレームの JSON）と、部品ごとの経路（どの文から・なぜそう描いたか）を数字で書かせる。
+// 先に脚本の段（script.ts・11/5）で話の筋を決め、Opus 5.5 に動き（キーフレームの JSON）と、部品ごとの経路（どの文から・なぜそう描いたか）を数字で書かせる。
 // 絵は直接描かせない。印の 3〜4 か所がコマになる。経路の無い部品があれば、その中身を渡して 1 回だけ書き直させる。
 import type Anthropic from "@anthropic-ai/sdk";
-import type { CardBody, SourceRef, Statement } from "../card";
+import type { CardBody, CardScript, SourceRef, Statement } from "../card";
+import { scriptText, writeScript } from "./script";
 import { validateCard } from "../card";
 import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import type { From } from "../extract/rules";
@@ -54,8 +55,8 @@ export const SCENE_TEXT: Record<Scene, string> = {
   bad: "この 1 枚は ○× の組の × の側。まちがったやり方をしている場面にし、最後のコマに ×（cross_mark）を置く。禁止の印（prohibit）は使わない。",
 };
 
-/** examples は同じ会社・同じカテゴリの手本の文（086・exemplarText）。無ければ空 */
-export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string, scene?: Scene, examples?: string): Anthropic.MessageCreateParamsNonStreaming {
+/** examples は同じ会社・同じカテゴリの手本の文（086・exemplarText）。無ければ空。script は先に書かせた脚本（11/5） */
+export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string, scene?: Scene, examples?: string, script?: CardScript): Anthropic.MessageCreateParamsNonStreaming {
   const why = statements.filter((s) => s.field === "why").map((s) => s.text).join("。");
   const base = drawParams(MAKER_MODEL, "motion", rule.kind === "dont" ? `${rule.text}（してはいけないこと）` : rule.text, why || undefined);
   const lines = statements.map((s) => `${s.id}（${s.field === "rule" ? "守ること" : "なぜ"}）: ${s.text}`).join("\n");
@@ -66,7 +67,10 @@ ${scene ? `${SCENE_TEXT[scene]}
 どのカードの文（statement に s1 などの番号）から描いたかと、なぜそう描いたか（reason。短く）を書く。経路の無い部品は置かない。
 ${why ? "" : "元の文に理由が無いので、新入社員に伝える理由を why に 1 文で書く（文から分かる危険だけ。元の文に無い数字や決まりは足さない）。\n"}`;
   const again = feedback ? `\n\n前の絵の結果: ${feedback}\n絵だけで伝わるように、姿勢・小物・吹き出しを直してください。` : "";
-  const content = `${examples ? `${examples}\n\n` : ""}カードの文:\n${lines}${again}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
+  const plot = script
+    ? `\n\n脚本（このとおりの筋で描く。コマの数と順・誰が何をするか・吹き出しの中身を変えない。mark: true はコマごとに 1 つ）:\n${scriptText(script)}`
+    : "";
+  const content = `${examples ? `${examples}\n\n` : ""}カードの文:\n${lines}${plot}${again}${fix ? `\n\n前の答えを直してください: ${fix}` : ""}`;
   return {
     ...base,
     system,
@@ -104,10 +108,13 @@ export function checklistErrors(rule: OkRule, motion: MotionJson): string[] {
 /** 1 項目から未承認の下書き 1 枚の中身を作る（保存は呼ぶ側）。feedback は前の絵を確かめる AI がどう読んだか */
 export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate, feedback?: string, scene?: Scene, examples?: string): Promise<Made> {
   const base = assign(rule, locate);
-  const messages: Anthropic.Message[] = [];
+  // 先に脚本（11/5）: きっかけ → 気づく → 決まりの動き → 結果 の筋をコマごとに決めてから、絵の数字を書かせる
+  const written = await writeScript(deps, purpose, rule, base, scene, examples);
+  const script = written.script;
+  const messages: Anthropic.Message[] = [...written.messages];
   let fix: string | undefined;
   for (let i = 0; i < 2; i++) {
-    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix, feedback, scene, examples) });
+    const msg = await guardedCall(deps, { purpose, label: "作成（動きと経路）", params: makerParams(rule, base, fix, feedback, scene, examples, script) });
     messages.push(msg);
     const out = JSON.parse(textOf(msg)) as { motion: MotionJson; parts: { type: "figure" | "prop"; index: number; statement: string; reason: string }[]; why: string | null };
     const statements = base.slice();
@@ -120,6 +127,7 @@ export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule
       motion: { kind: "keyframes", json: out.motion },
       frames: (out.motion?.keyframes ?? []).filter((k) => k.mark).map((k) => ({ t: k.t })),
       parts: (out.parts ?? []).map((p, j) => ({ id: `p${j + 1}`, target: { type: p.type, index: p.index }, statement: p.statement, reason: p.reason })),
+      script,
     };
     const errs = [...validateCard(card), ...checklistErrors(rule, out.motion)];
     if (!errs.length) return { card, messages };

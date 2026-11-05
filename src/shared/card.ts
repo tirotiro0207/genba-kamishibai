@@ -41,6 +41,19 @@ export interface CardBody {
   /** 3〜4 コマ。png は切り出した PNG の置き場の鍵（まだ切り出していなければ無い） */
   frames: { t: number; png?: string }[];
   parts: CardPart[];
+  /** 脚本（11/5〜。絵の数字の前に書かせた話の筋）。前に作ったカードには無い */
+  script?: CardScript;
+}
+
+/** 脚本（src/shared/make/script.ts）。きっかけ・コマごとの筋・なぜの見せ方 */
+export interface CardScript {
+  trigger: string;
+  frames: { who: string; action: string; viewer: string }[];
+  why_shown: string;
+  avoid: string[];
+  /** 描ける部品だけで見せられるか。false のときは missing に足りない物 */
+  drawable: boolean;
+  missing: string | null;
 }
 
 export type CardMotion = { kind: "keyframes"; json: MotionJson } | { kind: "html"; html: string; duration: number };
