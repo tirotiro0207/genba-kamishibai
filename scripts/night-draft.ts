@@ -21,6 +21,7 @@ import { CARD_MAX_USD, runDrafts, type Steps } from "../src/node/night-draft";
 import { imageBlock, svgToPng } from "../src/node/png";
 import { dayBudgetUsd, MemoryCallLog, sumAllUsd } from "../src/shared/claude";
 import { extractRules, type Rule } from "../src/shared/extract/rules";
+import { addDrawExtra } from "../src/shared/make/lessons";
 import { makeCard } from "../src/shared/make/maker";
 import { pickRules } from "../src/shared/make/pick";
 import { makeWords } from "../src/shared/make/words";
@@ -73,10 +74,10 @@ async function main() {
 
   const base = sub ? claudePClient() : makeClient();
   const drawExtra = opt("--draw-extra") ? readFileSync(opt("--draw-extra")!, "utf-8").trim() : "";
-  // 角度と人形の呼び出し（指示が「人形の姿勢と小物を数字で決める係」で始まるもの）にだけ、足す決まりを付ける
+  // 角度と人形の呼び出し（指示が「人形の姿勢と小物を数字で決める係」で始まるもの）にだけ、足す決まりを付ける。
+  // 教訓はもう作る係に入っているので、addDrawExtra が同じ行と教訓で置き換えた古い行を省いて足す
   const client = drawExtra
-    ? { messages: { create: (p: Parameters<typeof base.messages.create>[0]) => base.messages.create(typeof p.system === "string" && p.system.includes("人形の姿勢と小物を数字で決める係") ? { ...p, system: `${p.system}
-${drawExtra}` } : p) } }
+    ? { messages: { create: (p: Parameters<typeof base.messages.create>[0]) => base.messages.create(typeof p.system === "string" && p.system.includes("人形の姿勢と小物を数字で決める係") ? { ...p, system: addDrawExtra(p.system, drawExtra) } : p) } }
     : base;
   const deps = { client, log };
   const since = new Date().toISOString();

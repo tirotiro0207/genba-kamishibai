@@ -11,10 +11,10 @@ const RULE: OkRule = { kind: "do", text: "盤に触る前に検電する", from:
 const locate = (f: { line: number }) => ({ kind: "doc" as const, doc: "m", page: 30, line: f.line });
 
 describe("正式な流れの作成（034a）", () => {
-  it("OK した 1 項目から、3〜4 コマで部品の全部に経路がある未承認の下書きの中身ができる", async () => {
+  it("OK した 1 項目から、3〜4 コマで部品の全部に経路がある未承認の下書きの中身ができる。既定では脚本の段を呼ばない（11/6）", async () => {
     const client = fakeMaker();
     const log = new MemoryCallLog();
-    const { card } = await makeCard({ client, log }, "app", RULE, locate);
+    const { card, messages } = await makeCard({ client, log }, "app", RULE, locate);
     expect(card.frames.length).toBeGreaterThanOrEqual(3);
     expect(card.frames.length).toBeLessThanOrEqual(4);
     expect(card.statements).toEqual([
@@ -22,7 +22,19 @@ describe("正式な流れの作成（034a）", () => {
       { id: "s2", field: "why", text: "感電を防ぐ", sources: [{ kind: "doc", doc: "m", page: 30, line: 4 }] },
     ]);
     expect(card.parts).toHaveLength(3);
-    // 先に脚本（11/5）: 物語 → コマ割り の 2 段。脚本はカードに残り、コマ割りが絵の数字の段にそのまま渡る
+    // 前の作り方（脚本なし）: 絵の数字の段の 1 回だけ。脚本はカードに残らず、絵の段にも渡らない
+    expect(log.records.map((r) => r.label)).toEqual(["作成（動きと経路）"]);
+    expect(messages).toHaveLength(1);
+    expect(client.scripts).toHaveLength(0);
+    expect(card.script).toBeUndefined();
+    expect(String(client.sent[0].messages[0].content)).not.toContain("脚本");
+  });
+
+  it("options の script: true で、前の日の作り方（脚本 → 絵）も呼べる", async () => {
+    const client = fakeMaker();
+    const log = new MemoryCallLog();
+    const { card } = await makeCard({ client, log }, "app", RULE, locate, undefined, undefined, undefined, { script: true });
+    // 物語 → コマ割り の 2 段。脚本はカードに残り、コマ割りが絵の数字の段にそのまま渡る
     expect(log.records.map((r) => r.label)).toEqual(["脚本（物語）", "脚本（コマ割り）", "作成（動きと経路）"]);
     expect(card.script).toEqual({ ...SCRIPT, story: STORY });
     expect(String(client.scripts[1].messages[0].content)).toContain(`場面 1: ${STORY.beats[0].what}／見る人が分かること: ${STORY.beats[0].viewer}`);
@@ -89,11 +101,16 @@ describe("正式な流れの作成（034a）", () => {
   it("経路の無い部品があれば 1 回だけ書き直させる", async () => {
     const client = fakeMaker({ dropPart: true });
     const { card, messages } = await makeCard({ client, log: new MemoryCallLog() }, "app", RULE, locate);
-    // 脚本 2 回（物語・コマ割り）+ 絵の数字 2 回。脚本は書き直しでは呼び直さない
-    expect(messages).toHaveLength(4);
-    expect(client.scripts).toHaveLength(2);
+    // 既定（脚本なし）は絵の数字 2 回だけ
+    expect(messages).toHaveLength(2);
+    expect(client.scripts).toHaveLength(0);
     expect(String(client.sent[1].messages[0].content)).toMatch(/経路が無い/);
     expect(card.parts).toHaveLength(3);
+    // 脚本ありなら、脚本 2 回（物語・コマ割り）+ 絵の数字 2 回。脚本は書き直しでは呼び直さない
+    const withScript = fakeMaker({ dropPart: true });
+    const again = await makeCard({ client: withScript, log: new MemoryCallLog() }, "app", RULE, locate, undefined, undefined, undefined, { script: true });
+    expect(again.messages).toHaveLength(4);
+    expect(withScript.scripts).toHaveLength(2);
   });
 
   it("元の文に理由が無いとき、AI が書いた理由は ai の文になる。元の文の理由は ai ではない", async () => {

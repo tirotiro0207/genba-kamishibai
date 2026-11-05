@@ -46,8 +46,9 @@ describe("その場で作る（093b）", () => {
     expect(await demoCards()).toBe(before + 1);
     const calls = await env.DB.prepare("SELECT label FROM api_calls WHERE purpose = 'demo' ORDER BY id DESC LIMIT 6").all<{ label: string }>();
     expect(calls.results.map((r) => r.label)).toContain("取り出し（公開デモ）");
-    // 絵の数字の前に脚本を書かせる（11/5）
-    expect(calls.results.map((r) => r.label)).toContain("脚本（コマ割り）");
+    // 前の作り方（脚本なし・11/6）: 脚本の段は呼ばず、絵の数字の段だけ
+    expect(calls.results.map((r) => r.label)).toContain("作成（動きと経路）");
+    expect(calls.results.map((r) => r.label)).not.toContain("脚本（コマ割り）");
   });
 
   it("その日の公開デモの費用が多くても止まらない（1 日の USD の上限は付けない）", async () => {
