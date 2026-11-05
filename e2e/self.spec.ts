@@ -91,7 +91,8 @@ test("① 見せるものを結び、組のとおりにカードと元のペー�
 test("① 画像の読み込みが遅くても、読み込み中は「はじめる」が押せず、その分は分かるまでの時間に入らない", async ({ page, request }) => {
   const t = await crossTrial(request, ["s1", "s2"]);
   // 文の側の画像を 2.5 秒遅らせる。読み込み終わるまで表紙の「はじめる」は押せない
-  await page.route("**/api/t/practice/files/pages/**", async (r) => {
+  // 画像は回の口（trials/<回>/page/<項目>）から読む（11/6）
+  await page.route("**/api/t/practice/trials/*/page/**", async (r) => {
     await new Promise((ok) => setTimeout(ok, 2500));
     await r.continue();
   });

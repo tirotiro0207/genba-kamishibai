@@ -68,3 +68,6 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .self-fit .material.card .read-frame { min-height: 0; display: grid; place-items: center; }
 .self-fit .material.card .read-frame > div, .self-fit .material.card .read-frame svg { width: 100%; height: 100%; display: block; }
 .self-fit .read-words { margin: 0; }
+/* 戻る帯（11/6 作者「ホームに戻る経路」）。作る側の画面はホームへ、新入社員はじぶんの画面へ戻る */
+.back-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.3)); font-size: 16px; }
+.back-bar a { color: inherit; text-decoration: none; font-weight: 600; padding: 6px 0; }

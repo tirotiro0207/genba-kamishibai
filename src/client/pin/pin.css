@@ -22,3 +22,5 @@
 .role-pick-list li svg { width: 16px; height: 16px; }
 @keyframes role-pick-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .role-pick-list { animation: none; } .role-pick-chev { transition: none; } }
+/* 新入社員の ID の段から、役割を選び直す（11/6） */
+.pin .pin-back { align-self: center; background: none; border: 0; color: rgba(255, 255, 255, 0.85); font: inherit; font-size: 16px; text-decoration: underline; padding: 8px; cursor: pointer; }

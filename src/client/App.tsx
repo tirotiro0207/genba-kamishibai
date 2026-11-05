@@ -18,8 +18,9 @@ import { QueueScreen } from "./queue/QueueScreen";
 import { ReadScreen } from "./read/ReadScreen";
 import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
+import { StudentScreen } from "./student/StudentScreen";
 import { StatsBar } from "./stats/StatsBar";
-import { PinGate } from "./pin/TenantPin";
+import { ENTRY, PinGate, roleKey } from "./pin/TenantPin";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
@@ -28,6 +29,28 @@ import { NewTrial } from "./trial/NewTrial";
 import { ForecastScreen, PictureAnswerScreen } from "./trial/PicturesScreen";
 import { SelfScreen } from "./trial/SelfScreen";
 import { TimeScreen } from "./trial/TimeScreen";
+import { TrialsScreen } from "./trial/TrialsScreen";
+
+/** 役割のしるし（テナント.役割.番号.…）から役割を読む。しるしが無ければ null */
+export function myRole(tenant: string): string | null {
+  try {
+    return sessionStorage.getItem(roleKey(tenant))?.split(".")[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function BackBar({ tenant }: { tenant: string }) {
+  const student = myRole(tenant) === "newhire";
+  const to = `#/t/${encodeURIComponent(tenant)}/${student ? "student" : "home"}`;
+  return (
+    <nav className="back-bar" data-testid="back-bar">
+      <a href={to} data-testid="back-home">
+        {student ? "← じぶんの がめん" : "← ホーム"}
+      </a>
+    </nav>
+  );
+}
 
 function useRoute() {
   const [h, setH] = useState(location.hash);
@@ -62,7 +85,8 @@ export function App() {
     else if (r[4] === "answer" && r[5]) body = <AnswerScreen tenant={tenant} id={r[3]} participant={r[5]} />;
     else if (r[4] === "grade" && (r[5] === "g1" || r[5] === "g2")) body = <GradeScreen tenant={tenant} id={r[3]} grader={r[5]} />;
     // 会社のテナントでは、記録アプリも 2 段の PIN で入ってから開く（総点検の 2・3）。回答の記録の口は新入社員の役割では開かないので、作者・監修者・教育担当から選ぶ
-    body = <PinGate tenant={tenant}>{body}</PinGate>;
+    // 新入社員が受ける画面（① と絵のテスト）は、新入社員も選べる（11/6）
+    body = <PinGate tenant={tenant} roles={r[4] === "self" || r[4] === "pictures" ? ENTRY : undefined}>{body}</PinGate>;
   }
   // #/t/<テナント>/audit/<カード> ・ 監査の記録（監修者・教育担当）
   if (r[0] === "t" && r[2] === "audit" && r[3]) body = <AuditScreen tenant={r[1]} cardId={r[3]} />;
@@ -90,12 +114,20 @@ export function App() {
   if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
   // #/t/<テナント>/queue ・ 確認待ちの列（赤から先）と仕分けの一覧の入れ替え（061）
   if (r[0] === "t" && r[2] === "queue") body = <QueueScreen tenant={r[1]} />;
+  // #/t/<テナント>/student ・ 新入社員だけが見る画面（11/6 作者。ID と PIN で入る）
+  if (r[0] === "t" && r[2] === "student") body = <StudentScreen tenant={r[1]} />;
+  // #/t/<テナント>/trials ・ 試しの回の一覧（11/6。ホームから押してたどり着く）
+  if (r[0] === "t" && r[2] === "trials") body = <TrialsScreen tenant={r[1]} />;
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない
   const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign", "pose", "queue"].includes(r[2]);
+  // 戻る帯（11/6 作者「ホームに戻るとか、ボタンを押していって、そこにたどり着く経路」）。ホームと新入社員の画面には出さない。
+  // 新入社員が受けている途中（① と絵のテスト・② の答え）にも出さない（終わりの画面に戻るボタンを置く）
+  const back = r[0] === "t" && !!r[2] && !["home", "student"].includes(r[2]) && !(r[2] === "trial" && ["self", "pictures", "answer"].includes(r[4]));
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
   return (
     <main data-testid="app">
+      {back && <BackBar tenant={r[1]} />}
       {maker && <StatsBar tenant={r[1]} />}
       <Slide k={r.slice(0, 4).join("/")}>{body}</Slide>
     </main>

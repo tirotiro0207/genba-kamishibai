@@ -21,7 +21,7 @@ export function Material({ shown, item, tenant, content, src: given, onShown }: 
   useEffect(() => {
     if (!page || !tenant || given) return;
     let url = "";
-    fileUrl(tenant, page).then(
+    fileUrl(tenant, page, content?.page_src).then(
       (u) => setSrc((url = u)),
       (e: Error) => setErr(e.message),
     );

@@ -10,7 +10,7 @@ import { STANDING } from "../../shared/picto/skeleton";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
-import { STAFF, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
+import { ENTRY, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
 
 interface Card {
@@ -41,18 +41,44 @@ const day = (s: string) => new Date(s.includes("T") ? s : `${s.replace(" ", "T")
 function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
   const [needPin] = useNeedsTenantPin(tenant);
   const [err, setErr] = useState("");
+  // 新入社員を押すと、ID を入れる段に進む（11/6 作者）。PIN の無いテナント（練習）でも同じ順にする
+  const [asStudent, setAsStudent] = useState(false);
+  const [student, setStudent] = useState("");
   if (needPin === null) return <p>読み込み中…</p>;
-  if (needPin) return <TenantPin tenant={tenant} roles={STAFF} onDone={onDone} />;
-  const go = async (value: string) => {
+  if (needPin) return <TenantPin tenant={tenant} roles={ENTRY} onDone={onDone} />;
+  const go = async (value: string, id?: string) => {
     const [role, slot] = value.split(".");
     try {
-      const { token } = await req<{ token: string }>(tenant, "/login", { method: "POST", body: JSON.stringify({ role, slot: Number(slot) }) });
+      const { token } = await req<{ token: string }>(tenant, "/login", { method: "POST", body: JSON.stringify({ role, slot: Number(slot), ...(id ? { student: id } : {}) }) });
       sessionStorage.setItem(`role:${tenant}`, token);
       onDone();
     } catch (e) {
       setErr((e as Error).message);
     }
   };
+  if (asStudent)
+    return (
+      <form
+        className="home-pick"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void go("newhire.1", student.trim());
+        }}
+        data-testid="home-pick-student"
+      >
+        <p>新入社員の ID を入れてください</p>
+        <input value={student} onChange={(e) => setStudent(e.target.value.replace(/\s/g, ""))} placeholder="student_V_1" autoCapitalize="off" autoComplete="off" spellCheck={false} data-testid="home-student-id" />
+        <div className="verdicts">
+          <button type="button" className="pick" onClick={() => setAsStudent(false)}>
+            ← 役割を選び直す
+          </button>
+          <button className="pick go-pick" disabled={!student.trim()} data-testid="home-student-enter">
+            入る
+          </button>
+        </div>
+        {err && <p className="err">{err}</p>}
+      </form>
+    );
   return (
     <section className="home-pick" data-testid="home-pick">
       <p>どの役で入りますか</p>
@@ -62,6 +88,9 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
             {r.label}
           </button>
         ))}
+        <button className="pick" onClick={() => setAsStudent(true)} data-testid="home-as-newhire-1">
+          新入社員
+        </button>
       </div>
       {err && <p className="err">{err}</p>}
     </section>
@@ -183,6 +212,12 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
           </button>
         )}
       </div>
+      {/* ほかの見方（11/6 作者「ボタンを押していって、そこにたどり着く経路」） */}
+      <div className="home-more" data-testid="home-more-card">
+        <a className="pick" href={t(tenant, `route/${card.id}`)}>経路（部品 → 文 → 元の文）</a>
+        <a className="pick" href={t(tenant, `fold/${card.id}`)}>折りたたみ</a>
+        <a className="pick" href={t(tenant, `audit/${card.id}`)}>記録</a>
+      </div>
       {stopping && <StopDialog card={card} onCancel={cancel} onStop={(r) => move("stopped", r)} />}
       {err && <p className="err">{err}</p>}
     </div>
@@ -278,6 +313,11 @@ export function HomeScreen({ tenant }: { tenant: string }) {
   }, [tenant, me?.role]);
   if (!me) return <p>読み込み中…</p>;
   const role = me.role;
+  // 新入社員は、新入社員だけの画面へ（11/6 作者）
+  if (role === "newhire") {
+    location.replace(studentHome(tenant));
+    return <p>読み込み中…</p>;
+  }
   if (!role || !(role in ROLE_NAME)) return <RolePick tenant={tenant} onDone={check} />;
   // 自分のキャラクターをまだ持っていない人は、ホームの前にキャラクターを作る画面を 1 回通る
   if (!avatar) return <AvatarSetup tenant={tenant} role={role} onDone={setAvatar} />;
@@ -299,7 +339,16 @@ export function HomeScreen({ tenant }: { tenant: string }) {
         </button>
       </div>
       {tab === "cards" ? (
-        <CardsTab tenant={tenant} role={role} />
+        <>
+          {/* ほかの画面（11/6 作者）。ホームから押してたどり着けるように */}
+          <nav className="home-more" aria-label="ほかの画面" data-testid="home-more">
+            <a className="pick" href={t(tenant, "queue")} data-testid="home-go-queue">確認待ち</a>
+            <a className="pick" href={t(tenant, "issue")} data-testid="home-go-issue">発行の管理</a>
+            <a className="pick" href={t(tenant, "trials")} data-testid="home-go-trials">試しの回</a>
+            <a className="pick" href={t(tenant, "make")} data-testid="home-go-make">資料から作る</a>
+          </nav>
+          <CardsTab tenant={tenant} role={role} />
+        </>
       ) : (
         <>
           <AvatarSetup key={JSON.stringify(avatar)} tenant={tenant} role={role} initial={avatar} edit onDone={(a) => { setAvatar(a); setSaved(true); }} />

@@ -180,6 +180,9 @@ export function PictureAnswerScreen({ tenant, id, participant }: { tenant: strin
         <p className="done" data-testid="pic-done">
           絵の答えは全部済み。ありがとうございました
         </p>
+        <a className="big" href={`#/t/${encodeURIComponent(tenant)}/student`} data-testid="pic-back">
+          もどる
+        </a>
       </div>
     );
   const submit = (e: FormEvent) => {

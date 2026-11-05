@@ -34,7 +34,9 @@ async function enter(p: Page, T: string, path: string, role: string | null, tena
   expect(bad, "PIN の画面の前の 4xx").toEqual([]);
   await p.getByTestId("tenant-pin-input").fill(tenantPin);
   await p.getByTestId("tenant-pin-enter").click();
-  await expect(p.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
+  // 閲覧の画面（新入社員）は、ID と PIN を入れる段になる（11/6）
+  await expect(p.getByTestId("tenant-pin")).toHaveAttribute("data-step", path === "read" ? "student" : "role");
+  if (path === "read") await p.getByTestId("tenant-pin-student").fill("student_J_1");
   if (role) {
     await p.getByTestId("tenant-pin-role").click();
     await p.getByTestId(`tenant-pin-role-${role}`).click();

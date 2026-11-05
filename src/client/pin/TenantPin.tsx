@@ -69,6 +69,12 @@ export const STAFF = [
   { value: "supervisor.2", label: "監修者 2" },
   { value: "trainer.1", label: "教育担当" },
 ] as const;
+/** 新入社員（11/6 作者）。選んで「次へ」を押すと、ID と PIN を入れる段に進む */
+export const NEWHIRE = [{ value: "newhire.1", label: "新入社員" }] as const;
+/** 入口（ホーム）で選べる役割。作る側と新入社員 */
+export const ENTRY = [...STAFF, ...NEWHIRE] as const;
+/** 新入社員だけが見る画面 */
+export const studentHome = (tenant: string) => `#/t/${encodeURIComponent(tenant)}/student`;
 
 const has = (key: string) => {
   try {
@@ -80,8 +86,11 @@ const has = (key: string) => {
 
 /** roles に選べる役割（value は「役割.番号」）。1 つなら選ぶ欄を出さない */
 export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; onDone: () => void; roles?: readonly { value: string; label: string }[] }) {
-  const [step, setStep] = useState<"tenant" | "role">(() => (has(tokenKey(tenant)) ? "role" : "tenant"));
+  const [step, setStep] = useState<"tenant" | "role" | "student">(() => (has(tokenKey(tenant)) ? (roles.length === 1 && roles[0].value.startsWith("newhire") ? "student" : "role") : "tenant"));
   const [who, setWho] = useState<string>(roles[0].value);
+  // 新入社員の ID（11/6 作者）。student_V_1 の形。前もって作らず、入ったときにその場で決まる
+  const [student, setStudent] = useState("");
+  const isStudent = who.startsWith("newhire");
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -98,11 +107,11 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
       else {
         const [role, slot] = who.split(".");
         headers.authorization = `Bearer ${sessionStorage.getItem(tokenKey(tenant)) ?? ""}`;
-        res = await fetch(`${base}/login`, { method: "POST", headers, body: JSON.stringify({ role, slot: Number(slot), pin }) });
+        res = await fetch(`${base}/login`, { method: "POST", headers, body: JSON.stringify({ role, slot: Number(slot), pin, ...(isStudent ? { student: student.trim() } : {}) }) });
       }
       const b = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
       // テナントの入室の期限が切れていたら、テナントの PIN からやり直す
-      if (step === "role" && res.status === 401 && b.error?.includes("PIN で入って")) {
+      if (step !== "tenant" && res.status === 401 && b.error?.includes("PIN で入って")) {
         sessionStorage.removeItem(tokenKey(tenant));
         setStep("tenant");
         throw new Error("入り直してください");
@@ -114,7 +123,7 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
         throw new Error("この端末では入ったしるしを残せない");
       }
       setPin("");
-      if (step === "tenant" && !has(roleKey(tenant))) setStep("role");
+      if (step === "tenant" && !has(roleKey(tenant))) setStep(roles.length === 1 && isStudent ? "student" : "role");
       else onDone();
     } catch (x) {
       setErr((x as Error).message);
@@ -123,25 +132,52 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
     }
   }
 
+  // 新入社員を選んで「次へ」を押すと、ID と PIN の段へ（11/6 作者「生徒は押したら次のページに、生徒の ID、そして PIN」）
+  const next = (e: FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    setPin("");
+    setStep("student");
+  };
+
   // 後ろは入口と同じ顔のカードの背景（11/5 作者「あれをデフォルトに」）。フォームは画面の真ん中
   return (
     <>
     <Backdrop />
-    <form className="pin" onSubmit={enter} data-testid="tenant-pin" data-step={step}>
-      <h1>{step === "tenant" ? "会社のテナントに入る" : "役割で入る"}</h1>
+    <form className="pin" onSubmit={step === "role" && isStudent ? next : enter} data-testid="tenant-pin" data-step={step}>
+      <h1>{step === "tenant" ? "会社のテナントに入る" : step === "student" ? "新入社員で入る" : "役割で入る"}</h1>
       {step === "role" && roles.length > 1 && (
         <div className="pin-field">
           <span className="pin-cap">役割</span>
           <RolePicker roles={roles} value={who} onChange={setWho} />
         </div>
       )}
-      <label>
-        {step === "tenant" ? "PIN" : `${roles.find((r) => r.value === who)?.label ?? ""}の PIN`}
-        <input value={pin} onChange={(e) => setPin(e.target.value)} type="password" inputMode="numeric" autoComplete="off" data-testid="tenant-pin-input" />
-      </label>
-      <button className="big go" disabled={busy || !pin} data-testid="tenant-pin-enter">
-        入る
-      </button>
+      {step === "student" && (
+        <label>
+          ID（れい: student_V_1）
+          <input value={student} onChange={(e) => setStudent(e.target.value.replace(/\s/g, ""))} autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} placeholder="student_V_1" data-testid="tenant-pin-student" />
+        </label>
+      )}
+      {!(step === "role" && isStudent) && (
+        <label>
+          {step === "tenant" ? "PIN" : step === "student" ? "PIN" : `${roles.find((r) => r.value === who)?.label ?? ""}の PIN`}
+          <input value={pin} onChange={(e) => setPin(e.target.value)} type="password" inputMode="numeric" autoComplete="off" data-testid="tenant-pin-input" />
+        </label>
+      )}
+      {step === "role" && isStudent ? (
+        <button className="big go" data-testid="tenant-pin-next">
+          次へ
+        </button>
+      ) : (
+        <button className="big go" disabled={busy || !pin || (step === "student" && !student.trim())} data-testid="tenant-pin-enter">
+          入る
+        </button>
+      )}
+      {step === "student" && roles.length > 1 && (
+        <button type="button" className="pin-back" onClick={() => setStep("role")} data-testid="tenant-pin-back">
+          ← 役割を選び直す
+        </button>
+      )}
       {err && <p className="err">{err}</p>}
     </form>
     </>

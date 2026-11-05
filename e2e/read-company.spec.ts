@@ -29,9 +29,10 @@ test("会社のテナントの閲覧画面は、テナントの PIN と新入社
   await page.getByTestId("tenant-pin-input").fill(tenantPin);
   await page.waitForTimeout(500);
   await page.getByTestId("tenant-pin-enter").click();
-  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
-  // 新入社員の画面では役割を選ぶ欄を出さない
+  // 新入社員の画面では役割を選ぶ欄を出さず、ID と PIN を入れる段になる（11/6）
+  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "student");
   await expect(page.getByTestId("tenant-pin-role")).toHaveCount(0);
+  await page.getByTestId("tenant-pin-student").fill("student_V_1");
   await page.getByTestId("tenant-pin-input").fill(newhirePin);
   await page.waitForTimeout(500);
   await page.getByTestId("tenant-pin-enter").click();

@@ -7,6 +7,7 @@ import { latestForecasts, pictureOrder, PICTURES_MAX } from "../shared/picture-o
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import { fileKey } from "./files";
+import { normalizeStudent, type PeopleVars, studentGroup } from "./people";
 import type { TenantVars } from "./tenant";
 
 export const trials = new Hono<{ Bindings: Env; Variables: TenantVars }>();
@@ -19,11 +20,23 @@ interface TrialRow {
 }
 
 async function getTrial(db: D1Database, tenantId: string, id: string) {
-  return db.prepare("SELECT id, seed, participants, created_at FROM trials WHERE id = ? AND tenant_id = ?").bind(id, tenantId).first<TrialRow>();
+  const t = await db.prepare("SELECT id, seed, participants, created_at FROM trials WHERE id = ? AND tenant_id = ?").bind(id, tenantId).first<TrialRow>();
+  return t ? withJoins(db, t) : null;
+}
+
+/** その場で加わった人（trial_joins）を、回の参加者の後ろに組つきで足す（11/6）。回の行そのものは書き換えない */
+async function withJoins(db: D1Database, t: TrialRow): Promise<TrialRow> {
+  const p = JSON.parse(t.participants) as Stored;
+  if (Array.isArray(p)) return t;
+  const { results } = await db.prepare("SELECT participant, grp, set_no FROM trial_joins WHERE trial_id = ? ORDER BY created_at, rowid").bind(t.id).all<{ participant: string; grp: string; set_no: 1 | 2 }>();
+  if (!results.length) return t;
+  const have = new Set(p.people.map((x) => x.id));
+  const people = [...p.people, ...results.filter((r) => !have.has(r.participant)).map((r) => ({ id: r.participant, group: r.grp, set: r.set_no }))];
+  return { ...t, participants: JSON.stringify({ ...p, people }) };
 }
 
 /** 交差の回（11/5 作者）は participants に {design, people} を入れる。前からの回は ID の並び */
-type Stored = string[] | { design: "cross"; people: { id: string; group: string }[] };
+type Stored = string[] | { design: "cross"; people: { id: string; group: string; set?: 1 | 2 }[] };
 export const participantIds = (raw: string) => {
   const p = JSON.parse(raw) as Stored;
   return Array.isArray(p) ? p : p.people.map((x) => x.id);
@@ -32,8 +45,25 @@ export const participantIds = (raw: string) => {
 const view = (t: TrialRow) => {
   const p = JSON.parse(t.participants) as Stored;
   if (Array.isArray(p)) return { id: t.id, seed: t.seed, created_at: t.created_at, design: "order" as const, participants: p, assignments: assign(t.seed, p) };
-  return { id: t.id, seed: t.seed, created_at: t.created_at, design: "cross" as const, participants: p.people.map((x) => x.id), assignments: crossAssign(t.seed, p.people) };
+  // その場で加わった人（11/6・set を持つ）は加わったときの組のまま。前もって並べた人は今までどおり種から分ける
+  const base = new Map(crossAssign(t.seed, p.people.filter((x) => !x.set)).map((a) => [a.participant, a]));
+  const assignments = p.people.map((x) => base.get(x.id) ?? fixedSet(x.id, x.group, x.set!));
+  return { id: t.id, seed: t.seed, created_at: t.created_at, design: "cross" as const, participants: p.people.map((x) => x.id), assignments };
 };
+
+const fixedSet = (participant: string, group: string, set: 1 | 2) => ({ participant, group, set, A: [set === 1 ? "card" : "text"] as ("card" | "text")[], B: [set === 1 ? "text" : "card"] as ("card" | "text")[] });
+
+/**
+ * その場で加わる人の組（11/6 作者）。同じ国籍の中で人数の少ない組に入れ、同じ数なら種と国籍と人数から決める。
+ * 前に加わった人の組は変えない（答えを入れ始めた人の見せるものが変わらないように）
+ */
+export function joinSet(seed: string, group: string, sets: (1 | 2)[]): 1 | 2 {
+  const one = sets.filter((s) => s === 1).length;
+  const two = sets.length - one;
+  if (one !== two) return one < two ? 1 : 2;
+  const coin = [...`${seed}:${group}:${sets.length}`].reduce((a, ch) => (Math.imul(a, 31) + ch.charCodeAt(0)) >>> 0, 7);
+  return coin % 2 === 0 ? 1 : 2;
+}
 
 trials.post("/", async (c) => {
   const b = await c.req.json<{ participants?: unknown; seed?: unknown; design?: unknown }>().catch(() => ({}) as { participants?: unknown; seed?: unknown; design?: unknown });
@@ -43,7 +73,8 @@ trials.post("/", async (c) => {
   const people = cross && raw ? raw.map((x) => (x && typeof x === "object" ? (x as { id?: unknown; group?: unknown }) : {})) : [];
   const ps = cross ? people.map((x) => x.id) : raw;
   const okId = (p: unknown) => typeof p === "string" && p.length > 0 && p.length <= 40;
-  if (!ps || ps.length < 1 || ps.length > 200 || !ps.every(okId) || new Set(ps).size !== ps.length) {
+  // 交差の回は参加者 0 人でも作れる（11/6。新入社員が ID を入れてその場で加わる）
+  if (!ps || ps.length < (cross ? 0 : 1) || ps.length > 200 || !ps.every(okId) || new Set(ps).size !== ps.length) {
     return c.json({ error: "participants は重ならない ID の並び（1〜200）" }, 400);
   }
   if (cross && !people.every((x) => typeof x.group === "string" && x.group.trim().length > 0 && x.group.length <= 40)) return c.json({ error: "交差の回は、参加者ごとに国籍（group）が要る" }, 400);
@@ -52,6 +83,50 @@ trials.post("/", async (c) => {
   const id = crypto.randomUUID();
   await c.env.DB.prepare("INSERT INTO trials (id, tenant_id, seed, participants) VALUES (?, ?, ?, ?)").bind(id, c.var.tenant.id, seed, JSON.stringify(stored)).run();
   return c.json(view((await getTrial(c.env.DB, c.var.tenant.id, id))!), 201);
+});
+
+/** 回の一覧（11/6・ホームからたどる）。新しい順 */
+trials.get("/", async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT id, seed, participants, created_at FROM trials WHERE tenant_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50").bind(c.var.tenant.id).all<TrialRow>();
+  const rows = await Promise.all(results.map((t) => withJoins(c.env.DB, t)));
+  return c.json({ trials: rows.map((t) => ({ id: t.id, created_at: t.created_at, design: view(t).design, participants: participantIds(t.participants).length })) });
+});
+
+/** 新入社員が受ける今の回（11/6）。いちばん新しい交差の回。無ければ null */
+trials.get("/open", async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT id, seed, participants, created_at FROM trials WHERE tenant_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50").bind(c.var.tenant.id).all<TrialRow>();
+  const t = results.find((x) => view(x).design === "cross");
+  if (!t) return c.json({ trial: null });
+  const material = !!(await readMaterial(c.env, c.var.tenant.id, t.id));
+  const pictures = (await pictureCards(c.env.DB, t.id)).length;
+  return c.json({ trial: { id: t.id, created_at: t.created_at, material, pictures } });
+});
+
+/**
+ * 回に加わる（11/6 作者）。新入社員は入ったときの ID（student_V_1 など）で加わり、国籍は ID の頭文字から決まる。
+ * もう加わっていれば、そのときの組を返す（何度押してもよい）。作る側は participant を送って加えられる
+ */
+trials.post("/:id/join", async (c) => {
+  const person = (c.var as PeopleVars).person;
+  const b = await c.req.json<{ participant?: unknown }>().catch(() => ({}) as { participant?: unknown });
+  const me = person?.role === "newhire" ? (person.student ?? null) : normalizeStudent(b.participant);
+  if (!me) return c.json({ error: "ID は student_V_1 の形" }, 400);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+    if (!t) return c.json({ error: "回が無い" }, 404);
+    const p = JSON.parse(t.participants) as Stored;
+    if (Array.isArray(p)) return c.json({ error: "交差の回ではない" }, 400);
+    const v = view(t) as { assignments: { participant: string; group: string; set: 1 | 2 }[] };
+    const had = v.assignments.find((a) => a.participant === me);
+    if (had) return c.json({ participant: me, group: had.group, set: had.set });
+    if (p.people.length >= 200) return c.json({ error: "この回は 200 人まで" }, 409);
+    const group = studentGroup(me);
+    const set = joinSet(t.seed, group, v.assignments.filter((a) => a.group === group).map((a) => a.set));
+    // 同じ人が同時に押したときは 1 行だけ入る（主キー）。入らなければ読み直して、入った方の組を返す
+    const res = await c.env.DB.prepare("INSERT OR IGNORE INTO trial_joins (trial_id, tenant_id, participant, grp, set_no) VALUES (?, ?, ?, ?, ?)").bind(t.id, c.var.tenant.id, me, group, set).run();
+    if (res.meta.changes) return c.json({ participant: me, group, set }, 201);
+  }
+  return c.json({ error: "加われなかった。もう一度押す" }, 409);
 });
 
 trials.get("/:id", async (c) => {
@@ -86,7 +161,11 @@ trials.post("/:id/responses", async (c) => {
 trials.get("/:id/responses", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
-  const { results } = await c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer, created_at FROM responses WHERE trial_id = ? ORDER BY seq").bind(t.id).all();
+  // 新入社員には自分の答えだけを返す（11/6）
+  const me = (c.var as PeopleVars).person?.role === "newhire" ? ((c.var as PeopleVars).person?.student ?? "") : null;
+  const { results } = me === null
+    ? await c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer, created_at FROM responses WHERE trial_id = ? ORDER BY seq").bind(t.id).all()
+    : await c.env.DB.prepare("SELECT seq, participant, item, shown, ms, answer, created_at FROM responses WHERE trial_id = ? AND participant = ? ORDER BY seq").bind(t.id, me).all();
   return c.json({ responses: results });
 });
 
@@ -309,6 +388,22 @@ trials.put("/:id/material", async (c) => {
 });
 
 // その参加者に見せるもの。カードの側は絵とやさしい日本語だけ（文は返さない）、文の側はページの画像の置き場の名前だけ
+/** ① で、その参加者に「文」として見せるページの画像（11/6）。その参加者のその項目が文の側のときだけ返す */
+trials.get("/:id/page/:item", async (c) => {
+  const item = c.req.param("item");
+  if (item !== "A" && item !== "B") return c.json({ error: "項目は A か B" }, 400);
+  const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const a = view(t).assignments.find((x) => x.participant === c.req.query("participant"));
+  if (!a) return c.json({ error: "この回の参加者ではない" }, 400);
+  if (!a[item].includes("text")) return c.json({ error: "この参加者には、この項目のページを見せない" }, 403);
+  const cfg = await readMaterial(c.env, c.var.tenant.id, t.id);
+  if (!cfg) return c.json({ error: "① で見せるもの（カードとページの画像）がまだ結ばれていない" }, 409);
+  const obj = await c.env.FILES.get(`t/${c.var.tenant.id}/${cfg[item].page}`);
+  if (!obj) return c.json({ error: "ページの画像が無い" }, 404);
+  return new Response(obj.body, { headers: { "content-type": obj.httpMetadata?.contentType ?? "application/octet-stream", "cache-control": "private, no-store" } });
+});
+
 trials.get("/:id/material", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
@@ -321,7 +416,8 @@ trials.get("/:id/material", async (c) => {
   const items = await Promise.all(
     (["A", "B"] as const).map(async (item) => {
       const shown = a[item][0];
-      if (shown === "text") return { item, shown, page: cfg[item].page };
+      // 文の側の画像は、この回の口から読む（11/6。新入社員は資料の置き場を読めないので、自分に見せるページだけをここで渡す）
+      if (shown === "text") return { item, shown, page: cfg[item].page, page_src: `trials/${t.id}/page/${item}?participant=${encodeURIComponent(p)}` };
       const row = await c.env.DB.prepare("SELECT body FROM cards WHERE id = ? AND tenant_id = ?").bind(cfg[item].card, c.var.tenant.id).first<{ body: string }>();
       const body = JSON.parse(row!.body) as { motion: unknown; words?: { ja: string } };
       // 言葉はやさしい日本語だけ（11/5 作者）

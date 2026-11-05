@@ -65,3 +65,9 @@
   .home-detail { padding-left: 14px; }
   .home-date { width: 60px; }
 }
+/* 試しの回の一覧で、回を開いたときのリンク（11/6） */
+.trials-links { margin: 0; padding: 0 14px 12px; line-height: 2.2; }
+/* ホームの「ほかの画面」（11/6）と、カードを開いた中の「ほかの見方」 */
+.home-more { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-more a { text-decoration: none; }
+.trials-new { display: block; text-decoration: none; }

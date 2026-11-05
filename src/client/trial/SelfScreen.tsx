@@ -44,7 +44,7 @@ async function preload(tenant: string, items: MaterialItem[]) {
   const urls: Record<string, string> = {};
   for (const x of items) {
     if (x.shown !== "text" || !x.page) continue;
-    const u = await fileUrl(tenant, x.page);
+    const u = await fileUrl(tenant, x.page, x.page_src);
     const img = new Image();
     img.src = u;
     await img.decode();
@@ -154,6 +154,9 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
         <p className="done" data-testid="self-done">
           おわりです。ありがとうございました
         </p>
+        <a className="big" href={`#/t/${encodeURIComponent(tenant)}/student`} data-testid="self-back">
+          もどる
+        </a>
       </div>
     );
 

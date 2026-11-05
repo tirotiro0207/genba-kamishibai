@@ -11,7 +11,7 @@ import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
-import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate } from "./people";
+import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate, trialsGate } from "./people";
 import { issue } from "./issue";
 import { queue } from "./queue";
 import { read } from "./read";
@@ -65,7 +65,10 @@ app.use("/api/t/:tenant/cards", cardsGate);
 app.use("/api/t/:tenant/cards/*", cardsGate);
 app.use("/api/t/:tenant/audit/*", auditGate);
 // 新入社員が使わない口（052）。データを戻す・回答の記録・○× の組・確認待ちの列と仕分け（061）は、新入社員の役割では開かない
-for (const part of ["reset", "trials", "pairs", "queue", "sort"]) {
+// 試しの回（trials）は、ID を持って入った新入社員にだけ自分の分の口を開く（11/6・trialsGate）
+app.use("/api/t/:tenant/trials", trialsGate);
+app.use("/api/t/:tenant/trials/*", trialsGate);
+for (const part of ["reset", "pairs", "queue", "sort"]) {
   app.use(`/api/t/:tenant/${part}`, noNewhireGate);
   app.use(`/api/t/:tenant/${part}/*`, noNewhireGate);
 }

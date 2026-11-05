@@ -43,10 +43,12 @@ export function NewTrial({ tenant }: { tenant: string }) {
         <input value={seed} onChange={(e) => setSeed(e.target.value)} data-testid="new-seed" />
       </label>
       {/* 参加者の ID が空か重なっていれば押せない（総点検の 4） */}
-      <button className="big" disabled={!list.length || dup || noGroup} data-testid="new-submit">
+      {/* 交差の回は 0 人でも作れる（11/6 作者）。新入社員が ID で入り、その場で加わる */}
+      <button className="big" disabled={(!cross && !list.length) || dup || noGroup} data-testid="new-submit">
         回を作る
       </button>
-      {!list.length && <p className="hint">参加者の ID を 1 つ以上書くと、回を作れます</p>}
+      {!list.length && !cross && <p className="hint">参加者の ID を 1 つ以上書くと、回を作れます</p>}
+      {cross && <p className="hint">空のままでも作れます。新入社員が ID（student_V_1 の形）で入ると、その場でこの回に加わり、国籍ごとに組 1・組 2 へ分かれます</p>}
       {dup && <p className="err">同じ参加者の ID が 2 回あります</p>}
       {noGroup && <p className="err">国籍が書かれていない行があります</p>}
       {err && <p className="err">{err}</p>}

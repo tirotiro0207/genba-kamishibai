@@ -104,6 +104,8 @@ export interface MaterialItem {
   shown: Shown;
   /** 文の側: ページの画像の置き場の名前 */
   page?: string;
+  /** 文の側: その参加者だけが読めるページの画像の口（11/6。新入社員は置き場を読めない） */
+  page_src?: string;
   /** カードの側: 絵とやさしい日本語だけ */
   card?: { motion: CardMotion; words: { ja: string } | null };
 }
@@ -115,8 +117,8 @@ export const putMaterial = (tenant: string, id: string, cfg: Record<"A" | "B", {
   req<unknown>(`${base(tenant)}/${id}/material`, { method: "PUT", body: JSON.stringify(cfg) });
 
 /** 置き場の画像を、しるしを付けて読み、画面で使える URL にする（img にはしるしを付けられないため） */
-export async function fileUrl(tenant: string, path: string): Promise<string> {
-  const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/files/${path}`, { headers: authHeaders(tenant) });
+export async function fileUrl(tenant: string, path: string, src?: string): Promise<string> {
+  const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/${src ?? `files/${path}`}`, { headers: authHeaders(tenant) });
   if (!res.ok) throw new Error(`ページの画像が読めない（HTTP ${res.status}）`);
   return URL.createObjectURL(await res.blob());
 }
@@ -138,3 +140,16 @@ export interface SummaryCell {
 }
 export const getSummary = (tenant: string, id: string) =>
   req<{ all: SummaryCell[]; groups: { group: string; people: number; cells: SummaryCell[] }[]; hidden: number }>(`${base(tenant)}/${id}/summary`);
+
+// 回の一覧・今の回・その場で加わる（11/6 作者）。新入社員は ID で入り、いちばん新しい交差の回に自分で加わる
+export interface TrialSummary {
+  id: string;
+  created_at: string;
+  design: "order" | "cross";
+  participants: number;
+}
+export const listTrials = (tenant: string) => req<{ trials: TrialSummary[] }>(base(tenant)).then((r) => r.trials);
+export const openTrial = (tenant: string) =>
+  req<{ trial: { id: string; created_at: string; material: boolean; pictures: number } | null }>(`${base(tenant)}/open`).then((r) => r.trial);
+export const joinTrial = (tenant: string, id: string, participant?: string) =>
+  req<{ participant: string; group: string; set: 1 | 2 }>(`${base(tenant)}/${id}/join`, { method: "POST", body: JSON.stringify(participant ? { participant } : {}) });
