@@ -57,3 +57,12 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .stats { margin: 0 auto 12px; max-width: 720px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 15px; font-variant-numeric: tabular-nums; }
 .stats b { font-size: 20px; }
 .stats-danger { color: var(--err); font-weight: 700; }
+/* ① の見ているあいだ（11/6）: 見せるものと「分かった」を 1 画面に収める。高さは SelfScreen の useFitHeight が --fit-h に入れる */
+.answer.self-view { height: var(--fit-h, calc(100dvh - 32px)); box-sizing: border-box; }
+.self-view .stage { flex: 1; min-height: 0; }
+.self-view .material.filled { width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.self-view .material-page { flex: 1; min-height: 0; width: auto; max-width: 100%; height: 100%; object-fit: contain; }
+.self-view .material.card .read-frames { flex: 1; min-height: 0; width: auto; max-width: 100%; aspect-ratio: 1; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.self-view .material.card .read-frame { min-height: 0; display: grid; place-items: center; }
+.self-view .material.card .read-frame > div, .self-view .material.card .read-frame svg { width: 100%; height: 100%; display: block; }
+.self-view .read-words { margin: 0; }

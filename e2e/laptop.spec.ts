@@ -61,8 +61,7 @@ test("ノートパソコン: 表紙が抜けきった時から数える（マウ
   for (let k = 0; k < 2; k++) {
     await expect(page.getByTestId("self-start")).toBeEnabled();
     await expect(page.getByTestId("self-start")).toHaveText("はじめる");
-    // 今の見せ方では、文の側の「はじめる」が 1280×720 の画面の外（下）に出る。スクロールしてから押す（11/5 の確かめで分かった。直すかは作者が決める）
-    await page.getByTestId("self-start").scrollIntoViewIfNeeded();
+    // 11/6 から見せるものを画面の高さに収めたので、スクロールせずに押せる
     const box = (await page.getByTestId("self-start").boundingBox())!;
     const before = await page.evaluate(() => performance.now());
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -78,8 +77,8 @@ test("ノートパソコン: 表紙が抜けきった時から数える（マウ
 });
 
 // 13 インチ（1280×800 ほど）と 15 インチ（1366×768・1920×1080）の画面で、見せるものと「分かった」が 1 画面に収まるか。
-// 収まらないときは数だけを記録に出す（見せ方を直すかは作者が決める）
-for (const vp of [{ width: 1280, height: 800 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
+// 11/6 から画面の高さに合わせて縮めるので、カードの側も文の側も、見せるものの下の端と「分かった」の下の端が画面の高さ以内になる
+for (const vp of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }, { width: 1024, height: 768 }]) {
   test(`ノートパソコン: ${vp.width}×${vp.height} で見せるものが 1 画面に収まるか`, async ({ page, request }) => {
     await page.setViewportSize(vp);
     const t = await crossTrial(request, [`v${vp.width}a`, `v${vp.width}b`]);
@@ -94,6 +93,13 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 1366, height: 768 }, { 
       const b = (await m.boundingBox())!;
       const g = (await page.getByTestId("self-got").boundingBox())!;
       fit[shown] = { bottom: Math.round(b.y + b.height), got: Math.round(g.y + g.height) };
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      expect(fit[shown].bottom).toBeLessThanOrEqual(vp.height);
+      expect(fit[shown].got).toBeLessThanOrEqual(vp.height);
+      // 縮めすぎない: カードの絵もページの画像も、画面の高さの半分より大きく見える
+      const big = shown === "card" ? page.locator(".read-frames") : page.locator(".material-page");
+      expect((await big.boundingBox())!.height).toBeGreaterThan(vp.height * 0.5);
+      if (process.env.FIT_SHOTS) await page.screenshot({ path: `${process.env.FIT_SHOTS}/fit-${vp.width}x${vp.height}-${shown}.png` });
       await page.getByTestId("self-got").click();
       await page.getByTestId("self-text-ja").fill("x");
       await page.getByTestId("self-submit").click();

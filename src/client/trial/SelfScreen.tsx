@@ -16,6 +16,28 @@ const blank: AnswerFields = { ja: "", own: "" };
 /** 表紙が抜ける長さ。カードの側も文の側も同じ（app.css の .cover と合わせる） */
 export const LIFT_MS = 350;
 
+/**
+ * 見ているあいだは、見せるものと「分かった」をスクロールせずに 1 画面に収める（11/6）。
+ * 画面の高さから画面の中の位置を引いた高さを --fit-h に入れ、カードもページの画像もその中に縮めて収める（ブラウザの拡大はそのまま使える）。
+ * ページの側だけスクロールが要ると、その分が「分かるまでの時間」に入り、カードと比べられなくなるため
+ */
+function useFitHeight(on: boolean) {
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return;
+    const fit = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.setProperty("--fit-h", `${Math.max(320, window.innerHeight - top - 16)}px`);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+    // 読み込みのあとに form が出てくるので、描くたびに測り直す
+  });
+  return ref;
+}
+
 /** 文の側のページの画像を、先に全部読み込んで描ける形にしておく */
 async function preload(tenant: string, items: MaterialItem[]) {
   const urls: Record<string, string> = {};
@@ -77,6 +99,7 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
   const [text, setText] = useState<AnswerFields>(blank);
   const [err, setErr] = useState("");
   const t0 = useRef(0);
+  const fitRef = useFitHeight(ms === null);
   useEffect(() => {
     getTrial(tenant, id).then(setTrial, (e: Error) => setErr(e.message));
     listResponses(tenant, id).then(
@@ -145,7 +168,7 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
 
   const n = items.findIndex((x) => x.item === cur.item) + 1;
   return (
-    <form className="answer" onSubmit={submit} data-testid="self" data-item={cur.item}>
+    <form ref={fitRef} className={ms === null ? "answer self-view" : "answer"} onSubmit={submit} data-testid="self" data-item={cur.item}>
       {banner}
       <p className="who">
         {n} / {items.length}
