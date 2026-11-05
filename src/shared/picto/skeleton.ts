@@ -11,7 +11,7 @@ export type Bone = (typeof BONES)[number];
  * *_upper: 真下を 0 として前へ（腕は 180 で真上）/ arm_*_lower: ひじの曲げ（正で前へ曲げる）/ leg_*_lower: ひざの曲げ（負で後ろへ曲げる）
  */
 export const BONE_RANGE: Record<Bone, [number, number]> = {
-  torso: [-30, 95],
+  torso: [-95, 95], // 仰向けに横になる（lie_down_back）で -90 まで後ろへ倒す（11/6）
   neck: [-40, 50],
   arm_near_upper: [-60, 200],
   arm_near_lower: [0, 150],

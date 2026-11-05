@@ -664,7 +664,7 @@ export function characterSvg(c: CharacterSpec): string {
   const headAt = (inner: string) => r.neck === 0
     ? `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`
     : `<g transform="matrix(${hm.map((v) => n(v)).join(" ")})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak }));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak, eyes: lying(c.angles) ? "pain" : undefined }));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）。
   // 首を傾けるときは、付け根で首ごと半分傾ける（headMat）。下の端は胴の中まで伸ばし、傾けても襟から抜けて見えないようにする
   const neck = look !== "b" ? "" : r.neck === 0 ? headAt(neckB(skin)) :
@@ -684,9 +684,15 @@ export function characterSvg(c: CharacterSpec): string {
   };
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${wandOver ? wandHand() : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
-  const drawn = c.shock ? blacken(body) + shockBones(c, low) : body;
+  const drawn = c.shock ? blacken(body) + shockBones(c, low) + shockSparks(c) : body;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${drawn}</g>`;
 }
+
+/**
+ * 横になっている（胴を前か後ろへ 75 度より倒した）姿勢。倒れて目を開けているのはおかしいので、目だけ閉じた痛い目にする（11/6 作者）。
+ * 眉と口は場面の表情のまま。立ち姿・おじぎなど、ほかの姿勢の胴は 40 度までなので変わらない
+ */
+const lying = (a: Angles) => Math.abs(a.torso) >= 75;
 
 /** 感電: 塗りと線の色を全部黒にする（塗らない所 none はそのまま） */
 const blacken = (svg: string) => svg.replace(/(fill|stroke)="(?!none)[^"]*"/g, '$1="#000"');
@@ -747,6 +753,60 @@ function shockBones(c: CharacterSpec, low: number): string {
     eye + `<circle cx="${n(nose[0])}" cy="${n(nose[1])}" r="3.5" fill="#000"/>` +
     [-8, 0, 8].map((dx) => { const [a, b] = p(hm, (view === "front" ? 0 : view === "quarter" ? 8 : 16) + dx, -12); return `<path d="M${n(a)} ${n(b - 6)}V${n(b + 6)}" stroke="#000" stroke-width="2"/>`; }).join("");
   return `<g data-part="shock">${out}</g>`;
+}
+
+/**
+ * 感電のしるし（11/6 現場のヒアリングから）。体のまわりのぎざぎざの放電の線と、雷のマーク（稲妻）2 つ。
+ * 関節と頭から体の外の四角（囲み）を求め、その外側に置く: 左右に 2 本ずつ外へ、頭の側の上に 1 本、稲妻は上の左右の角。
+ * 囲みの外に置くので、どの姿勢（横になる姿勢も）でも体の黒い形には重ならず、床の下へも出ない
+ */
+function shockSparks(c: CharacterSpec): string {
+  const view = c.view ?? "quarter";
+  const r = rig(c.angles, view);
+  const look = c.look ?? "b";
+  const sl = segLen(c.len);
+  const kT = view === "front" ? torsoScale(c.angles.torso) : 1;
+  const p = (m: M, x = 0, y = 0): [number, number] => [m[0] * x + m[2] * y + m[4], at(m, x, y)];
+  const torsoM = R(r.torso);
+  const top = -TORSO_TOP * kT;
+  const pts: [number, number, number][] = [];
+  const head = p(mul(torsoM, headMat(view, look, r.neck, kT)), 0, -40);
+  pts.push([...head, 74], [...p(mul(torsoM, T(0, top))), 50], [0, 0, 50]);
+  r.arms.forEach((g, i) => {
+    const sh = mul(mul(torsoM, T(SPOT[view].arm[i], top + L.shoulderDrop)), R(g.upper));
+    const el = mul(mul(sh, T(0, sl(`arm_${g.s}_upper`, L.upperArm))), R(g.lower));
+    pts.push([...p(sh), 20], [...p(el), 20], [...p(el, 0, sl(`arm_${g.s}_lower`, L.lowerArm)), 20]);
+  });
+  r.legs.forEach((g, i) => {
+    const knee = mul(mul(T(SPOT[view].leg[i], 0), R(g.thigh)), T(0, sl(`leg_${g.s}_upper`, L.thigh)));
+    pts.push([...p(knee), 22], [...p(mul(knee, R(g.shin)), 0, sl(`leg_${g.s}_lower`, L.shin)), 30]);
+  });
+  const x0 = Math.min(...pts.map(([x, , e]) => x - e)), x1 = Math.max(...pts.map(([x, , e]) => x + e));
+  const y0 = Math.min(...pts.map(([, y, e]) => y - e)), y1 = Math.max(...pts.map(([, y, e]) => y + e));
+  // ぎざぎざ 1 本: (x, y) から (ux, uy) の向きへ、6 回折れる
+  const zig = (x: number, y: number, ux: number, uy: number, flip: number) => {
+    const [vx, vy] = [-uy, ux];
+    const q = [0, 1, 2, 3, 4, 5, 6].map((t) => {
+      const along = 10 + t * 11, side = t === 0 || t === 6 ? 0 : (t % 2 ? 12 : -12) * flip;
+      return `${n(x + ux * along + vx * side)} ${n(y + uy * along + vy * side)}`;
+    });
+    return `<path d="M${q.join("L")}" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="miter"/>`;
+  };
+  const h = y1 - y0, cx = (x0 + x1) / 2;
+  const at2 = (t: number) => y0 + h * t;
+  const zigs = [
+    zig(x0, at2(0.3), -1, -0.25, 1), zig(x0, at2(0.68), -1, 0, -1),
+    zig(x1, at2(0.3), 1, -0.25, -1), zig(x1, at2(0.68), 1, 0, 1),
+    zig(cx, y0, 0, -1, 1),
+  ].join("");
+  // 稲妻（高さ 96 の 1 筆の形。中を白、ふちを黒）。立ち姿は上の左右の角の外、横に長い姿勢（横になる）は上の辺の外
+  const bolt = (x: number, y: number, tilt: number) =>
+    `<path d="M15 -48L-21 6H0L-15 48L24 -9H3L15 -48Z" transform="translate(${n(x)} ${n(y)}) rotate(${tilt})" fill="#fff" stroke="#000" stroke-width="6" stroke-linejoin="round"/>`;
+  const wide = x1 - x0 > h * 1.2;
+  const bolts = wide
+    ? bolt(x0 + (x1 - x0) * 0.22, y0 - 52, -15) + bolt(x1 - (x1 - x0) * 0.22, y0 - 52, 15)
+    : bolt(x0 - 40, y0 + 2, -15) + bolt(x1 + 40, y0 + 2, 15);
+  return `<g data-part="spark">${zigs}${bolts}</g>`;
 }
 
 /**

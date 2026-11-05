@@ -26,7 +26,8 @@ export const EXPRESSIONS: readonly Expression[] = ["neutral", "joy", "fun", "ang
 /** 話している口の形（あ・い・う・え・お）。表情の口より先に使う */
 export type Vowel = "a" | "i" | "u" | "e" | "o";
 export const VOWELS: readonly Vowel[] = ["a", "i", "u", "e", "o"];
-export interface Mood { expression?: Expression; speak?: Vowel }
+/** eyes: 目だけ別の表情にする（横になる姿勢で目を閉じた痛い目にするのに使う。11/6）。無ければ expression の目 */
+export interface Mood { expression?: Expression; speak?: Vowel; eyes?: Expression }
 export type Glasses = "none" | "round" | "square";
 export type Skin = "white" | "light";
 /** stubble（口の周りからあごまでの薄い灰の面）は動画だけの特別なひげ。キャラクターを作る画面の選択肢には入れない */
@@ -302,7 +303,7 @@ export const faceSvg = (view: View, p: FaceParts, tilt = 0, mood: Mood = {}) => 
   const [nx, ny, nr] = lm.nose;
   return `<path d="${faceOutline(p.face, p.faceSize)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
     (p.beard === "stubble" ? stubbleSvg(p, lm) : "") +
-    shiftY(lm.eyes.map((e) => eyeSvg(e, p, view, ex)).join("") + browSvg(lm, p.brows, view, ex) +
+    shiftY(lm.eyes.map((e) => eyeSvg(e, p, view, mood.eyes ?? ex)).join("") + browSvg(lm, p.brows, view, ex) +
     `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, mood) + beardSvg(lm, p.beard), tilt);
 };
 
