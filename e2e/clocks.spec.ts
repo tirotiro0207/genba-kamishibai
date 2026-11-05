@@ -73,3 +73,48 @@ test("時計 2 つ: 交差の回は /summary の中央値で、項目 A・B の 
   // 国籍ごとの数はこの画面に出さない
   await expect(page.getByTestId("clocks")).not.toContainText("ベトナム");
 });
+
+// 60 秒を超えたら周ごとに塗りを濃くする（11/5 作者）。待つと 400 秒かかるので、ページの時計を進めて見る。静止画は private/shots/clock-laps（git に入らない）
+test("時計 2 つ: 30・90・200・400 秒で、周ごとの塗りと針の見え方と秒の形が崩れない", async ({ browser, request }) => {
+  test.setTimeout(120_000);
+  const { contrast, dialPaint, formatSec, LAP_FILLS } = await import("../src/shared/clock-laps");
+  const { privatePath } = await import("../src/node/private-dir");
+  const out = privatePath("shots/clock-laps");
+  for (const [card, text] of [[30_000, 90_000], [200_000, 400_000]]) {
+    const t = await request.post("/api/t/practice/trials", { data: { participants: ["p1"], seed: `laps-${card}-${Date.now()}` } });
+    expect(t.status()).toBe(201);
+    const trial = (await t.json()) as { id: string; assignments: { participant: string; A: Shown[] }[] };
+    for (const shown of trial.assignments[0].A)
+      expect((await request.post(`/api/t/practice/trials/${trial.id}/responses`, { data: { participant: "p1", item: "A", ms: shown === "card" ? card : text } })).status()).toBe(201);
+    // ページの時計を入れ替えるので、組ごとに新しい窓で開く
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.clock.install();
+    await page.goto(`/#/t/practice/trial/${trial.id}/clocks`);
+    await expect(page.getByTestId("clock-text")).toHaveAttribute("data-ms", String(text));
+    // 針が止まる時まで時計を飛ばし、次の描画を流す
+    await page.clock.fastForward(text + 1000);
+    await page.clock.runFor(100);
+    for (const [side, ms] of [["card", card], ["text", text]] as const) {
+      const dial = page.getByTestId(`clock-${side}`);
+      await expect(dial).toHaveAttribute("data-done", "true");
+      const want = dialPaint(ms);
+      await expect(dial).toHaveAttribute("data-lap", String(want.lap));
+      await expect(dial.locator(".clock-sec")).toHaveText(formatSec(ms));
+      // 塗りは設定の色の並びのとおりで、透かさない
+      const sweep = page.getByTestId(`clock-${side}-sweep`);
+      await expect(sweep).toHaveAttribute("fill", want.sweep);
+      expect(LAP_FILLS).toContain(want.sweep);
+      expect(await sweep.evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
+      if (want.lap > 1) {
+        await expect(page.getByTestId(`clock-${side}-under`)).toHaveAttribute("fill", want.under);
+        await expect(page.getByTestId(`clock-${side}-lap`)).toHaveText(`${want.lap} 周目`);
+      } else await expect(page.getByTestId(`clock-${side}-lap`)).toHaveCount(0);
+      // 針は、前の周と今の周のどちらの色の上でも 3:1 以上で見える
+      const hand = (await page.getByTestId(`clock-${side}-hand`).getAttribute("stroke"))!;
+      for (const bg of [want.under, want.sweep]) expect(contrast(hand, bg)).toBeGreaterThanOrEqual(3);
+    }
+    await page.getByTestId("clocks").screenshot({ path: `${out}/${card / 1000}s-${text / 1000}s.png` });
+    await ctx.close();
+  }
+});

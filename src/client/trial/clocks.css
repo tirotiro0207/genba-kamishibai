@@ -4,16 +4,16 @@
 .clocks-row { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; width: 100%; }
 .clock { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(340px, 42vw); min-width: 150px; }
 .clock svg { width: 100%; height: auto; }
-.clock-face { fill: var(--bg); stroke: var(--fg); stroke-width: 3; }
-.clock-tick { stroke: var(--muted); stroke-width: 1; }
-.clock-tick5 { stroke: var(--fg); stroke-width: 3; }
-.clock-sweep { fill: var(--accent); opacity: 0.18; }
-.clock-hand { stroke: var(--fg); stroke-width: 4; stroke-linecap: round; }
-.clock[data-done="true"] .clock-hand { stroke: var(--accent); }
-.clock-pin { fill: var(--fg); }
+.clock-face { stroke: var(--fg); stroke-width: 3; }
+.clock-tick { stroke-width: 1.5; }
+.clock-tick5 { stroke-width: 3; }
+/* 塗り・針・目盛りの色は shared/clock-laps.ts で決める（周ごとの塗りに合わせて針を黒か白にする） */
+.clock-hand { stroke-width: 4; stroke-linecap: round; }
+.clock[data-done="true"] .clock-hand { stroke-width: 6; }
 .clock figcaption { display: flex; flex-direction: column; align-items: center; }
 .clock-label { font-size: 20px; color: var(--muted); }
 .clock-sec { font-size: 40px; font-variant-numeric: tabular-nums; }
+.clock-lap { font-size: 14px; color: var(--muted); }
 .clocks-block { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
 .clocks-item { font-size: 20px; margin: 0; }
 .clocks-multi .clock { width: min(220px, 30vw); }

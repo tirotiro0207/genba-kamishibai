@@ -2,6 +2,7 @@
 // 2 つの針は同時に動き始め、それぞれ中央値の秒で止まる。#/t/<テナント>/trial/<回>/clocks は本物の答え、回が sample か答えが 0 件なら仮の数字。
 // 交差の回は項目 A・B を行に分ける（理由は shared/clocks.ts の crossClockRows）
 import { useEffect, useRef, useState } from "react";
+import { dialPaint, FACE, formatSec } from "../../shared/clock-laps";
 import { type ClockRow, clockTimes, crossClockRows, FAKE_CLOCKS, noAnswers } from "../../shared/clocks";
 import { getSummary, listResponses } from "./api";
 import "./clocks.css";
@@ -11,22 +12,29 @@ const R = 90;
 function Dial({ label, ms, elapsed, testid }: { label: string; ms: number | null; elapsed: number; testid: string }) {
   const shown = ms === null ? 0 : Math.min(elapsed, ms);
   const done = ms !== null && elapsed >= ms;
-  const deg = (shown / 1000) * 6;
+  // 60 秒を超えたら周ごとに塗りを濃くする（色の並びは shared/clock-laps.ts の LAP_FILLS）
+  const p = dialPaint(shown);
   return (
-    <figure className="clock" data-testid={testid} data-ms={ms ?? ""} data-done={done}>
-      <svg viewBox="-100 -100 200 200" role="img" aria-label={`${label} ${ms === null ? "まだ" : `${(ms / 1000).toFixed(1)} 秒`}`}>
-        <circle r={R} className="clock-face" />
+    <figure className="clock" data-testid={testid} data-ms={ms ?? ""} data-done={done} data-lap={p.lap}>
+      <svg viewBox="-100 -100 200 200" role="img" aria-label={`${label} ${ms === null ? "まだ" : formatSec(ms)}`}>
+        <circle r={R} className="clock-face" fill={FACE} />
+        {/* 前の周は丸ごと 1 色、その上に今の周の扇。どちらも透かさない */}
+        {p.lap > 1 && <circle r={R - 2} fill={p.under} data-testid={`${testid}-under`} />}
+        {shown > 0 && <path d={arc(p.deg)} fill={p.sweep} data-testid={`${testid}-sweep`} />}
         {Array.from({ length: 60 }, (_, i) => (
-          <line key={i} x1="0" y1={-R + (i % 5 ? 4 : 2)} x2="0" y2={-R + (i % 5 ? 9 : 16)} transform={`rotate(${i * 6})`} className={i % 5 ? "clock-tick" : "clock-tick5"} />
+          <line key={i} x1="0" y1={-R + (i % 5 ? 4 : 2)} x2="0" y2={-R + (i % 5 ? 9 : 16)} transform={`rotate(${i * 6})`} stroke={shown > 0 && i * 6 < p.deg ? p.tickOn : p.tickOff} className={i % 5 ? "clock-tick" : "clock-tick5"} />
         ))}
-        {/* 経った秒の扇 */}
-        {shown > 0 && <path d={arc(deg)} className="clock-sweep" />}
-        <line x1="0" y1="10" x2="0" y2={-R + 14} transform={`rotate(${deg})`} className="clock-hand" />
-        <circle r="5" className="clock-pin" />
+        <line x1="0" y1="10" x2="0" y2={-R + 14} transform={`rotate(${p.deg})`} stroke={p.hand} className="clock-hand" data-testid={`${testid}-hand`} />
+        <circle r="5" fill={p.hand} />
       </svg>
       <figcaption>
         <span className="clock-label">{label}</span>
-        <b className="clock-sec">{ms === null ? "—" : `${(shown / 1000).toFixed(1)} 秒`}</b>
+        <b className="clock-sec">{ms === null ? "—" : formatSec(shown)}</b>
+        {p.lap > 1 && (
+          <small className="clock-lap" data-testid={`${testid}-lap`}>
+            {p.lap} 周目
+          </small>
+        )}
       </figcaption>
     </figure>
   );
