@@ -17,3 +17,8 @@
 .fix-step a.big { display: inline-block; text-decoration: none; text-align: center; }
 @media (max-width: 760px) { .fix-main { grid-template-columns: 1fr; } }
 .fix-redone { max-width: 420px; }
+/* 指で直す（11/6）。選んだ部品は太い点線の枠（色を増やさない）。指の操作をページのスクロールや拡大に取られないようにする */
+.fix-face.touch { cursor: grab; }
+.touch-box { position: absolute; border: 4px dashed #111; border-radius: 4px; pointer-events: none; }
+.fix-undo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fix-undo p, .fix-undo span { margin: 0; }

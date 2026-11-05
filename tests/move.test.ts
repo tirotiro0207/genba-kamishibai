@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { routeOf } from "../src/shared/card";
-import { movePart, partJson } from "../src/shared/move";
+import { dragPatch, movePart, partJson, pinchPatch } from "../src/shared/move";
+import { partBoxes } from "../src/shared/boxes";
 import { validateMotion } from "../src/shared/picto/motion";
 import { sampleCard } from "./fixtures/card";
 
@@ -39,6 +40,38 @@ describe("movePart", () => {
 
   it("画面に出す値は、選んだ部品のものだけ", () => {
     expect(partJson(m, 0, { type: "prop", index: 1 })).toEqual({ kind: "panel", x: 0.75, y: 0.6, size: 0.2 });
-    expect(Object.keys(partJson(m, 0, { type: "figure", index: 0 }))).toEqual(["role", "x", "angles"]);
+    expect(Object.keys(partJson(m, 0, { type: "figure", index: 0 }))).toEqual(["role", "x", "facing", "angles"]);
+  });
+});
+
+describe("指で動かす・2 本指で大きさ（11/6）", () => {
+  const c = sampleCard();
+  const m = c.motion.kind === "keyframes" ? c.motion.json : null!;
+  const box = (json: typeof m, part: string) => partBoxes(json, 0, c.parts).find((b) => b.part === part)!;
+  const center = (b: { x: number; y: number; w: number; h: number }) => [b.x + b.w / 2, b.y + b.h / 2];
+
+  it("指で動かした量だけ、絵の上の部品も同じ量だけ動く（人・置いた小物・持った小物）", () => {
+    for (const p of c.parts) {
+      if (p.target.type === "element") continue;
+      const t = p.target;
+      const moved = movePart(m, 0, t, dragPatch(m, 0, 0, t, 0.05, t.type === "figure" ? 0 : 0.04));
+      const [a, b] = [center(box(m, p.id)), center(box(moved, p.id))];
+      expect(b[0] - a[0]).toBeCloseTo(0.05, 2);
+      if (t.type === "prop") expect(b[1] - a[1]).toBeCloseTo(0.04, 2);
+      expect(validateMotion(moved)).toEqual([]);
+    }
+  });
+
+  it("2 本指は小物の大きさだけ（人には効かない）。範囲の外は端で止まる。向きは左右を入れかえられる", () => {
+    const prop = { type: "prop" as const, index: 1 };
+    const size = m.keyframes[0].props[1].size;
+    expect(movePart(m, 0, prop, pinchPatch(m, 0, prop, 1.5)!).keyframes[0].props[1].size).toBeCloseTo(size * 1.5);
+    expect(movePart(m, 0, prop, pinchPatch(m, 0, prop, 100)!).keyframes[0].props[1].size).toBe(0.5);
+    expect(pinchPatch(m, 0, { type: "figure", index: 0 }, 2)).toBeNull();
+    const f = m.keyframes[0].figures[0].facing;
+    const flip = f === "left" ? "right" : "left";
+    const out = movePart(m, 0, { type: "figure", index: 0 }, { facing: flip });
+    expect(out.keyframes[0].figures[0].facing).toBe(flip);
+    expect(partJson(out, 0, { type: "figure", index: 0 })).toMatchObject({ facing: flip });
   });
 });

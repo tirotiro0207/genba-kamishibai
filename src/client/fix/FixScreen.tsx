@@ -4,10 +4,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { boxFrom, FIX_BOX_MIN, type FixBox } from "../../shared/fix";
-import { cutFrames } from "../../shared/picto/motion";
+import { cutFrames, type MotionJson } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
 import { Slide } from "../motion/Slide";
+import { TouchEdit } from "./TouchEdit";
 import "./fix.css";
 
 interface CardView {
@@ -72,6 +73,9 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<{ n: number; version: number } | null>(null);
   const [redone, setRedone] = useState<{ version: number; redo: { parts: string[]; count: number; left: number } } | null>(null);
+  // 直し方（11/6）: なぞって AI に頼むか、指で部品を動かすか
+  const [mode, setMode] = useState<"ask" | "touch">("ask");
+  const [note, setNote] = useState("");
   useEffect(() => {
     req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)
       .then(setCard)
@@ -113,15 +117,72 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
     }
   }
 
+  // 指で動かした絵を保存する（版が 1 つ上がり、④ に前後が残る）
+  async function saveTouch(json: MotionJson, reason: string) {
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`, { method: "PUT", body: JSON.stringify({ card: { ...card!.body, motion: { kind: "keyframes", json } }, reason }) });
+      setCard(out);
+      setNote(`版 ${out.version} にしました。直しの記録 ④ に前後が残り、確かめる AI に見せ直すまで確認待ちです`);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 1 つ前の版に戻す（11/6）。戻すのも直しの 1 つで、④ に理由・直した人・日時が残る（記録は消さない）
+  async function undo() {
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}/undo`, { method: "POST", body: JSON.stringify({}) });
+      setCard(out);
+      setBox(null);
+      setRedone(null);
+      setNote(`1 つ前の版の中身に戻し、版 ${out.version} にしました（直しの記録 ④ に残りました）`);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const undoBar = (
+    <div className="fix-undo">
+      <span className="done" data-testid="fix-version">
+        今は版 {card.version}
+      </span>
+      <button className="pick" disabled={busy || card.version <= 1} onClick={undo} data-testid="fix-undo">
+        ↶ 1 つ前の版に戻す
+      </button>
+    </div>
+  );
+
   return (
     <article className="fix" data-testid="fix" data-card={card.id}>
       <Slide k={step} dir={step === "draw" ? -1 : 1}>
         {step === "draw" && (
           <section className="fix-step" data-testid="fix-draw">
-            <h1>直したい部分を枠で囲む</h1>
-            <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="fix-to-pose">
-              AI に頼まず、部品を手で 1 つずつ動かす
-            </a>
+            <h1>{mode === "ask" ? "直したい部分を枠で囲む" : "部品をタップして、指で動かす"}</h1>
+            {undoBar}
+            <nav className="fix-frames" aria-label="直し方">
+              <button className={`pick${mode === "ask" ? " on" : ""}`} onClick={() => setMode("ask")} data-testid="fix-mode-ask">
+                なぞって AI に頼む
+              </button>
+              <button className={`pick${mode === "touch" ? " on" : ""}`} onClick={() => setMode("touch")} data-testid="fix-mode-touch">
+                指で動かす
+              </button>
+              <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="fix-to-pose">
+                つまみで角度まで動かす
+              </a>
+            </nav>
+            {note && (
+              <p className="saved" data-testid="fix-note">
+                {note}
+              </p>
+            )}
             <nav className="fix-frames" aria-label="コマ">
               {frames.map((f, j) => (
                 <button
@@ -137,6 +198,9 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
                 </button>
               ))}
             </nav>
+            {mode === "touch" ? (
+              <TouchEdit key={`${card.version}-${at}`} body={b} at={at} busy={busy} onSave={saveTouch} />
+            ) : (
             <div className="fix-main">
               <DrawBox svg={svg} box={box} onBox={setBox} />
               <div className="fix-side">
@@ -150,6 +214,7 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
                 </button>
               </div>
             </div>
+            )}
           </section>
         )}
         {step === "confirm" && box && (
@@ -197,6 +262,17 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
                 <a className="big go" href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(card.id)}`} data-testid="fix-to-card">
                   カードを見る
                 </a>
+                <button
+                  className="big"
+                  disabled={busy}
+                  onClick={async () => {
+                    await undo();
+                    setStep("draw");
+                  }}
+                  data-testid="fix-redo-undo"
+                >
+                  作り直す前に戻す
+                </button>
               </>
             ) : (
               <button className="big go" disabled={busy} onClick={redo} data-testid="fix-redo">

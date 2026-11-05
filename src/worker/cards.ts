@@ -1,13 +1,14 @@
 // カードの保存と状態（019）。形と経路は src/shared/card.ts で確かめ、経路の無い部品があれば保存を断る。
 // どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
 import { REDO_MAX, RedoError, redoCard } from "../shared/redo";
 import { summarize } from "../shared/stats";
+import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
@@ -21,6 +22,7 @@ import type { Env } from "./env";
 import type { TenantVars } from "./tenant";
 
 export const cards = new Hono<{ Bindings: Env; Variables: TenantVars }>();
+type Ctx = Context<{ Bindings: Env; Variables: TenantVars }>;
 
 export interface CardRow {
   id: string;
@@ -246,23 +248,30 @@ cards.put("/:id", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
   const b = await readBody(c);
-  const card = b.card as CardBody;
+  const reason = typeof b.reason === "string" ? b.reason.trim().slice(0, 1000) : "";
+  return saveEdit(c, r, b.card as CardBody, reason, actorOf(b, "editor"));
+});
+
+/**
+ * 直した中身を保存する（PUT と戻すで共通）。版を 1 つ上げ、④ に前と後・直した人・日時・理由を足す。
+ * extra は記録の行に足す欄（戻すときの request・restored）
+ */
+async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, fallbackBy: string, extra: Record<string, unknown> = {}) {
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const before = JSON.parse(r.body) as CardBody;
   const changed = (Object.keys({ ...before, ...card }) as (keyof CardBody)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(card[k]));
   // 修正の差分（050）: 何も変わらない直しは記録も版も増やさない。理由の無い直しは受けない
   if (!changed.length) return c.json({ ...cardView(r), changed });
-  const reason = typeof b.reason === "string" ? b.reason.trim().slice(0, 1000) : "";
   if (!reason) return c.json({ error: "直した理由が要る" }, 400);
   // 直した人は役割のしるしから取る（しるしの無い手元の呼び出しだけ、送られた名前を使う）
   const person = (c.var as PeopleVars).person;
-  const by = person ? personActor(person) : actorOf(b, "editor");
+  const by = person ? personActor(person) : fallbackBy;
   await appendAudit(c.env.DB, c.var.tenant.id, {
     card_id: r.id,
     kind: "edit",
     actor: by,
-    payload: { from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
+    payload: { ...extra, from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
   });
   // 会社の言葉（085）: 直しの前と後から、言い換えと使わない言い方を積む
   await addEditWords(c.env.DB, c.var.tenant.id, r.id, before as unknown as Record<string, unknown>, card as unknown as Record<string, unknown>);
@@ -273,6 +282,31 @@ cards.put("/:id", async (c) => {
   await reopenOnEdit(c.env.DB, c.var.tenant.id, r, reasons.length ? "ai_draft" : "draft", by, reason);
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
+}
+
+// 元に戻す（11/6）: 1 つ前の版の中身に戻す。戻すのも直しの 1 つで、版を 1 つ上げて ④ に理由・直した人・日時を残す（記録は消さない）。
+// 続けて押すと、さらに 1 つ前へ戻る。前の版が無い・記録から組み立てられないときは断る
+cards.post("/:id/undo", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await readBody(c);
+  const rows = (
+    await c.env.DB.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'edit' AND json_extract(payload, '$.to_version') IS NOT NULL ORDER BY created_at DESC")
+      .bind(c.var.tenant.id, r.id)
+      .all<{ payload: string }>()
+  ).results.map((x) => JSON.parse(x.payload) as EditRow);
+  let target: number;
+  let body: CardBody;
+  try {
+    target = undoTarget(r.version, rows);
+    body = bodyAt(JSON.parse(r.body) as CardBody, r.version, rows, target);
+  } catch (e) {
+    if (e instanceof UndoError) return c.json({ error: e.message }, 409);
+    throw e;
+  }
+  const why = typeof b.reason === "string" && b.reason.trim() ? b.reason.trim().slice(0, 1000) : "";
+  const reason = `元に戻す（版 ${r.version} → 版 ${target} の中身）${why ? `: ${why}` : ""}`;
+  return saveEdit(c, r, body, reason, actorOf(b, "supervisor"), { request: "undo", restored: target });
 });
 
 // 枠と指示（044a）: 直したい部分の枠と「ここをこうしたい」を ④ 人の直しの 1 行として残す。作り直すのは 044b。
