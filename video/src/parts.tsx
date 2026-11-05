@@ -43,9 +43,11 @@ const Dial: React.FC<{ cx: number; deg: number; done: boolean; label: string; un
       ) : (
         <g>
       {underline > 0 && <rect x={cx - w / 2} y={labelY + 14} width={w * underline} height={6} rx={3} fill={INK} />}
-      <circle cx={cx} cy={y} r={r} fill={FACE} stroke={INK} strokeWidth={5} />
+      <circle cx={cx} cy={y} r={r} fill={FACE} />
       {under && <circle cx={cx} cy={y} r={r - 2.5} fill={under} />}
       {sweep && <path d={sweep} fill={over} />}
+      {/* 外の枠線は、進んだ時間の色の上に描く（色が枠線を埋めて線が細く薄く見えないように。11/5 作者の指摘） */}
+      <circle cx={cx} cy={y} r={r} fill="none" stroke={INK} strokeWidth={5} />
       {Array.from({ length: 12 }, (_, i) => {
         const t = (i * 30 * Math.PI) / 180;
         return <line key={i} x1={cx + Math.sin(t) * (r - 12)} y1={y - Math.cos(t) * (r - 12)} x2={cx + Math.sin(t) * (r - 2)} y2={y - Math.cos(t) * (r - 2)} stroke={INK} strokeWidth={4} />;

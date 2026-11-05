@@ -901,13 +901,12 @@ const Stage: React.FC = () => {
   );
 };
 
-/** 冒頭（0:00〜0:19）: 0:00〜0:13 の白地の段は intro.tsx の 1 本（時計・印刷・折り紙・紙の人。L3）。開演と題（0:13〜）は場面の中でレイヤーに分ける */
+/** 冒頭（0:00〜0:19）: 0:00〜0:13 の白地の段は intro.tsx の 1 本（地・枠・紙・紙の人を中で L1〜L4 に分ける）。開演と題（0:13〜）は場面の中でレイヤーに分ける */
 const Opening: React.FC = () => (
   <>
     <Sequence durationInFrames={INTRO_FRAMES} name="冒頭の白地の段（折り紙）">
-      <L n={3}>
-        <Intro />
-      </L>
+      {/* 中でレイヤーに分けてある（地 L1・枠 L2・紙 L3・紙の人 L4） */}
+      <Intro />
     </Sequence>
     {SCENES.filter((s) => s.id === "s7-curtain" || s.id === "s8-title").map((s) => {
       const C = SCENE_COMPONENTS[s.id];

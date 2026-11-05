@@ -31,7 +31,11 @@ if (e < FRAMES - 1) { ff("-ss", ((e + 1 + 0.5) / 30).toFixed(4), "-i", src, "-c"
 const list = path.join(LDIR, "patch-list.txt");
 fs.writeFileSync(list, parts.map((p) => `file '${p.replaceAll("\\", "/")}'`).join("\n"));
 const joined = path.join(LDIR, "patch-joined.mov");
-ff("-f", "concat", "-safe", "0", "-i", list, "-c", "copy", joined);
+// つないだあと、コマの時刻を 0, 1/30, 2/30 … に振り直す（つなぎ目でコマの時刻が前のコマとほぼ同じになり、次の差し替えで後ろの頭の 1 コマが落ちていた。11/5 夜）
+const raw = path.join(LDIR, "patch-raw.mov");
+ff("-f", "concat", "-safe", "0", "-i", list, "-c", "copy", raw);
+ff("-i", raw, "-c", "copy", "-an", "-bsf:v", "setts=pts=N/(30*TB):dts=N/(30*TB)", joined);
+fs.unlinkSync(raw);
 const n = frameCount(joined);
 const counts = parts.map(frameCount);
 if (n !== FRAMES) throw new Error(`つないだ長さが ${n} コマ（${FRAMES} のはず。前・中・後ろ ${counts.join("・")}）`);
