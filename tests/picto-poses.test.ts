@@ -85,12 +85,15 @@ describe("向きごとの角度（poseAngles）と棒人間", () => {
     }
   });
 
-  it("ももを上げた足は、胴（服の裾）より前に描く", () => {
-    expect(poseAngles("squat", "side").over).toEqual({ far: true, near: true });
-    expect(poseAngles("stand", "front").over).toEqual({ far: false, near: false });
+  it("胴は足の上にかぶせる（ももを上げた姿勢でも）。奥の足の影は向きで濃さが変わる", () => {
     const squat = poseAngles("squat", "side");
     const svg = characterSvg({ ...squat, x: 100, groundY: 306, height: 270, facing: "right", view: "side", hair: "short" });
-    // 胴（ベストの裾の帯）が、手前の足のももより先に出てくる
-    expect(svg.indexOf('stroke="#333" stroke-width="12"')).toBeLessThan(svg.lastIndexOf('translate(6 0)'));
+    // 手前の足（腰の x 6）を描いたあとに、胴（ベストの裾の帯）が来る
+    expect(svg.lastIndexOf("translate(6 0)")).toBeLessThan(svg.indexOf('stroke="#333" stroke-width="12"'));
+    expect(poseAngles("stand", "front").shade).toEqual({});
+    expect(poseAngles("stand", "quarter").shade).toEqual({ far: 0.35 });
+    expect(poseAngles("stand", "side").shade).toEqual({ far: 0.75 });
+    // 正面でも足が前後に開く姿勢は、後ろへ振った足に影を付ける
+    expect(poseAngles("run", "front").shade).toEqual({ far: 0.35 });
   });
 });

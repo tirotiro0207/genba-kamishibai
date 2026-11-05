@@ -5,7 +5,7 @@
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, type Mood, SKIN_TONE, type Vowel } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
-import { type Angles, type Lengths, type LegsOver, legsOver, type Seg, torsoScale } from "./poses";
+import { type Angles, type Lengths, type LegShade, legShade, type Seg, torsoScale } from "./poses";
 import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
 
 export { L, NECK_LEN, SPOT };
@@ -56,11 +56,19 @@ export interface CharacterSpec {
   speak?: Vowel;
   /** 手足の見かけの長さの倍率（poseAngles が正面で返す。前後へ振った手足は短く見える）。無い段は 1 */
   len?: Lengths;
-  /** 胴より前に描く足（ももを前へ上げた足は、服の裾の上に重なる）。poseAngles が返す。無ければ斜めと真横は角度から決め、正面はどれも後ろ */
-  over?: LegsOver;
+  /** 奥にある足の影の濃さ（poseAngles が返す）。無ければ向きから決める（正面 0・斜め 0.35・真横 0.75） */
+  shade?: LegShade;
 }
 
 const UNIT = 434;
+/** 2 つの色の間（t 0 で a、1 で b）。t が 0 か 1 なら元の文字列のまま返す */
+const mixTone = (a: string, b: string, t: number) => {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  const rgb = (h: string) => (h.length === 4 ? [1, 2, 3].map((i) => parseInt(h[i] + h[i], 16)) : [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+  const [x, y] = [rgb(a), rgb(b)];
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
+};
 /** 役の明るさ。色を変えられるかぶり物（安全帽・つばの帽子）は、この明るさで役を見分ける */
 const ROLE_TONE: Record<CharacterRole, string> = { new: "#fff", lead: "#222", worker: "#999" };
 
@@ -586,10 +594,10 @@ export function characterSvg(c: CharacterSpec): string {
   // 2 回に分けると、ひじ・ひざの内側の縁は中身に埋もれて消え、外まわりの縁だけが 1 本につながる
   const leg = (i: number) => {
     const g = r.legs[i];
-    // 正面は両足ともカメラから同じ遠さなので、同じ明るさにする
-    const far = i === 0 && view !== "front";
-    const fill = o.pants ? (far ? farTone(o.pants) : o.pants) : far ? cloth.legFar : cloth.leg;
-    const shoeFill = o.boots ? (far ? farTone(o.boots) : o.boots) : far ? cloth.shoeFar : cloth.shoe;
+    // 奥の足は、奥行きの分だけ暗くする（shade。1 で今までの奥の足の色）
+    const t = (c.shade ?? legShade(c.angles, view))[g.s] ?? 0;
+    const fill = mixTone(o.pants ?? cloth.leg, o.pants ? farTone(o.pants) : cloth.legFar, t);
+    const shoeFill = mixTone(o.boots ?? cloth.shoe, o.boots ? farTone(o.boots) : cloth.shoeFar, t);
     const [th, sh] = [sl(`leg_${g.s}_upper`, L.thigh), sl(`leg_${g.s}_lower`, L.shin)].map((v) => +n(v));
     const boot = o.boots ? bootSvg(sh, shoeFill) : "";
     // 正面で、すねが後ろへ向く足（ひざをつく・走る後ろの足）は、すねと靴がももの後ろに隠れる。靴を足より先に、床と平行に描く
@@ -627,13 +635,6 @@ export function characterSvg(c: CharacterSpec): string {
   const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;
   const front = view === "front";
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
-  // ももを前へ上げた足（しゃがむ・座る・ひざをつく・走る）は胴のあと、頭の前に描く。裾が足の前に出ると、服が足を突き抜けて見えた
-  const over = c.over ?? (front ? {} : legsOver(c.angles));
-  const late = (["far", "near"] as const).map((s) => !!over[s]);
-  const rotT = (s: string) => `<g transform="rotate(${n(r.torso)})">${s}</g>`;
-  const body = !late[0] && !late[1]
-    ? `${rotT(front ? "" : arm(0))}${leg(0)}${leg(1)}${rotT(upper)}`
-    : `${rotT(front ? "" : arm(0))}${late[0] ? "" : leg(0)}${late[1] ? "" : leg(1)}${rotT(`${behind ? headAt(behind) : ""}${neck}${body0}`)}` +
-      `${late[0] ? leg(0) : ""}${late[1] ? leg(1) : ""}${rotT(`${head}${front ? arm(0) : ""}${arm(1)}`)}`;
+  const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }

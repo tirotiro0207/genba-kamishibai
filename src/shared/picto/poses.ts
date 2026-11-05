@@ -91,11 +91,19 @@ export type Seg = Exclude<Bone, "torso" | "neck">;
 /** 手足の見かけの長さの倍率（正面で前後へ振った手足は短く見える）。無い段は 1 */
 export type Lengths = Partial<Record<Seg, number>>;
 /** 描く向きの角度と見かけの長さ。characterSvg に angles と len として渡す */
-export interface ViewPose { angles: Angles; len: Lengths; over?: LegsOver }
-/** 胴より前に描く足 */
-export type LegsOver = Partial<Record<"far" | "near", boolean>>;
-/** ももを前へ 40 度より上げた足は、胴（服の裾）より前に描く。a は横から見た角度 */
-export const legsOver = (a: Angles): LegsOver => ({ far: a.leg_far_upper >= 40, near: a.leg_near_upper >= 40 });
+export interface ViewPose { angles: Angles; len: Lengths; shade?: LegShade }
+/** 奥にある足の影の濃さ（0 で影なし、1 で今までの奥の足の色）。無い足は 0 */
+export type LegShade = Partial<Record<"far" | "near", number>>;
+/**
+ * 奥の足の影（11/5 作者）。奥行きが出る向きほど濃くする: 斜め 0.35、真横 0.75。
+ * 正面はふつう影を付けないが、足が前後に開く姿勢（歩く・走る・倒れる）は、後ろへ振った足に斜めと同じ影を付ける
+ */
+export function legShade(a: Angles, view: View): LegShade {
+  if (view === "quarter") return { far: 0.35 };
+  if (view === "side") return { far: 0.75 };
+  const d = a.leg_near_upper - a.leg_far_upper;
+  return Math.abs(d) < 20 ? {} : d > 0 ? { far: 0.35 } : { near: 0.35 };
+}
 
 const DEG = Math.PI / 180;
 /** 正面で手足をもともと外へ開く角度（度）。腕は体の横から少し離し、足はほぼまっすぐ下ろす（大きく開くとがに股に見えた） */
@@ -207,6 +215,21 @@ export function reach(view: View, side: "near" | "far", target: [number, number]
 }
 
 /**
+ * ひじと手を置く場所を決めて、その向きで描く腕の角度と見かけの長さにする（胴の座標。腰が原点、y は下が正）。
+ * ひじがカメラの方へ出る腕は、上腕が短く見える（len）。正面以外の手前の腕に使う
+ */
+function place(view: Exclude<View, "front">, elbow: [number, number], hand: [number, number]): { angles: Partial<Angles>; len: Lengths } {
+  const [sx, sy] = [SPOT[view].arm[1], -L.torso + L.shoulderDrop];
+  const ru = Math.atan2(-(elbow[0] - sx), elbow[1] - sy) / DEG;
+  const rl = Math.atan2(-(hand[0] - elbow[0]), hand[1] - elbow[1]) / DEG - ru;
+  // 手前の腕は rig で向きが裏返る（-1）ので、符号を戻す
+  return {
+    angles: { arm_near_upper: -ru, arm_near_lower: -rl },
+    len: { arm_near_upper: Math.hypot(elbow[0] - sx, elbow[1] - sy) / L.upperArm, arm_near_lower: Math.hypot(hand[0] - elbow[0], hand[1] - elbow[1]) / L.lowerArm },
+  };
+}
+
+/**
  * 顔の横の見える耳の位置（電話を当てる所）。胴の座標で、首を傾けない立ち姿のとき。
  * 耳の印（avatar.ts の EAR_MARK、頭の原点から y −32）に首の横の位置（NECK_X）を足した所。正面は顔の縁の外の耳たぶへ少し出す
  * （顔の内側に置くと、手が頬や目の上に来て、目をこすっているように見えた）
@@ -221,16 +244,23 @@ const EAR_AT: Record<View, [number, number]> = { front: [54, -190], quarter: [-2
  */
 const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>> = {
   stop: { quarter: { arm_near_upper: 12, arm_near_lower: 8, arm_far_upper: 72, arm_far_lower: 50 } },
-  phone: {
-    front: reach("front", "near", EAR_AT.front),
-    // 斜めと真横もひじは後ろへ張る（前へ出すと、前腕が顔の前を横切った）
-    quarter: reach("quarter", "near", EAR_AT.quarter),
-    side: reach("side", "near", EAR_AT.side),
-  },
+  phone: { front: reach("front", "near", EAR_AT.front) },
   raise_hand: { quarter: { arm_near_upper: 184, arm_near_lower: 0 } },
   // 頭の上の作業は、斜めと真横で手前の腕を真上より少し後ろへ立てて、顔を隠さない
   reach_up: { quarter: { arm_near_upper: 184, arm_near_lower: 0 }, side: { arm_near_upper: 194, arm_near_lower: 0 } },
   wave: { quarter: { arm_near_upper: 200, arm_near_lower: -24 } },
+};
+
+/**
+ * ひじと手の場所で決めた腕（角度と見かけの長さ）。BY_VIEW のあとに当てる。
+ * 電話: 斜めと真横は、ひじを体の前（正面から 45 度ほど）へ出し、胸の前から耳へ手を上げる。
+ * ひじを後ろへ張ると、腕を頭の後ろへ回したように見えた（11/5 作者）。ひじがカメラの方へ出る分、上腕は短く見える
+ */
+const PLACED: Partial<Record<PoseName, Partial<Record<Exclude<View, "front">, { angles: Partial<Angles>; len: Lengths }>>>> = {
+  phone: {
+    quarter: place("quarter", [-6, -140], [EAR_AT.quarter[0], EAR_AT.quarter[1] + 4]),
+    side: place("side", [30, -142], [EAR_AT.side[0], EAR_AT.side[1] + 6]),
+  },
 };
 
 /**
@@ -242,12 +272,13 @@ const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>>
 export function poseAngles(src: PoseName | Angles, view: View): ViewPose {
   const name = typeof src === "string" ? src : undefined;
   const a = name ? POSES[name] : (src as Angles);
-  const base: ViewPose = { ...(view === "front" ? frontOf(a, name ? SPREAD[name] : undefined) : { angles: a, len: {} }), over: legsOver(a) };
+  const base: ViewPose = { ...(view === "front" ? frontOf(a, name ? SPREAD[name] : undefined) : { angles: a, len: {} }), shade: legShade(a, view) };
+  const placed = name && view !== "front" ? PLACED[name]?.[view] : undefined;
   const hand = name ? BY_VIEW[name]?.[view] : undefined;
-  if (!hand) return base;
+  if (!hand && !placed) return base;
   const len = { ...base.len };
-  for (const k of Object.keys(hand)) delete len[k as Seg];
-  return { angles: { ...base.angles, ...hand }, len, over: base.over };
+  for (const k of Object.keys(hand ?? {})) delete len[k as Seg];
+  return { angles: { ...base.angles, ...hand, ...placed?.angles }, len: { ...len, ...placed?.len }, shade: base.shade };
 }
 
 // ---- 棒人間（姿勢の土台を見るための絵） ----
