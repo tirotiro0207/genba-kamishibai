@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Resvg } from "@resvg/resvg-js";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FACE, FACE_OPTIONS, type FaceParts, faceHalfWidth, faceOutline, faceSvg, glassesSvg, hairScale } from "../src/shared/picto/avatar";
+import { DEFAULT_FACE, EXPRESSIONS, FACE_OPTIONS, type FaceParts, faceHalfWidth, faceOutline, faceSvg, glassesSvg, hairScale, VOWELS } from "../src/shared/picto/avatar";
 import { characterSvg, type Hair, HEADWEAR, type HeadwearKind, hairSvg, headwearSvg, type View } from "../src/shared/picto/character";
 import { TRACED_HAIRS } from "../src/shared/picto/hair-traced";
 import { A_POSE } from "../src/shared/picto/poses";
@@ -30,7 +30,7 @@ const rand = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2147
 const pick = <T,>(r: () => number, xs: readonly T[]) => xs[Math.floor(r() * xs.length)];
 const randomFace = (r: () => number): FaceParts => ({
   face: pick(r, FACE_OPTIONS.face), faceSize: pick(r, FACE_OPTIONS.faceSize), eyeShape: pick(r, FACE_OPTIONS.eyeShape), eyeSize: pick(r, FACE_OPTIONS.eyeSize),
-  lashes: pick(r, FACE_OPTIONS.lashes), brows: pick(r, FACE_OPTIONS.brows), mouth: pick(r, FACE_OPTIONS.mouth), mouthSize: pick(r, FACE_OPTIONS.mouthSize),
+  lashes: pick(r, FACE_OPTIONS.lashes), brows: pick(r, FACE_OPTIONS.brows),
   glasses: pick(r, FACE_OPTIONS.glasses), skin: pick(r, FACE_OPTIONS.skin), beard: pick(r, FACE_OPTIONS.beard),
 });
 /** 部品を 1 つずつ変えた組み合わせ（ほかは初めの値）と、乱数の 40 組 */
@@ -65,6 +65,27 @@ describe("キャラクターを作る画面の顔と髪", () => {
         const out = points(paint(inner)).filter(([x, y]) => !faceAt(x, y));
         if (out.length) bad.push(`${view} ${JSON.stringify(f)}: ${out.length} 点（${out[0]}）`);
       }
+    expect(bad).toEqual([]);
+  }, 120000);
+
+  it("表情とあいうえおの口: どの輪郭・大きさ・向きでも顔の部品が輪郭の外へ出ず、ふつうの顔は表情を付けない顔と同じ", () => {
+    const bad: string[] = [];
+    const moods = [...EXPRESSIONS.map((expression) => ({ expression })), ...VOWELS.map((speak) => ({ speak }))];
+    for (const face of FACE_OPTIONS.face)
+      for (const faceSize of FACE_OPTIONS.faceSize)
+        for (const view of VIEWS) {
+          const f = { ...DEFAULT_FACE, face, faceSize };
+          expect(faceSvg(view, f, 0, { expression: "neutral" })).toEqual(faceSvg(view, f));
+          const faceAt = paint(`<path d="${faceOutline(face, faceSize)}" fill="#fff" stroke="#000" stroke-width="5"/>`);
+          for (const mood of moods) {
+            const inner = faceSvg(view, f, 0, mood).replace(/<path d="M[^"]*Z" fill="#(fff|e6e6e6)" stroke="#000" stroke-width="5" stroke-linejoin="round"\/>/, "");
+            const out = points(paint(inner)).filter(([x, y]) => !faceAt(x, y));
+            if (out.length) bad.push(`${view} ${face} ${faceSize} ${JSON.stringify(mood)}: ${out.length} 点（${out[0]}）`);
+          }
+          // 表情ごとに顔が変わる（同じ絵の表情が無い）
+          const all = moods.map((m) => faceSvg(view, f, 0, m));
+          expect(new Set(all).size, `${view} ${face}`).toBe(all.length);
+        }
     expect(bad).toEqual([]);
   }, 120000);
 

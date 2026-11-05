@@ -3,7 +3,7 @@
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
-import { DEFAULT_FACE, earsSvg, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
+import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, type Mood, SKIN_TONE, type Vowel } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
 import { type Angles, type Lengths, type Seg, torsoScale } from "./poses";
 import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
@@ -50,6 +50,10 @@ export interface CharacterSpec {
   outfit?: Outfit;
   /** 顔の部品（avatar.ts。キャラクターを作る画面で選ぶ）。無い部品は初めの値 */
   face?: Partial<FaceParts>;
+  /** 表情（場面ごとに選ぶ。無ければふつうの笑った口の顔） */
+  expression?: Expression;
+  /** 話している口の形（あいうえお）。表情の口より先に使う */
+  speak?: Vowel;
   /** 手足の見かけの長さの倍率（poseAngles が正面で返す。前後へ振った手足は短く見える）。無い段は 1 */
   len?: Lengths;
 }
@@ -476,14 +480,14 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
 };
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
 // tilt は正面で顔の部品（目・鼻・口・眼鏡）を上下にずらす量（うつむくと下、見上げると上）
-const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts, tilt = 0) => {
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts, tilt = 0, mood: Mood = {}) => {
   const h = hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize), SKIN_TONE[f.skin]);
   const k = faceHalfWidth(f.face, f.faceSize) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
   // 耳はどの髪でも髪の前の層の上に描く
   const ears = earsSvg(view, f);
-  return `${h.back}${faceSvg(view, f, tilt)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
+  return `${h.back}${faceSvg(view, f, tilt, mood)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
 const ANKLE_MAX = 25;
@@ -600,7 +604,7 @@ export function characterSvg(c: CharacterSpec): string {
   };
   const headAt = (inner: string) =>
     `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak }));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(neckB(skin)) : "";
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる

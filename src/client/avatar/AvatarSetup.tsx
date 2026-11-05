@@ -1,8 +1,8 @@
 // キャラクターを作る画面（11/5 作者）。まだ自分のキャラクターを持っていない人が、発行の管理に入る前に 1 回だけ通る。
 // 上の切り替え（デフォルト・カスタム）を 1 枚のカードで包み、初めはデフォルト。デフォルトはキャラクターを真ん中に出し、その下の「このキャラクターで進める」で決める。
-// カスタムにすると、キャラクターが左へ寄り、右に部品のタブ（髪・輪郭・目・まつげ・眉・口・眼鏡・ひげ・肌）が出る。
-// タブの中は部品の一覧で、押すと選べる。大きさのある部品（目・輪郭・口）は、一覧の下に「小 ━━ 大」のつまみを出す。髪には大きさを付けない。
-// 輪郭と口の大きさは、人形の部品（avatar.ts）に値が足されたら出る（FACE_OPTIONS に faceSize・mouthSize があるときだけ）
+// カスタムにすると、キャラクターが左へ寄り、右に部品のタブ（髪・輪郭・目・まつげ・眉・眼鏡・ひげ・肌）が出る。
+// タブの中は部品の一覧で、押すと選べる。大きさのある部品（目・輪郭）は、一覧の下に「小 ━━ 大」のつまみを出す。髪には大きさを付けない。
+// 輪郭の大きさは、人形の部品（avatar.ts）の FACE_OPTIONS に faceSize があるときだけ出る。口は選ばない（表情とあいうえおで描く側が決める。11/5 作者）
 import { useMemo, useState } from "react";
 import { FACE_OPTIONS, type FaceParts } from "../../shared/picto/avatar";
 import { characterSvg, type Hair } from "../../shared/picto/character";
@@ -22,10 +22,9 @@ const LABEL: Record<string, string> = {
   oval: "たまご", slit: "糸目", up: "つり目", down: "たれ目",
   none: "なし", flick: "1 本", three: "3 本",
   flat: "まっすぐ", arch: "アーチ", angled: "つり眉",
-  smile: "笑顔", open: "あける", small: "すぼめる",
   white: "白", light: "うす灰", mustache: "口ひげ",
 };
-const labelOf = (key: string, v: string) => (key === "glasses" ? { none: "なし", round: "まる", square: "しかく" }[v] : key === "mouth" && v === "flat" ? "への字" : LABEL[v]) ?? v;
+const labelOf = (key: string, v: string) => (key === "glasses" ? { none: "なし", round: "まる", square: "しかく" }[v] : LABEL[v]) ?? v;
 
 const OPTS = FACE_OPTIONS as unknown as Record<string, readonly string[]>;
 interface Tab {
@@ -41,7 +40,6 @@ const TABS: Tab[] = (
     { key: "eyeShape", label: "目", size: "eyeSize" },
     { key: "lashes", label: "まつげ" },
     { key: "brows", label: "眉" },
-    { key: "mouth", label: "口", size: "mouthSize" },
     { key: "glasses", label: "眼鏡" },
     { key: "beard", label: "ひげ" },
     { key: "skin", label: "肌" },

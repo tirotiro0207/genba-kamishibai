@@ -48,7 +48,6 @@ sheet("B_目", FACE_OPTIONS.eyeShape.map((eyeShape) => ({ label: eyeShape, specs
 sheet("C_眉まつげ口ほか", [
   ...FACE_OPTIONS.brows.map((brows) => ({ label: `眉 ${brows}`, specs: [{ ...f({ brows }), hair: "bob" as Hair }, { ...f({ brows, face: "slim" }), hair: "sidePart" as Hair }] })),
   ...FACE_OPTIONS.lashes.map((lashes) => ({ label: `まつげ ${lashes}`, specs: [{ ...f({ lashes }), hair: "long" as Hair }, { ...f({ lashes, eyeSize: "l" }), hair: "ponytail" as Hair }] })),
-  ...FACE_OPTIONS.mouth.map((mouth) => ({ label: `口 ${mouth}`, specs: [f({ mouth }), f({ mouth, face: "square", beard: "mustache" })] })),
   ...FACE_OPTIONS.glasses.map((glasses) => ({ label: `眼鏡 ${glasses}`, specs: [f({ glasses }), { ...f({ glasses, face: "round" }), hair: "bob" as Hair }] })),
   ...FACE_OPTIONS.skin.map((skin) => ({ label: `肌 ${skin}`, specs: [f({ skin }), { ...f({ skin }), hair: "buzz" as Hair }] })),
 ]);
@@ -64,7 +63,7 @@ const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 214748364
 const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)];
 const people = Array.from({ length: 24 }, () => ({
   hair: pick(HAIRS),
-  face: { face: pick(FACE_OPTIONS.face), eyeShape: pick(FACE_OPTIONS.eyeShape), eyeSize: pick(FACE_OPTIONS.eyeSize), lashes: pick(FACE_OPTIONS.lashes), brows: pick(FACE_OPTIONS.brows), mouth: pick(FACE_OPTIONS.mouth), glasses: pick(FACE_OPTIONS.glasses), skin: pick(FACE_OPTIONS.skin), beard: pick(FACE_OPTIONS.beard) } as FaceParts,
+  face: { face: pick(FACE_OPTIONS.face), eyeShape: pick(FACE_OPTIONS.eyeShape), eyeSize: pick(FACE_OPTIONS.eyeSize), lashes: pick(FACE_OPTIONS.lashes), brows: pick(FACE_OPTIONS.brows), glasses: pick(FACE_OPTIONS.glasses), skin: pick(FACE_OPTIONS.skin), beard: pick(FACE_OPTIONS.beard) } as FaceParts,
 }));
 const FW = 150, FH = 300, PER = 4;
 const gw = PER * VIEWS.length * FW, gh = Math.ceil(people.length / PER) * FH;
