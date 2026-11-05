@@ -52,7 +52,20 @@ test("署名済みを止めると新入社員から消え、見た人・回収�
   await page.goto(`/#/t/${T}/issue`);
   await expect(page.getByTestId("issue-pick")).toBeVisible();
   await page.getByTestId("issue-as-supervisor-1").click();
+  // まだキャラクターを持っていないので、キャラクターを作る画面を通る（初めはデフォルト。カスタムで目を選び、大きさを変えてから進む）
+  await expect(page.getByTestId("avatar-setup")).toBeVisible();
+  await expect(page.getByTestId("avatar-mode-default")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("avatar-panel")).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("issue-1b-avatar-default.png") });
+  await page.getByTestId("avatar-mode-custom").click();
+  await page.getByTestId("avatar-tab-eyeShape").click();
+  await page.getByTestId("avatar-opt-up").click();
+  await expect(page.getByTestId("avatar-opt-up")).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("avatar-size").fill("2");
+  await page.screenshot({ path: test.info().outputPath("issue-1c-avatar-custom.png") });
+  await page.getByTestId("avatar-go").click();
   await expect(page.getByTestId("issue")).toBeVisible();
+  expect(await page.evaluate((t) => JSON.parse(localStorage.getItem(`avatar:${t}:supervisor`) ?? "{}").face?.eyeSize, T)).toBe("l");
   await expect(page.getByTestId("issue-cards").locator("> li")).toHaveCount(4);
   await expect(page.getByTestId(`issue-card-${stopId}`)).toContainText("版 1");
   await expect(page.getByTestId(`issue-card-${stopId}`)).toContainText(signedDate);
@@ -104,6 +117,8 @@ test("署名済みを止めると新入社員から消え、見た人・回収�
   await page.evaluate((t) => sessionStorage.removeItem(`role:${t}`), T);
   await page.goto(`/#/t/${T}/issue`);
   await page.getByTestId("issue-as-trainer-1").click();
+  // 教育担当の役ではまだキャラクターが無いので、デフォルトのまま進む
+  await page.getByTestId("avatar-go").click();
   await expect(page.getByTestId("issue-unread")).toHaveText("未読 1");
   await expect(page.getByTestId(`issue-recall-key-${stopId}`)).toContainText("版 1");
   await expect(page.getByTestId(`issue-recall-key-${stopId}`)).toContainText(signedDate);

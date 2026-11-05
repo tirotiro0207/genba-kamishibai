@@ -3,6 +3,8 @@
 // 役のしるしは sessionStorage の role:<テナント>（ほかの画面と同じ）。回収の知らせは版と署名の日付つきで印刷できる
 import { useCallback, useEffect, useState } from "react";
 import { req } from "../make/MakeScreen";
+import { AvatarSetup } from "../avatar/AvatarSetup";
+import { loadAvatar } from "../avatar/store";
 import { REVIEWERS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./issue.css";
 
@@ -300,11 +302,14 @@ function Board({ tenant, me }: { tenant: string; me: { role: string } }) {
 
 export function IssueScreen({ tenant }: { tenant: string }) {
   const [me, setMe] = useState<{ role: string | null } | undefined>(undefined);
+  // 自分のキャラクターをまだ持っていない人は、発行の管理の前にキャラクターを作る画面を 1 回通る（11/5 作者）
+  const [made, setMade] = useState(0);
   const check = useCallback(() => {
     req<{ role: string | null }>(tenant, "/me").then(setMe, () => setMe({ role: null }));
   }, [tenant]);
   useEffect(check, [check]);
   if (!me) return <p>読み込み中…</p>;
   if (me.role !== "supervisor" && me.role !== "trainer") return <RolePick tenant={tenant} onDone={check} />;
+  if (!made && !loadAvatar(tenant, me.role)) return <AvatarSetup tenant={tenant} role={me.role} onDone={() => setMade(1)} />;
   return <Board tenant={tenant} me={{ role: me.role }} />;
 }

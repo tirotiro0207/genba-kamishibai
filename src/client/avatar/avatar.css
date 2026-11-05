@@ -1,0 +1,42 @@
+/* キャラクターを作る画面（11/5 作者）。切り替えと絵と部品を 1 枚のカードで包む。絵の地はいつも白（人形の塗りが白なので） */
+.av { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 920px; margin: 0 auto; }
+.av h1 { font-size: 22px; margin: 4px 0; }
+.av-card { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+/* デフォルト・カスタムの切り替え。外の箱の中で、選んだ側だけが浮く */
+.av-seg { display: inline-flex; padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.av-seg button { font: inherit; font-size: 16px; min-width: 128px; padding: 10px 18px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; transition: background 160ms, color 160ms; }
+.av-seg button.on { background: var(--bg); color: var(--fg); font-weight: 700; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
+
+/* 絵と部品。デフォルトは絵だけが真ん中、カスタムは絵が左へ寄り、右に部品が出る */
+.av-body { width: 100%; display: flex; justify-content: center; align-items: flex-start; gap: 20px; }
+.av-stage { flex: 0 0 auto; width: 240px; background: #fff; border-radius: 12px; padding: 12px; transition: transform 260ms ease; }
+.av-figure { display: block; width: 100%; height: auto; }
+.av-body.custom .av-stage { width: 220px; animation: av-slide 260ms ease; }
+@keyframes av-slide { from { transform: translateX(120px); } to { transform: none; } }
+.av-panel { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; animation: av-in 260ms ease; }
+@keyframes av-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+
+.av-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.av-tabs button { font: inherit; font-size: 15px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.av-tabs button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+.av-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; padding: 2px; }
+.av-grid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 10px; border: 2px solid transparent; background: #fff; color: #111; font: inherit; font-size: 12px; cursor: pointer; }
+.av-grid button svg { width: 100%; height: auto; display: block; }
+.av-grid button.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* 大きさのつまみ。左が小、右が大 */
+.av-size { flex-direction: row; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); padding: 6px 2px 0; border-top: 1px solid var(--line); }
+.av-size input { flex: 1; padding: 0; border: 0; accent-color: var(--accent); }
+
+.av-go { min-width: 280px; }
+
+@media (max-width: 640px) {
+  .av-body.custom { flex-direction: column; align-items: center; }
+  .av-body.custom .av-stage { width: 160px; animation: none; }
+  .av-go { min-width: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .av-body.custom .av-stage, .av-panel { animation: none; }
+}
