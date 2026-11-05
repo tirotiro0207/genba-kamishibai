@@ -107,6 +107,12 @@ export const PROP_JA: Record<PropKind, string> = {
   height_2m: "高さの札（2m）",
   fever: "熱がある顔",
   chair: "椅子（休憩所の背もたれのある椅子）",
+  bulb_off: "明かりの消えた電球（光の線なし・グレー）",
+  label_teiatsu: "「低圧停電」の札（停電作業のカードの右上）",
+  label_anzen: "「安全確認」の札（安全確認の打ち合わせのカードの右上）",
+  safety_cross: "安全の十字の印",
+  count_3sec: "「1…2…3 SEC」（3 秒数える）",
+  healthy: "元気に笑った顔",
 };
 
 const HEADGEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead"]);

@@ -36,6 +36,10 @@ export const PROP_KINDS = [
   "fever",
   // 座る椅子（11/6。作者の指示）。今まで座るのに使っていた踏み台の代わり。背もたれのある、金属の脚の休憩所の椅子
   "chair",
+  // 11/6 昼の 20 枚の作者の直しで足りなかった物: 明かりの消えた電球（光の線なし・ガラスはグレー）、漢字 4 文字の札 2 つ（「低圧停電」「安全確認」。
+  // カードの右上の空きに置く。字は字形を塗りの path で持つ。たった時間の札と同じ扱いの例外。作者の判断）、安全の十字の印、
+  // 吹き出しの中の「1…2…3 SEC」（数字・点々・SEC を線で描く。たった時間の札と同じ扱い）、元気に笑った顔（熱の顔と対）
+  "bulb_off", "label_teiatsu", "label_anzen", "safety_cross", "count_3sec", "healthy",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -57,7 +61,20 @@ export interface PropSpec {
   inner2?: InnerKind;
   /** inner と inner2 に付ける印（左・右の順）。無ければ両方とも印なし */
   inner_marks?: [InnerMark, InnerMark];
+  /** チェック表の行の数（11/6。2〜8。チェック表だけ）。無ければ 3 行 */
+  rows?: number;
+  /** チェック表の、上から何行に ✓ を付けるか（11/6。0〜rows。チェック表だけ）。無ければ 2（行が 2 より少なければ行の数） */
+  checks?: number;
+  /** チェック表の ✓ の欄の後ろに丸数字 ①〜⑧ を付ける（11/6。チェック表だけ） */
+  numbered?: boolean;
+  /** チェック表の行の頭（✓・丸数字の後ろ）に描く小さな絵（11/6。上の行から順に。"none" はその行に絵なし。チェック表だけ） */
+  icons?: ChecklistIcon[];
 }
+
+/** チェック表の行の頭の小さな絵: 転倒（人がつまずいて倒れかける）か、吹き出しの中に描ける道具、"none" は絵なし（11/6） */
+export type ChecklistIcon = "fall" | "none" | InnerKind;
+export const CHECKLIST_ROWS_MIN = 2;
+export const CHECKLIST_ROWS_MAX = 8;
 
 /** 吹き出しの中の道具に付ける印: ？・○・×・無し */
 export const INNER_MARKS = ["question", "circle", "cross", "none"] as const;
@@ -75,6 +92,8 @@ export const INNER_KINDS = [
   "aed", "voltage_detector", "insulated_gloves", "dust_mask", "power_drill", "armband",
   // 11/6: 熱がある顔（体調が悪いと伝える）、2 つの電球、切れた電線
   "fever", "bulb_flicker", "bulb_steady", "wire_broken",
+  // 11/6 昼: 消えた電球、「1…2…3 SEC」、元気な顔（熱の顔と対）、安全の十字
+  "bulb_off", "count_3sec", "healthy", "safety_cross",
 ] as const;
 export type InnerKind = (typeof INNER_KINDS)[number];
 
@@ -168,6 +187,12 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   height_2m: null,
   fever: null,
   chair: "hip",
+  bulb_off: "hand_near",
+  label_teiatsu: null,
+  label_anzen: null,
+  safety_cross: null,
+  count_3sec: null,
+  healthy: null,
 };
 
 /**
@@ -232,6 +257,15 @@ export function validateProps(props: PropSpec[], figures: number): string[] {
     if (p.inner2 !== undefined && !(BUBBLES.has(p.kind) && p.inner !== undefined && (INNER_KINDS as readonly string[]).includes(p.inner2))) errs.push(`props[${i}].inner2 は inner のある吹き出しの 2 つ目の道具だけ: ${p.inner2}`);
     if (p.inner_marks !== undefined && !(Array.isArray(p.inner_marks) && p.inner_marks.length === 2 && p.inner_marks.every((m) => (INNER_MARKS as readonly string[]).includes(m)) && p.inner2 !== undefined))
       errs.push(`props[${i}].inner_marks は inner2 のある吹き出しに、印 2 つ（${INNER_MARKS.join("・")}）`);
+    // チェック表の欄（11/6）
+    const list = p.rows !== undefined || p.checks !== undefined || p.numbered !== undefined || p.icons !== undefined;
+    if (list && p.kind !== "checklist") errs.push(`props[${i}] の rows・checks・numbered・icons はチェック表（checklist）だけ`);
+    const rows = p.rows ?? 3;
+    if (p.rows !== undefined && !(Number.isInteger(p.rows) && p.rows >= CHECKLIST_ROWS_MIN && p.rows <= CHECKLIST_ROWS_MAX)) errs.push(`props[${i}].rows は ${CHECKLIST_ROWS_MIN}〜${CHECKLIST_ROWS_MAX} の整数: ${p.rows}`);
+    if (p.checks !== undefined && !(Number.isInteger(p.checks) && p.checks >= 0 && p.checks <= rows)) errs.push(`props[${i}].checks は 0〜行の数（${rows}）の整数: ${p.checks}`);
+    if (p.numbered !== undefined && typeof p.numbered !== "boolean") errs.push(`props[${i}].numbered は true か false`);
+    if (p.icons !== undefined && !(Array.isArray(p.icons) && p.icons.length <= rows && p.icons.every((k) => k === "fall" || k === "none" || (INNER_KINDS as readonly string[]).includes(k))))
+      errs.push(`props[${i}].icons は行の数（${rows}）までの、fall・none・吹き出しの中の道具の並び`);
     if ("figure" in p.at) {
       if (p.at.figure < 0 || p.at.figure >= figures) errs.push(`props[${i}].at.figure が人物の番号の外`);
       if (Math.abs(p.at.dx ?? 0) > 1 || Math.abs(p.at.dy ?? 0) > 1) errs.push(`props[${i}].at のずれが範囲の外`);
@@ -263,13 +297,15 @@ interface Opt {
   topY?: number;
   /** クレーンに吊り荷がつながっている（クレーンは自分のワイヤーとフックを描かない） */
   linked?: boolean;
+  /** チェック表の欄（11/6）。無ければ前の 3 行の絵 */
+  list?: Pick<PropSpec, "rows" | "checks" | "numbered" | "icons">;
 }
 
 /** 高さの札の文字（線で描く。たった時間の札と同じく、数字と単位だけ） */
 export const HEIGHT_LABEL: Partial<Record<PropKind, string>> = { height_2m: "2m" };
 
 /** 部品の形。c は部品の「持つところ」（手に付けるときは手の位置。床に置く部品は下の真ん中） */
-function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = false, worn = false, body = false, elbow, topY, linked = false }: Opt): string {
+function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = false, worn = false, body = false, elbow, topY, linked = false, list }: Opt): string {
   const h = s / 2;
   /** 向いている側を正にした横の位置 */
   const X = (v: number) => cx + d * v;
@@ -509,6 +545,7 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
           return line(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0, cx + Math.sin(a) * h * 0.74, cy - Math.cos(a) * h * 0.74, INK, main ? 1 : 0.6);
         }).join("");
     case "checklist": {
+      if (list) return checklistRows([cx, cy], s, W, list);
       // 手元のチェックリスト: 濃い板に紙と上の留め具、3 行の欄。上の 2 行に ✓、下の 1 行は空の四角
       const x0 = cx - h * 0.72;
       const y0 = cy - h;
@@ -1143,11 +1180,14 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         [-0.3, 0.3].map((f) => ring(cx + f * s, cy - s * 0.08, s * 0.08, COAL) + dot(cx + f * s, cy - s * 0.08, s * 0.028, MID)).join("");
     }
     case "bulb_flicker":
-    case "bulb_steady": {
+    case "bulb_steady":
+    case "bulb_off": {
       // 電球（11/6）: 丸いガラスと首、ねじの口金、中のフィラメント。安定した電球は、まわりに同じ長さの光の線。
       // ちらつく電球は、ガラスを一段暗くし、横へずれたもう 1 つの輪郭（ぶれて見える）と、長さと向きのそろわないギザギザの短い線 4 本。
       // 手に持つ・吹き出しの中ではガラスが上（c は口金の真ん中）。キャンバスに置くと天井からコードで下がり、ガラスが下（c はガラスの真ん中）
       const flicker = kind === "bulb_flicker";
+      // 明かりの消えた電球（11/6 昼）: 安定した電球と同じ形で、ガラスをグレー（MID）にし、光の線を出さない
+      const off = kind === "bulb_off";
       // 吹き出しの中では、光の線まで含めて枠に収まるよう小さめにし、全体の真ん中を c にする
       const r = h * (icon ? 0.4 : 0.55);
       const hang = !icon && !body;
@@ -1160,12 +1200,14 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
       let out = "";
       if (hang) out += cord(`M${n(cx)} ${n(topY ?? Math.max(0, gy - h * 2.2))}V${n(capB)}`, W * 2, DARK);
       if (flicker) out += `<path d="${circ(cx + r * 0.24, gy - r * 0.1, r)}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.7)}" stroke-dasharray="${n(W * 1.6)} ${n(W * 1.3)}" stroke-linecap="round"/>`;
-      out += merge([[circ(cx, gy, r), flicker ? LIGHT : PAPER], [glass, flicker ? LIGHT : PAPER]]);
+      out += off ? merge([[circ(cx, gy, r), MID], [glass, MID]]) : merge([[circ(cx, gy, r), flicker ? LIGHT : PAPER], [glass, flicker ? LIGHT : PAPER]]);
       out += box(cx - r * 0.42, Math.min(capA, capB), cx + r * 0.42, Math.max(capA, capB), STEEL, r * 0.08, 0.8) +
         line(cx - r * 0.36, neck(1.22), cx + r * 0.36, neck(1.22), INK, 0.5) + line(cx - r * 0.36, neck(1.38), cx + r * 0.36, neck(1.38), INK, 0.5);
       // フィラメント: 口金から伸びる 2 本の足と、先の小さな山
       out += `<path d="M${n(cx - r * 0.2)} ${n(neck(0.95))}L${n(cx - r * 0.2)} ${n(neck(0.15))}L${n(cx - r * 0.07)} ${n(neck(-0.05))}L${n(cx + r * 0.07)} ${n(neck(0.15))}L${n(cx + r * 0.2)} ${n(neck(-0.05))}V${n(neck(0.95))}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.6)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-      if (!flicker) {
+      if (off) {
+        // 消えた電球は光の線を出さない
+      } else if (!flicker) {
         // 同じ長さの光の線 7 本（口金の側には出さない）
         for (let k = 0; k < 8; k++) {
           const a = (k * Math.PI) / 4;
@@ -1283,6 +1325,55 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         box(X(-s * 0.31), cy - s * 0.94, X(-s * 0.2), cy - s * 0.66, DARK, s * 0.03) +
         box(X(-s * 0.27), seat, X(s * 0.29), seat + s * 0.08, LIGHT, s * 0.03) + shine(X(-s * 0.18), seat + s * 0.035, X(s * 0.05), seat + s * 0.035, LIGHT);
     }
+    case "label_teiatsu":
+    case "label_anzen": {
+      // 漢字 4 文字の札（11/6 昼。「低圧停電」「安全確認」）: 紙の白の札に黒い字。カードの右上の空きに置く。c は札の真ん中、札の幅が size。
+      // 字は字形の塗りの path（KANJI）。絵の面に text を置かない決まりは守る。字を入れるのは、たった時間の札と同じ扱いの例外（作者の判断）
+      const label = KANJI_LABEL[kind]!;
+      const g = s / (label.length + 0.68);
+      const pad = g * 0.22;
+      const gap = g * 0.08;
+      const bh = g + pad * 2;
+      let out = box(cx - h, cy - bh / 2, cx + h, cy + bh / 2, PAPER, pad, 1.2);
+      [...label].forEach((ch, k) => {
+        const x = cx - h + pad + k * (g + gap);
+        out += `<path d="${KANJI[ch]}" fill="${INK}" transform="translate(${n(x)} ${n(cy - g / 2)}) scale(${(g / 1000).toFixed(4)})"/>`;
+      });
+      return out;
+    }
+    case "safety_cross": {
+      // 安全の十字の印（11/6 昼）: 紙の白の角の丸い四角に、濃い太い十字（緑十字の代わりに白黒で）。c は真ん中、幅が size
+      const a = h * 0.62;
+      const t = h * 0.2;
+      return box(cx - h, cy - h, cx + h, cy + h, PAPER, h * 0.2, 1.2) +
+        path(poly([[cx - t, cy - a], [cx + t, cy - a], [cx + t, cy - t], [cx + a, cy - t], [cx + a, cy + t], [cx + t, cy + t], [cx + t, cy + a], [cx - t, cy + a], [cx - t, cy + t], [cx - a, cy + t], [cx - a, cy - t], [cx - t, cy - t]]), COAL, 0.8);
+    }
+    case "count_3sec": {
+      // 「1…2…3 SEC」（11/6 昼。333 運動の 3 秒）: 数字と点々と SEC を線で描く。たった時間の札と同じ扱い。
+      // 吹き出しの中（icon）は札なしで幅が size の 2.3 倍、キャンバスに置くと紙の白の札で幅が size。c は真ん中
+      const wt = icon ? s * 2.3 : s * 0.86;
+      const gw = wt / countUnits();
+      const gh = gw / 0.55;
+      const sw = Math.max(W * (icon ? 0.9 : 1.15), gh * 0.13);
+      const plate = icon ? "" : box(cx - h, cy - gh * 0.95, cx + h, cy + gh * 0.95, PAPER, gh * 0.4);
+      return plate + countGlyphs(cx - wt / 2, cy - gh / 2, gw, gh, sw);
+    }
+    case "healthy": {
+      // 元気に笑った顔（11/6 昼。熱の顔 fever と対）: 丸い顔に、笑って細めた目（∩）、大きく開けて笑う口、ほおの丸、頭の右上の元気の線 3 本。c は顔の真ん中
+      const r = h * 0.68;
+      const fy = cy + r * 0.12;
+      let out = ring(cx, fy, r, PAPER);
+      for (const k of [-1, 1]) {
+        const ex = cx + k * r * 0.36;
+        const ey = fy - r * 0.18;
+        out += `<path d="M${n(ex - r * 0.15)} ${n(ey + r * 0.05)}Q${n(ex)} ${n(ey - r * 0.2)} ${n(ex + r * 0.15)} ${n(ey + r * 0.05)}" fill="none" stroke="${INK}" stroke-width="${n(W)}" stroke-linecap="round"/>`;
+        out += dot(cx + k * r * 0.58, fy + r * 0.22, r * 0.11, LIGHT);
+      }
+      out += path(`M${n(cx - r * 0.42)} ${n(fy + r * 0.16)}Q${n(cx)} ${n(fy + r * 0.24)} ${n(cx + r * 0.42)} ${n(fy + r * 0.16)}Q${n(cx + r * 0.36)} ${n(fy + r * 0.72)} ${n(cx)} ${n(fy + r * 0.72)}Q${n(cx - r * 0.36)} ${n(fy + r * 0.72)} ${n(cx - r * 0.42)} ${n(fy + r * 0.16)}Z`, DEEP, 0.8);
+      out += `<path d="M${n(cx - r * 0.2)} ${n(fy + r * 0.6)}Q${n(cx)} ${n(fy + r * 0.48)} ${n(cx + r * 0.2)} ${n(fy + r * 0.6)}Q${n(cx)} ${n(fy + r * 0.7)} ${n(cx - r * 0.2)} ${n(fy + r * 0.6)}Z" fill="${MID}"/>`;
+      for (const a of [-1.15, -0.75, -0.35]) out += line(cx + Math.cos(a) * r * 1.18, fy + Math.sin(a) * r * 1.18, cx + Math.cos(a) * r * 1.42, fy + Math.sin(a) * r * 1.42, INK, 1);
+      return out;
+    }
   }
 }
 
@@ -1305,6 +1396,11 @@ const GLYPH: Record<string, { w: number; d: string[]; dots?: [number, number][] 
   A: { w: 0.9, d: ["M0 1L0.45 0L0.9 1", "M0.2 0.62H0.7"] },
   E: { w: 0.72, d: ["M0.72 0H0V1H0.72", "M0 0.5H0.6"] },
   D: { w: 0.85, d: ["M0 0H0.42L0.85 0.3V0.7L0.42 1H0Z"] },
+  // 11/6 昼: チェック表の丸数字の 4・6 と、「1…2…3 SEC」の S・C
+  "4": { w: 1, d: ["M0.75 1V0L0 0.68H1"] },
+  "6": { w: 1, d: ["M0.9 0H0V1H1V0.5H0"] },
+  S: { w: 0.8, d: ["M0.8 0.1L0.62 0H0.18L0 0.12V0.38L0.18 0.5H0.62L0.8 0.62V0.88L0.62 1H0.18L0 0.9"] },
+  C: { w: 0.8, d: ["M0.8 0.1L0.6 0H0.2L0 0.15V0.85L0.2 1H0.6L0.8 0.9"] },
 };
 const GAP = 0.35;
 function glyphsWidth(text: string, gw: number): number {
@@ -1328,6 +1424,116 @@ function glyphs(text: string, x0: number, y0: number, gw: number, gh: number, sw
     x += g.w * gw + GAP * gw;
   }
   return out;
+}
+
+/** 漢字の札の字（11/6 昼）。字形はオープンソースの日本語フォント（SIL Open Font License 1.1）の太字から取り出した塗りの path。
+ * 1 文字は 1000 × 1000 の枠の中（y は上が 0） */
+const KANJI: Record<string, string> = {
+  "低": "M840 60 929 151Q858 173 773 192Q688 210 599 223Q510 236 427 244Q423 225 413 196Q403 168 393 150Q454 143 515 133Q577 124 636 112Q695 101 747 88Q799 75 840 60ZM362 119 479 157V719H362ZM297 696Q368 687 464 674Q561 660 659 645L665 752Q576 767 485 781Q394 795 320 807ZM432 368H969V476H432ZM632 173H753Q752 268 759 362Q765 456 777 538Q788 620 804 684Q819 747 837 783Q854 819 871 819Q882 819 888 786Q895 753 896 684Q915 702 941 720Q967 738 990 747Q982 823 966 865Q951 906 925 921Q899 936 859 936Q811 936 774 894Q738 851 711 776Q685 701 668 603Q651 506 642 396Q634 286 632 173ZM333 845H735V950H333ZM237 34 350 70Q318 154 274 240Q230 325 179 401Q128 478 73 535Q68 520 56 497Q45 473 32 449Q19 425 9 410Q54 364 97 304Q139 244 176 175Q212 106 237 34ZM141 311 255 197 255 198V968H141Z",
+  "圧": "M190 82H939V198H190ZM275 439H894V552H275ZM207 827H959V940H207ZM119 82H241V370Q241 435 237 513Q233 591 221 673Q209 754 187 831Q165 908 129 970Q117 960 98 948Q78 935 57 925Q36 914 20 909Q55 851 75 782Q95 714 105 641Q114 569 117 500Q119 430 119 371ZM515 238H636V891H515Z",
+  "停": "M326 119H963V220H326ZM578 32H698V167H578ZM504 336V391H777V336ZM391 257H897V470H391ZM302 508H976V701H866V599H407V702H302ZM441 641H838V736H441ZM578 664H697V853Q697 895 687 919Q676 943 645 955Q614 966 570 969Q527 971 470 971Q467 946 457 916Q448 886 436 862Q461 863 485 864Q510 865 530 864Q550 864 557 864Q569 864 574 861Q578 857 578 849ZM237 34 350 70Q318 154 274 240Q230 325 179 401Q128 478 73 535Q68 520 56 497Q45 473 32 449Q19 425 9 410Q54 364 97 304Q139 244 176 175Q212 106 237 34ZM141 311 255 197 255 198V968H141Z",
+  "電": "M211 633H778V705H211ZM211 508H848V829H211V749H729V589H211ZM432 553H547V832Q547 860 561 867Q574 875 619 875Q628 875 646 875Q665 875 688 875Q712 875 735 875Q759 875 779 875Q799 875 810 875Q835 875 848 868Q861 861 867 839Q873 817 876 775Q894 787 924 798Q953 809 976 813Q969 873 953 906Q937 940 906 953Q874 967 819 967Q810 967 789 967Q767 967 741 967Q714 967 687 967Q660 967 639 967Q618 967 608 967Q540 967 502 955Q463 943 448 914Q432 885 432 833ZM151 508H266V874H151ZM128 66H870V155H128ZM205 306H403V371H205ZM186 405H403V471H186ZM593 405H813V471H593ZM593 306H789V371H593ZM438 102H556V481H438ZM59 192H942V397H831V272H166V397H59Z",
+  "安": "M433 29H561V212H433ZM75 120H930V357H801V231H197V357H75ZM397 255 524 281Q495 342 463 407Q430 473 397 538Q364 603 332 661Q301 720 274 767L147 733Q176 687 208 628Q241 570 274 505Q308 441 340 377Q371 312 397 255ZM650 484 785 501Q753 617 696 698Q640 778 560 832Q481 886 377 919Q273 951 144 970Q139 955 127 935Q115 914 101 894Q88 874 76 861Q240 845 359 805Q477 765 550 688Q623 611 650 484ZM54 403H947V516H54ZM222 712 309 628Q382 648 464 676Q547 704 628 737Q710 769 782 803Q855 837 907 870L811 968Q764 936 695 901Q626 865 545 831Q464 796 381 765Q298 734 222 712Z",
+  "全": "M496 144Q465 188 422 235Q379 281 327 327Q275 372 216 413Q158 454 96 488Q85 467 63 438Q40 410 20 392Q107 347 186 286Q265 224 328 156Q391 88 428 27H553Q593 84 643 137Q693 190 748 235Q804 281 864 318Q923 354 983 380Q960 403 940 431Q920 459 903 487Q846 455 787 415Q728 374 674 329Q620 283 574 236Q528 189 496 144ZM157 614H841V718H157ZM208 392H795V498H208ZM76 839H931V946H76ZM434 439H560V898H434Z",
+  "確": "M549 516H923V604H549ZM549 674H923V762H549ZM547 833H970V931H547ZM400 124H965V306H858V224H501V306H400ZM684 432H794V880H684ZM586 350H945V449H586V970H473V454L575 350ZM638 29 752 51Q712 213 637 340Q562 467 452 548Q444 537 430 519Q415 502 399 485Q383 468 371 458Q473 391 540 280Q607 169 638 29ZM746 249 856 272Q837 313 818 351Q798 390 782 418L692 395Q706 364 722 323Q738 282 746 249ZM48 90H408V199H48ZM160 384H393V849H160V746H292V487H160ZM151 148 263 165Q249 273 225 377Q201 480 164 571Q128 661 78 729Q73 715 61 693Q50 671 37 649Q25 627 14 614Q53 559 80 485Q106 411 124 325Q141 239 151 148ZM113 384H210V927H113Z",
+  "認": "M598 111H706Q699 171 685 232Q672 292 645 348Q618 403 574 452Q529 500 459 536Q450 515 430 490Q410 465 392 451Q452 422 490 383Q528 344 550 299Q572 254 582 206Q593 158 598 111ZM425 282 481 199Q531 213 584 235Q636 257 684 281Q731 305 764 326L707 419Q675 395 627 369Q580 344 528 320Q475 297 425 282ZM827 69H939Q939 69 939 78Q939 86 938 96Q938 107 937 113Q933 227 927 299Q921 372 913 412Q904 451 891 467Q876 486 861 494Q845 502 824 505Q806 509 777 509Q748 510 715 509Q714 484 706 453Q697 423 685 401Q711 404 732 404Q753 405 765 405Q784 406 795 393Q802 383 808 352Q814 320 819 256Q823 192 827 87ZM535 609H645V827Q645 848 649 854Q653 859 667 859Q670 859 677 859Q684 859 692 859Q700 859 707 859Q715 859 718 859Q728 859 733 852Q738 845 741 823Q744 800 745 754Q755 762 772 771Q790 779 809 786Q827 792 842 797Q837 862 825 898Q812 935 790 948Q767 962 731 962Q724 962 713 962Q701 962 689 962Q677 962 666 962Q655 962 648 962Q602 962 577 950Q553 937 544 908Q535 879 535 829ZM433 648 528 673Q524 717 515 762Q506 807 491 847Q476 886 451 916L363 863Q384 837 398 803Q412 768 420 728Q429 688 433 648ZM558 540 627 470Q659 486 693 508Q727 529 758 553Q788 576 807 597L732 675Q715 653 686 629Q658 605 624 582Q590 558 558 540ZM778 664 875 625Q902 663 924 707Q946 751 962 795Q978 838 985 873L879 917Q875 881 860 837Q845 794 824 748Q803 702 778 664ZM439 69H878V169H439ZM75 337H368V428H75ZM79 62H366V152H79ZM75 474H368V564H75ZM30 196H395V291H30ZM127 612H370V917H127V822H270V707H127ZM73 612H172V956H73Z",
+};
+/** 漢字の札の文字 */
+export const KANJI_LABEL: Partial<Record<PropKind, string>> = { label_teiatsu: "低圧停電", label_anzen: "安全確認" };
+
+/** 「1…2…3 SEC」の並び（字・点々・大きいすき間）。幅は字の幅の単位 */
+const COUNT_PARTS = ["1", "dots", "2", "dots", "3", "space", "S", "E", "C"];
+const DOTS_W = 1.3;
+const SPACE_W = 0.5;
+function countUnits(): number {
+  return COUNT_PARTS.reduce((a, p, i) => a + (p === "dots" ? DOTS_W : p === "space" ? SPACE_W : GLYPH[p].w) + (i ? GAP : 0), 0);
+}
+function countGlyphs(x0: number, y0: number, gw: number, gh: number, sw: number): string {
+  let x = x0;
+  let out = "";
+  COUNT_PARTS.forEach((p, i) => {
+    if (i) x += GAP * gw;
+    if (p === "dots") {
+      for (const f of [0.2, 0.65, 1.1]) out += `<circle cx="${n(x + f * gw)}" cy="${n(y0 + gh * 0.92)}" r="${n(sw * 0.7)}" fill="${INK}"/>`;
+      x += DOTS_W * gw;
+    } else if (p === "space") x += SPACE_W * gw;
+    else {
+      out += glyphs(p, x, y0, gw, gh, sw);
+      x += GLYPH[p].w * gw;
+    }
+  });
+  return out;
+}
+
+/**
+ * 行の数・✓ の数・丸数字・行の頭の絵を決めたチェック表（11/6 昼）。置き方は前の 3 行の絵と同じ（板の上の端は c − size/2、板の高さが size）。
+ * 1 行は左から ✓ の欄・丸数字（numbered）・小さな絵（icons）・記入の線。丸数字と絵の分だけ板が左右に広がる
+ */
+function checklistRows([cx, cy]: Pt, s: number, W: number, list: NonNullable<Opt["list"]>): string {
+  const h = s / 2;
+  const rows = list.rows ?? 3;
+  const checks = list.checks ?? Math.min(2, rows);
+  const icons = list.icons ?? [];
+  const hasIcon = icons.some((k) => k !== "none");
+  const step = Math.min(0.48, 1.5 / rows) * h;
+  const cs = Math.min(h * 0.26, step * 0.66);
+  const numW = list.numbered ? cs * 1.5 : 0;
+  const iconW = hasIcon ? step * 1.05 : 0;
+  const bw = h * 1.44 + numW + iconW;
+  const x0 = cx - bw / 2;
+  const y0 = cy - h;
+  const rbox = (a: number, t: number, b: number, u: number, fill: string, r: number, k: number) =>
+    `<rect x="${n(a)}" y="${n(t)}" width="${n(b - a)}" height="${n(u - t)}" rx="${n(r)}" fill="${fill}" stroke="${INK}" stroke-width="${n(W * k)}" stroke-linejoin="round"/>`;
+  let out = rbox(x0, y0, x0 + bw, y0 + s, STEEL, s * 0.06, 1) + rbox(x0 + h * 0.12, y0 + h * 0.16, x0 + bw - h * 0.12, y0 + s - h * 0.1, PAPER, s * 0.02, 0.6) +
+    rbox(cx - h * 0.3, y0 - h * 0.12, cx + h * 0.3, y0 + h * 0.14, DEEP, s * 0.03, 0.8);
+  const first = y0 + h * 0.31 + step / 2;
+  for (let k = 0; k < rows; k++) {
+    const ry = first + k * step;
+    const bx = x0 + h * 0.26;
+    let x = bx + cs * 1.3;
+    out += rbox(bx, ry - cs / 2, bx + cs, ry + cs / 2, PAPER, cs * 0.15, 0.5);
+    if (k < checks)
+      out += `<polyline points="${n(bx + cs * 0.15)},${n(ry)} ${n(bx + cs * 0.45)},${n(ry + cs * 0.38)} ${n(bx + cs * 1.2)},${n(ry - cs * 0.75)}" fill="none" stroke="${INK}" stroke-width="${n(Math.max(W * 0.9, cs * 0.16))}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if (list.numbered) {
+      // 丸数字: 細い輪と、中の数字（線で描く）
+      const r = cs * 0.6;
+      const mx = x + cs * 0.15 + r;
+      const digit = String(k + 1);
+      const gh = r * 1.0;
+      const gw = gh * 0.62;
+      const dw = glyphsWidth(digit, gw);
+      out += `<circle cx="${n(mx)}" cy="${n(ry)}" r="${n(r)}" fill="none" stroke="${INK}" stroke-width="${n(Math.max(1, cs * 0.09))}"/>` +
+        glyphs(digit, mx - dw / 2, ry - gh / 2, gw, gh, Math.max(1, cs * 0.11));
+      x += numW;
+    }
+    if (hasIcon) {
+      const ik = icons[k] ?? "none";
+      const z = step * 0.9;
+      const ix = x + iconW / 2;
+      if (ik === "fall") out += fallIcon(ix, ry, z, W);
+      else if (ik !== "none") out += shape(ik, [ix, ry + (ON_FLOOR.has(ik) ? z * 0.45 : 0)], z, 1, { W: W * 0.6, icon: true });
+      x += iconW;
+    }
+    out += `<line x1="${n(x + cs * 0.1)}" y1="${n(ry)}" x2="${n(x0 + bw - h * 0.28)}" y2="${n(ry)}" stroke="${MID}" stroke-width="${n(W * 0.7)}" stroke-linecap="round"/>`;
+  }
+  return out;
+}
+
+/** 転倒の小さな絵（11/6 昼。チェック表の行の頭）: 床の段差につまずき、前へ倒れかける人（頭・体・手足の太い線）と、後ろの動きの線 2 本。(cx, cy) が真ん中、z は枠の大きさ */
+function fallIcon(cx: number, cy: number, z: number, W: number): string {
+  const P = (u: number, v: number) => `${n(cx + u * z)} ${n(cy + v * z)}`;
+  const t = Math.max(W * 0.9, z * 0.1);
+  const limb = (d: string) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${n(t)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const thin = (u1: number, v1: number, u2: number, v2: number) => `<path d="M${P(u1, v1)}L${P(u2, v2)}" fill="none" stroke="${INK}" stroke-width="${n(t * 0.45)}" stroke-linecap="round"/>`;
+  return thin(-0.5, 0.45, 0.5, 0.45) +
+    `<rect x="${n(cx + z * 0.02)}" y="${n(cy + z * 0.3)}" width="${n(z * 0.2)}" height="${n(z * 0.15)}" fill="${DARK}" stroke="${INK}" stroke-width="${n(t * 0.35)}"/>` +
+    limb(`M${P(-0.14, 0.06)}L${P(0.16, -0.14)}`) +
+    limb(`M${P(-0.14, 0.06)}L${P(-0.06, 0.24)}L${P(0.0, 0.34)}`) +
+    limb(`M${P(-0.14, 0.06)}L${P(-0.32, 0.18)}L${P(-0.44, 0.08)}`) +
+    limb(`M${P(0.16, -0.14)}L${P(0.32, 0.0)}L${P(0.4, 0.12)}`) +
+    limb(`M${P(0.16, -0.14)}L${P(0.1, -0.32)}L${P(0.2, -0.44)}`) +
+    `<circle cx="${n(cx + z * 0.32)}" cy="${n(cy - z * 0.24)}" r="${n(z * 0.1)}" fill="${INK}"/>` +
+    thin(-0.3, -0.22, -0.4, -0.17) + thin(-0.4, -0.08, -0.5, -0.03);
 }
 
 /** かぶり物と保護めがねは頭に付けたとき、手袋は手に付けたとき、size ではなく頭・手の大きさに合わせる */
@@ -1432,6 +1638,11 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
     };
     return `<g data-part="bubble">${tail}${box}${half(inner!, m1, cx - bw * 0.25)}${half(inner2!, m2, cx + bw * 0.25)}</g>`;
   }
+  // 「1…2…3 SEC」は横に長いので、記号の無い吹き出しでは箱の幅いっぱいに、ほかの吹き出しでは印の左の幅に収める（11/6 昼）
+  if (inner === "count_3sec") {
+    const sz = say ? Math.min(is, (bw * 0.86) / 2.3) : (bw * 0.48) / 2.3;
+    return `<g data-part="bubble">${tail}${box}${iconAt(inner, say ? cx : cx - bw * 0.21, sz)}${mark}</g>`;
+  }
   const icon = inner ? iconAt(inner, say ? cx : cx - bw * 0.18, is) : "";
   return `<g data-part="bubble">${tail}${box}${icon}${mark}</g>`;
 }
@@ -1482,8 +1693,11 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
       const straps = p.kind === "harness" && onBody ? harnessStraps(posed[(p.at as { figure: number }).figure], W) : "";
       const elbow = onHand ? posed[(p.at as { figure: number }).figure].joints[(p.at as { joint: Joint }).joint.replace("hand", "elbow") as Joint] : undefined;
       // キャンバスに置いた電球は天井の線から吊る
-      const hung = (p.kind === "bulb_flicker" || p.kind === "bulb_steady") && !onBody ? CEIL * size : undefined;
+      const hung = (p.kind === "bulb_flicker" || p.kind === "bulb_steady" || p.kind === "bulb_off") && !onBody ? CEIL * size : undefined;
       const opt: Opt = { W, worn: onHead || onHand, body: onBody, elbow, linked: linkedCranes.has(i), topY: j === undefined ? hung : tips[j]![1] };
+      // チェック表の欄（11/6）。どれも無ければ前の絵のまま
+      if (p.kind === "checklist" && (p.rows !== undefined || p.checks !== undefined || p.numbered !== undefined || p.icons !== undefined))
+        opt.list = { rows: p.rows, checks: p.checks, numbered: p.numbered, icons: p.icons };
       return `<g data-part="prop">${straps}${shape(p.kind, c, s, d, opt)}</g>`;
     })
     .join("");
