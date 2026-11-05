@@ -10,6 +10,15 @@ import type { Env } from "./env";
 import type { PeopleVars } from "./people";
 import { actorOf } from "./sign";
 
+/** 本文を読む。壊れた 1 枚で一覧全体が落ちないよう、読めなければ null（11/6） */
+function bodyOf(raw: string): CardBody | null {
+  try {
+    return JSON.parse(raw) as CardBody;
+  } catch {
+    return null;
+  }
+}
+
 export const queue = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 queue.get("/queue", async (c) => {
@@ -26,10 +35,13 @@ queue.get("/queue", async (c) => {
   );
   const items = await Promise.all(
     results.map(async (r) => {
-      const e = await currentEvidence(db, tid, r);
-      return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, night: night.has(r.id), rule: (JSON.parse(r.body) as CardBody).rule };
+      const b = bodyOf(r.body);
+      // 証拠を読むときも本文を読み直すので、読めない本文の枚は証拠なしで並べる
+      const e = b ? await currentEvidence(db, tid, r) : null;
+      return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, night: night.has(r.id), scripted: Boolean(b?.script), rule: b?.rule ?? "" };
     }),
   );
+  // scripted: 脚本（11/5〜）を書いてから作ったカードか。前の作り方のカードには見せ場・山場の脚本が無く、一覧に印を出す（11/6）
   return c.json({ cards: queueOrder(items) });
 });
 

@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { sampleCard } from "../../tests/fixtures/card";
+import { SCRIPT, sampleCard } from "../../tests/fixtures/card";
 import { appendAudit } from "./audit";
 
 // 061: 確認待ちの列は赤のカードが先頭。監修者は仕分けの一覧を入れ替えられ、保存される
@@ -48,6 +48,21 @@ describe("確認待ちの列と仕分けの入れ替え（061）", () => {
     const { cards } = (await res.json()) as { cards: { id: string; night: boolean }[] };
     expect(cards.find((x) => x.id === nightCard)?.night).toBe(true);
     expect(cards.find((x) => x.id === made)?.night).toBe(false);
+  });
+
+  it("脚本の有るカードは scripted が true、脚本の無い前の作り方のカードは false。本文が壊れた 1 枚があっても一覧は落ちない（11/6）", async () => {
+    await env.DB.prepare("INSERT INTO tenants (id, kind, name) VALUES ('qscr', 'demo', 'qscr')").run();
+    const old = await card("qscr", "脚本の無いカード");
+    const res0 = await call("/api/t/qscr/cards", json("POST", { card: { ...sampleCard(), rule: "脚本の有るカード", script: SCRIPT } }));
+    const withScript = ((await res0.json()) as { id: string }).id;
+    const broken = await card("qscr", "本文が壊れたカード");
+    await env.DB.prepare("UPDATE cards SET body = '{壊れた' WHERE id = ?").bind(broken).run();
+    const res = await call("/api/t/qscr/queue", json("GET", undefined, await roleHeader("qscr", "supervisor")));
+    expect(res.status).toBe(200);
+    const { cards } = (await res.json()) as { cards: { id: string; scripted: boolean }[] };
+    expect(cards.find((x) => x.id === withScript)?.scripted).toBe(true);
+    expect(cards.find((x) => x.id === old)?.scripted).toBe(false);
+    expect(cards.find((x) => x.id === broken)?.scripted).toBe(false);
   });
 
   it("監修者が「する／しない」を入れ替えると保存され、最初の AI の答えと入れ替えた人が残る。監修者のほかは入れ替えられない", async () => {

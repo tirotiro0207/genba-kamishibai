@@ -14,6 +14,8 @@ interface QueueCard {
   rate: number | null;
   /** 夜間の一括で作ったカード（11/6） */
   night?: boolean;
+  /** 脚本（11/5〜）を書いてから作ったカード。false は前の作り方で、見せ場・山場の脚本が無い（11/6） */
+  scripted?: boolean;
   rule: string;
 }
 
@@ -72,6 +74,11 @@ export function QueueScreen({ tenant }: { tenant: string }) {
               {c.night && (
                 <span className="queue-night" data-testid="queue-night">
                   夜間
+                </span>
+              )}
+              {c.scripted === false && (
+                <span className="queue-noscript" data-testid="queue-noscript" title="11/5 より前の作り方。見せ場・山場の脚本が無い">
+                  脚本なし
                 </span>
               )}
               <a href={`#/t/${tenant}/card/${c.id}`}>{c.rule}</a>

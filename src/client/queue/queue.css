@@ -21,3 +21,5 @@
 .queue-swapped { margin-left: 6px; font-size: 12px; border: 1px solid var(--fg); border-radius: 8px; padding: 0 6px; }
 /* 夜間の一括で作ったカードの印（11/6）。帯の色と混ざらないよう、塗らずに点線の枠だけ */
 .queue-night { font-size: 13px; padding: 1px 8px; border-radius: 10px; border: 1px dashed var(--muted); color: var(--muted); }
+/* 脚本の無い、11/5 より前の作り方のカードの印（11/6）。夜間の印と並べ、黄の帯と混ざらないよう塗らずに注意の色の枠と字だけ */
+.queue-noscript { font-size: 13px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--band-yellow); color: var(--fg); }

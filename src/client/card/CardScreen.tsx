@@ -46,6 +46,16 @@ function Ask({ card }: { card: CardView }) {
   );
 }
 
+/** 脚本の無い枚の印（11/6）。11/5 より前の作り方のカードには見せ場・山場の脚本が無いので、絵に山場が無い理由をここで示す */
+function NoScript({ card }: { card: CardView }) {
+  if (card.body.script) return null;
+  return (
+    <p className="card-note" data-testid="card-noscript">
+      脚本なし（11/5 より前の作り方）。見せ場・山場の脚本が無いので、作り直すときは新しい作り方で作り直す
+    </p>
+  );
+}
+
 /** 手本にしたもの（087・§5 L7）。この下書きを作るときに渡した、同じ会社の前の修正か署名済みのカードの日付と誰（役割） */
 function Used({ tenant, card }: { tenant: string; card: CardView }) {
   const [used, setUsed] = useState<UsedExemplar[]>([]);
@@ -129,6 +139,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
       <Band card={card} />
       <Ask card={card} />
       <Used tenant={tenant} card={card} />
+      <NoScript card={card} />
       {card.verify?.dangerous && card.status !== "signed" && card.status !== "stopped" && (
         // 危険の印（048）は絵の面の外に置く。絵の面は 0 字のまま
         <p className="card-danger" data-testid="card-danger" role="alert">
