@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { isScriptCall, MOTION, SCRIPT } from "../../tests/fixtures/card";
+import { isScriptCall, MOTION, scriptReply } from "../../tests/fixtures/card";
 import { setClientFactory } from "./claude-client";
 
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
@@ -15,7 +15,7 @@ describe("正式な流れの作成の API（034a）", () => {
     setClientFactory(() => ({
       messages: {
         create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-          if (isScriptCall(p.system)) return reply(SCRIPT);
+          if (isScriptCall(p.system)) return reply(scriptReply(p.system));
           if (String(p.system).includes("言葉」の欄")) return reply(WORDS);
           if (String(p.system).includes("カードの下ごしらえ"))
             return reply({ rules: [{ kind: "do", text: "盤に触る前に検電する", from: { quote: "盤に触る前に検電する", lines: [2] }, reasons: [{ text: "感電を防ぐ", from: { quote: "感電", lines: [3] }, stated: true }], checklist: false, reworded: false }] });
@@ -82,7 +82,7 @@ describe("AI 下書きの判定（035）", () => {
     setClientFactory(() => ({
       messages: {
         create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-          if (isScriptCall(p.system)) return reply(SCRIPT);
+          if (isScriptCall(p.system)) return reply(scriptReply(p.system));
           if (String(p.system).includes("言葉」の欄")) return reply(WORDS);
           if (String(p.system).includes("カードの下ごしらえ"))
             return reply({ rules: [{ kind: "do", text: "盤に触る前に 2 回検電する", from: { quote: "盤に触る前に検電する", lines: [2] }, reasons: [{ text: "感電を防ぐ", from: { quote: "盤に触る前に検電する", lines: [2] }, stated: false }], checklist: false, reworded: false }] });

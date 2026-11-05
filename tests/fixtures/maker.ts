@@ -1,6 +1,6 @@
 // 作成（034a）のテスト用の偽の client。動きは tests/fixtures/card の MOTION、経路は部品ごとに s1 を指す
 import type Anthropic from "@anthropic-ai/sdk";
-import { isScriptCall, MOTION, SCRIPT } from "./card";
+import { isScriptCall, MOTION, scriptReply } from "./card";
 
 export function fakeMaker(opts: { dropPart?: boolean; why?: string | null } = {}) {
   const sent: Anthropic.MessageCreateParamsNonStreaming[] = [];
@@ -14,7 +14,7 @@ export function fakeMaker(opts: { dropPart?: boolean; why?: string | null } = {}
         // 脚本の段（11/5）は先に 1 回。sent には絵の数字の段だけを積む
         if (isScriptCall(p.system)) {
           scripts.push(p);
-          return { model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(SCRIPT) }], usage: { input_tokens: 1000, output_tokens: 800 } } as unknown as Anthropic.Message;
+          return { model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(scriptReply(p.system)) }], usage: { input_tokens: 1000, output_tokens: 800 } } as unknown as Anthropic.Message;
         }
         sent.push(p);
         const parts = [

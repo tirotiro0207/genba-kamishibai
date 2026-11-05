@@ -42,9 +42,24 @@ export const SCRIPT = {
     { who: "新人", action: "検電器を盤に当てる", viewer: "先に検電する" },
     { who: "新人", action: "✓ の印", viewer: "電気が来ていないと確かめた" },
   ],
+  merged: "そのまま 3 コマ",
   why_shown: "3 コマ目の ✓",
   avoid: [],
   drawable: true,
   missing: null,
 };
+/** 脚本の 1 段目（物語）の偽の答え */
+export const STORY = {
+  setting: "盤のある部屋で新人が作業している",
+  beats: [
+    { what: "新人が盤の前に来る", viewer: "盤を触る場面" },
+    { what: "新人が検電器を当てる", viewer: "先に検電する" },
+    { what: "電気が来ていないと分かる", viewer: "確かめた" },
+  ],
+  why_shown: "最後の場面",
+  time: null,
+  avoid: [],
+};
 export const isScriptCall = (system: unknown) => String(system).includes("脚本を書く係");
+/** 脚本の係への偽の答え（物語の段なら STORY、コマ割りの段なら SCRIPT） */
+export const scriptReply = (system: unknown) => (String(system).includes("物語の段") ? STORY : SCRIPT);

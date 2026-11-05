@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { MemoryCallLog } from "../src/shared/claude";
 import { assign, makeCard, makerParams, type OkRule } from "../src/shared/make/maker";
-import { PROP_JA, scriptErrors, scriptParams, writeScript } from "../src/shared/make/script";
+import { boardParams, PROP_JA, scriptErrors, storyErrors, storyParams, writeScript } from "../src/shared/make/script";
 import { PROP_KINDS } from "../src/shared/picto/props";
-import { SCRIPT } from "./fixtures/card";
+import { SCRIPT, STORY } from "./fixtures/card";
 import { fakeMaker } from "./fixtures/maker";
 
 const from = (line: number) => ({ quote: "q", line, line_end: line, found: true });
@@ -22,37 +22,46 @@ describe("正式な流れの作成（034a）", () => {
       { id: "s2", field: "why", text: "感電を防ぐ", sources: [{ kind: "doc", doc: "m", page: 30, line: 4 }] },
     ]);
     expect(card.parts).toHaveLength(3);
-    // 先に脚本（11/5）。脚本はカードに残り、絵の数字の段にそのまま渡る
-    expect(log.records.map((r) => r.label)).toEqual(["脚本", "作成（動きと経路）"]);
-    expect(card.script).toEqual(SCRIPT);
+    // 先に脚本（11/5）: 物語 → コマ割り の 2 段。脚本はカードに残り、コマ割りが絵の数字の段にそのまま渡る
+    expect(log.records.map((r) => r.label)).toEqual(["脚本（物語）", "脚本（コマ割り）", "作成（動きと経路）"]);
+    expect(card.script).toEqual({ ...SCRIPT, story: STORY });
+    expect(String(client.scripts[1].messages[0].content)).toContain(`場面 1: ${STORY.beats[0].what}／見る人が分かること: ${STORY.beats[0].viewer}`);
     const sent = String(client.sent[0].messages[0].content);
     expect(sent).toContain("脚本（このとおりの筋で描く");
     expect(sent).toContain(`1 コマ目: ${SCRIPT.frames[0].who}／${SCRIPT.frames[0].action}／見る人が分かること: ${SCRIPT.frames[0].viewer}`);
     expect(sent).toContain(`なぜの見せ方: ${SCRIPT.why_shown}`);
   });
 
-  it("脚本の係には、描ける物・吹き出しの読まれ方・きっかけから始める決まりを渡す。○× の側と点検表の型も渡す", () => {
-    const p = scriptParams(RULE, assign(RULE, locate));
-    const sys = String(p.system);
-    expect(sys).toContain("脚本を書く係");
-    expect(sys).toContain("床にこぼれた液（spill）");
-    expect(sys).toMatch(/「？」の吹き出しは「分からない・どうするか聞いている」と読まれる/);
-    expect(sys).toMatch(/決まりが働くきっかけを最初に見せる/);
-    expect(String(p.messages[0].content)).toBe("カードの文:\n守ること: 盤に触る前に検電する\nなぜ: 感電を防ぐ");
-    expect(String(scriptParams({ ...RULE, kind: "dont", checklist: true }, assign(RULE, locate), "bad").messages[0].content)).toMatch(/してはいけないこと[\s\S]*× の側[\s\S]*点検表の型/);
+  it("物語の係はコマの数に縛らず、電気工事の現場のきっかけと時間の札を考える。コマ割りの係は描ける物と吹き出しの読まれ方で 3〜4 コマに移す", () => {
+    const st = storyParams(RULE, assign(RULE, locate));
+    expect(String(st.system)).toMatch(/コマの数はまだ考えません/);
+    expect(String(st.system)).toMatch(/電気工事の現場でよくある[\s\S]*火花が散る/);
+    expect(String(st.system)).toContain("10min");
+    expect(String(st.messages[0].content)).toBe("カードの文:\n守ること: 盤に触る前に検電する\nなぜ: 感電を防ぐ");
+    expect(String(storyParams({ ...RULE, kind: "dont", checklist: true }, assign(RULE, locate), "bad").messages[0].content)).toMatch(/してはいけないこと[\s\S]*× の側[\s\S]*点検表の型/);
+    const bd = boardParams(RULE, assign(RULE, locate), STORY);
+    const sys = String(bd.system);
+    expect(sys).toContain("火花（spark）");
+    expect(sys).toContain("bubble_alert");
+    expect(sys).toMatch(/「？」は「分からない・どうするか聞いている」/);
+    expect(sys).toMatch(/3〜4 コマに選んでまとめる/);
+    expect(String(bd.messages[0].content)).toContain("物語:\n場面: 盤のある部屋で新人が作業している");
   });
 
-  it("脚本のコマが 3〜4 でなければ 1 回だけ書き直させ、2 回とも足りなければ止める", async () => {
+  it("物語とコマ割りは形が合わなければ 1 回だけ書き直させ、2 回とも足りなければ止める", async () => {
     expect(scriptErrors(SCRIPT)).toEqual([]);
     expect(scriptErrors({ ...SCRIPT, frames: SCRIPT.frames.slice(0, 2) })).toEqual(["コマ（frames）は 3〜4"]);
+    expect(storyErrors(STORY)).toEqual([]);
+    expect(storyErrors({ ...STORY, time: "7min" })).toEqual(["時間の札（time）は 1min・5min・10min・30min・1h のどれか: 7min"]);
     const bad = { ...SCRIPT, frames: [] };
-    let calls = 0;
-    const client = { messages: { create: async () => (calls++, { model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(calls === 1 ? bad : SCRIPT) }], usage: { input_tokens: 1, output_tokens: 1 } }) } };
+    let boards = 0;
+    const answer = (x: unknown) => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(x) }], usage: { input_tokens: 1, output_tokens: 1 } });
+    const client = { messages: { create: async (p: { system: string }) => answer(p.system.includes("物語の段") ? STORY : ++boards === 1 ? bad : SCRIPT) } };
     const { script, messages } = await writeScript({ client: client as never, log: new MemoryCallLog() }, "app", RULE, assign(RULE, locate));
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(3);
     expect(script.frames).toHaveLength(3);
-    const never = { messages: { create: async () => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(bad) }], usage: { input_tokens: 1, output_tokens: 1 } }) } };
-    await expect(writeScript({ client: never as never, log: new MemoryCallLog() }, "app", RULE, assign(RULE, locate))).rejects.toThrow(/脚本が 2 回とも/);
+    const never = { messages: { create: async (p: { system: string }) => answer(p.system.includes("物語の段") ? STORY : bad) } };
+    await expect(writeScript({ client: never as never, log: new MemoryCallLog() }, "app", RULE, assign(RULE, locate))).rejects.toThrow(/脚本（コマ割り）が 2 回とも/);
   });
 
   it("小物の日本語の名前は、全部の小物にある", () => {
@@ -71,9 +80,9 @@ describe("正式な流れの作成（034a）", () => {
   it("経路の無い部品があれば 1 回だけ書き直させる", async () => {
     const client = fakeMaker({ dropPart: true });
     const { card, messages } = await makeCard({ client, log: new MemoryCallLog() }, "app", RULE, locate);
-    // 脚本 1 回 + 絵の数字 2 回。脚本は書き直しでは呼び直さない
-    expect(messages).toHaveLength(3);
-    expect(client.scripts).toHaveLength(1);
+    // 脚本 2 回（物語・コマ割り）+ 絵の数字 2 回。脚本は書き直しでは呼び直さない
+    expect(messages).toHaveLength(4);
+    expect(client.scripts).toHaveLength(2);
     expect(String(client.sent[1].messages[0].content)).toMatch(/経路が無い/);
     expect(card.parts).toHaveLength(3);
   });

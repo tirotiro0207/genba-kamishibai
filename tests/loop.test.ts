@@ -4,7 +4,7 @@ import { MemoryCallLog } from "../src/shared/claude";
 import { checklistErrors, type OkRule } from "../src/shared/make/maker";
 import { makeAndCheck, MAX_FIXES } from "../src/shared/make/loop";
 import { readParams } from "../src/shared/verify/formal";
-import { isScriptCall, MOTION, SCRIPT } from "./fixtures/card";
+import { isScriptCall, MOTION, scriptReply } from "./fixtures/card";
 
 const from = (line: number) => ({ quote: "q", line, line_end: line, found: true });
 const RULE: OkRule = { kind: "do", text: "盤に触る前に検電する", from: from(3), reasons: [{ text: "感電を防ぐ", from: from(4), stated: true }], checklist: false, reworded: false };
@@ -21,7 +21,7 @@ function fake(credits: [C, C][]) {
     sent,
     messages: {
       create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-        if (isScriptCall(p.system)) return reply(SCRIPT);
+        if (isScriptCall(p.system)) return reply(scriptReply(p.system));
         sent.push(p);
         const sys = String(p.system);
         if (sys.includes("部品ごとの経路"))

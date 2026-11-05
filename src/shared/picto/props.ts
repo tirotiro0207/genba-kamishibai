@@ -21,6 +21,9 @@ export const PROP_KINDS = [
   "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "first_aid", "gloves", "goggles",
   "knife", "hot_pot", "cart", "forklift", "spill", "bucket", "mop", "chemical", "gas_cylinder",
   "hammer", "wrench", "grinder", "gear", "sun", "water_bottle", "faucet", "radio",
+  // 11/5 脚本の段で足りなかった物: 火花（電気の異常）、記号の無い話す吹き出し・「！」の吹き出し（異常を知らせる）、
+  // たった時間の札（時計と「10min」。数字と min・h だけは線で描いて絵に入れる。作者の判断）
+  "spark", "bubble_say", "bubble_alert", "elapsed_1min", "elapsed_5min", "elapsed_10min", "elapsed_30min", "elapsed_1h",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -38,11 +41,14 @@ export interface PropSpec {
 }
 
 /** 吹き出し。人に付けると、しっぽ（話す）か小さい丸（考える）がその人の頭へ向かう */
-export const BUBBLES = new Set<PropKind>(["bubble_question", "bubble_check", "think_question", "think_check"]);
+export const BUBBLES = new Set<PropKind>(["bubble_question", "bubble_check", "think_question", "think_check", "bubble_say", "bubble_alert"]);
+/** たった時間の札と、その文字（線で描く） */
+export const ELAPSED: Partial<Record<PropKind, string>> = { elapsed_1min: "1min", elapsed_5min: "5min", elapsed_10min: "10min", elapsed_30min: "30min", elapsed_1h: "1h" };
 /** 吹き出しの中に描ける道具 */
 export const INNER_KINDS = [
   "panel", "tester", "outlet", "wire", "harness", "lock", "tag", "box", "toolbox", "checklist", "suspended_load", "broom", "clock",
   "fire_extinguisher", "first_aid", "gloves", "goggles", "cone", "ladder", "chemical", "knife", "gear",
+  "spark",
 ] as const;
 export type InnerKind = (typeof INNER_KINDS)[number];
 
@@ -103,6 +109,14 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   water_bottle: "hand_near",
   faucet: null,
   radio: "hand_near",
+  spark: null,
+  bubble_say: "head",
+  bubble_alert: "head",
+  elapsed_1min: null,
+  elapsed_5min: null,
+  elapsed_10min: null,
+  elapsed_30min: null,
+  elapsed_1h: null,
 };
 
 /** c が部品の下の真ん中（床に置く）の部品。吹き出しの中では真ん中へずらして描く */
@@ -304,7 +318,39 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
     case "bubble_check":
     case "think_question":
     case "think_check":
+    case "bubble_say":
+    case "bubble_alert":
       return ""; // 吹き出しは bubbleSvg で描く
+    case "spark": {
+      // 火花（11/5）: 真ん中の稲妻の形と、まわりへ飛ぶ短い線 8 本と小さい粒。c は真ん中
+      const bolt = poly([[cx - h * 0.12, cy - h * 0.62], [cx + h * 0.3, cy - h * 0.62], [cx + h * 0.06, cy - h * 0.1], [cx + h * 0.34, cy - h * 0.1], [cx - h * 0.2, cy + h * 0.66], [cx - h * 0.02, cy + h * 0.08], [cx - h * 0.3, cy + h * 0.08]]);
+      let out = "";
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4 + Math.PI / 8;
+        out += line(cx + Math.cos(a) * h * 0.62, cy + Math.sin(a) * h * 0.62, cx + Math.cos(a) * h * 0.95, cy + Math.sin(a) * h * 0.95, INK, 1.1);
+      }
+      for (const a of [0.3, 1.9, 3.5, 5.1]) out += dot(cx + Math.cos(a) * h * 1.05, cy + Math.sin(a) * h * 1.05, W * 0.9);
+      return out + path(bolt, LIGHT, 1.1);
+    }
+    case "elapsed_1min":
+    case "elapsed_5min":
+    case "elapsed_10min":
+    case "elapsed_30min":
+    case "elapsed_1h": {
+      // たった時間の札（11/5）: 薄い札に、左に小さい時計、右に「10min」などを線で描く。c は札の真ん中
+      const label = ELAPSED[kind]!;
+      const gh = h * 0.5;
+      const gw = gh * 0.55;
+      const tw = glyphsWidth(label, gw);
+      const cr = gh * 0.62;
+      const pad = h * 0.18;
+      const bw = cr * 2 + pad * 3 + tw;
+      const x0 = cx - bw / 2;
+      const ccx = x0 + pad + cr;
+      return box(x0, cy - h * 0.55, x0 + bw, cy + h * 0.55, PAPER, h * 0.2) +
+        ring(ccx, cy, cr, LIGHT, 1) + line(ccx, cy, ccx, cy - cr * 0.6, INK, 0.9) + line(ccx, cy, ccx + cr * 0.45, cy, INK, 1.1) +
+        glyphs(label, ccx + cr + pad, cy - gh * 0.8, gw, gh, W * 1.15);
+    }
     case "suspended_load": {
       // 上の端から吊った荷: ワイヤー、フック、2 本の吊り具、板を組んだ荷
       const top = Math.max(0, cy - h * 2.2);
@@ -702,6 +748,44 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
   }
 }
 
+/**
+ * 線で描く字（11/5。たった時間の札の「10min」だけに使う）。絵の面に text 要素を置かない決まり（style.ts）を守るため、
+ * 字は幅 1・高さ 1 の枠の中の折れ線で持つ（y は上が 0）。小文字は枠の下 6 割に収める
+ */
+const GLYPH: Record<string, { w: number; d: string[]; dots?: [number, number][] }> = {
+  "0": { w: 1, d: ["M0 0H1V1H0Z"] },
+  "1": { w: 0.6, d: ["M0.1 0.2L0.4 0V1"] },
+  "3": { w: 1, d: ["M0 0H1V1H0", "M0.25 0.5H1"] },
+  "5": { w: 1, d: ["M1 0H0V0.48H1V1H0"] },
+  m: { w: 1.2, d: ["M0 1V0.4H1.2V1", "M0.6 0.4V1"] },
+  i: { w: 0.3, d: ["M0.15 0.4V1"], dots: [[0.15, 0.18]] },
+  n: { w: 0.9, d: ["M0 1V0.4H0.9V1"] },
+  h: { w: 0.9, d: ["M0 0V1", "M0 0.4H0.9V1"] },
+};
+const GAP = 0.35;
+function glyphsWidth(text: string, gw: number): number {
+  return [...text].reduce((a, ch, i) => a + (GLYPH[ch]?.w ?? 1) * gw + (i ? GAP * gw : 0), 0);
+}
+function glyphs(text: string, x0: number, y0: number, gw: number, gh: number, sw: number): string {
+  let x = x0;
+  let out = "";
+  for (const ch of text) {
+    const g = GLYPH[ch];
+    if (!g) continue;
+    const tr = (d: string) => d.replace(/([MLHVZ])([^MLHVZ]*)/g, (_, c: string, args: string) => {
+      const v = args.trim().split(/\s+/).filter(Boolean).map(Number);
+      if (c === "H") return `H${n(x + v[0] * gw)}`;
+      if (c === "V") return `V${n(y0 + v[0] * gh)}`;
+      if (c === "Z") return "Z";
+      return `${c}${n(x + v[0] * gw)} ${n(y0 + v[1] * gh)}`;
+    });
+    for (const d of g.d) out += `<path d="${tr(d)}" fill="none" stroke="${INK}" stroke-width="${n(sw)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    for (const [px, py] of g.dots ?? []) out += `<circle cx="${n(x + px * gw)}" cy="${n(y0 + py * gh)}" r="${n(sw * 0.75)}" fill="${INK}"/>`;
+    x += g.w * gw + GAP * gw;
+  }
+  return out;
+}
+
 /** かぶり物と保護めがねは頭に付けたとき、手袋は手に付けたとき、size ではなく頭・手の大きさに合わせる */
 const HEADWEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead", "goggles"]);
 const HANDWEAR = new Set<PropKind>(["gloves"]);
@@ -749,11 +833,20 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
     tail = `<polygon points="${n(base[0] + px)},${n(base[1] + py)} ${n(base[0] - px)},${n(base[1] - py)} ${n(tip[0])},${n(tip[1])}" fill="#fff" stroke="${INK}" stroke-width="${n(w)}" stroke-linejoin="round"/>` +
       `<line x1="${n(base[0] + px * 0.8)}" y1="${n(base[1] + py * 0.8)}" x2="${n(base[0] - px * 0.8)}" y2="${n(base[1] - py * 0.8)}" stroke="#fff" stroke-width="${n(w * 2.2)}"/>`;
   }
-  // 中身
-  const mx = inner ? cx + bw * 0.24 : cx;
+  // 中身。記号の無い話す吹き出し（bubble_say）は道具だけを真ん中に、「！」の吹き出し（bubble_alert）は道具の右に「！」
+  const say = kind === "bubble_say";
+  const alert = kind === "bubble_alert";
+  const mx = inner && !say ? cx + bw * 0.24 : cx;
   const ms = bh * 0.62;
   let mark: string;
-  if (check) {
+  if (say) {
+    mark = "";
+  } else if (alert) {
+    // 「！」を太い線と点で描く
+    const q = ms * 0.5;
+    mark = `<line x1="${n(mx)}" y1="${n(cy - q * 0.85)}" x2="${n(mx)}" y2="${n(cy + q * 0.3)}" stroke="${INK}" stroke-width="${n(q * 0.3)}" stroke-linecap="round"/>` +
+      `<circle cx="${n(mx)}" cy="${n(cy + q * 0.8)}" r="${n(q * 0.17)}" fill="${INK}"/>`;
+  } else if (check) {
     mark = `<circle cx="${n(mx)}" cy="${n(cy)}" r="${n(ms * 0.5)}" fill="${INK}"/>` +
       `<polyline points="${n(mx - ms * 0.24)},${n(cy + ms * 0.01)} ${n(mx - ms * 0.06)},${n(cy + ms * 0.19)} ${n(mx + ms * 0.26)},${n(cy - ms * 0.18)}" fill="none" stroke="#fff" stroke-width="${n(ms * 0.11)}" stroke-linecap="round" stroke-linejoin="round"/>`;
   } else {
@@ -765,7 +858,7 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
   }
   // 中の道具は細い縁で描き、床に置く道具は箱の真ん中に来るよう下へずらす
   const is = bh * 0.62;
-  const icon = inner ? shape(inner, [cx - bw * 0.18, cy + (ON_FLOOR.has(inner) ? is * 0.45 : 0)], is, 1, { W: w * 0.7, icon: true }) : "";
+  const icon = inner ? shape(inner, [say ? cx : cx - bw * 0.18, cy + (ON_FLOOR.has(inner) ? is * 0.45 : 0)], is, 1, { W: w * 0.7, icon: true }) : "";
   return `<g data-part="bubble">${tail}${box}${icon}${mark}</g>`;
 }
 
