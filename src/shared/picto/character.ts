@@ -253,7 +253,7 @@ export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide
   },
   straw: {
     tone: "#ddd", hair: "show", top: -116, bottom: -56,
-    draw: { front: straw(0), quarter: straw(4), side: straw(-2) },
+    draw: { front: straw(0), quarter: straw(-2), side: straw(-2) }, // 斜めはほかの帽子と同じ −2（+4 だと右に寄って見えた。11/6 作者）
   },
   towel: {
     tone: "white", hair: "show", top: -108, bottom: -52,
@@ -283,7 +283,8 @@ export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide
     tone: "role", hair: "show", top: -116, bottom: -50,
     draw: {
       front: `<path d="M-58 -56C-60 -100 -32 -116 0 -116S60 -100 58 -56Z" FILL ${STROKE}/><path d="M-66 -60H66Q70 -58 68 -52Q66 -48 60 -48H-60Q-66 -48 -68 -52Q-70 -58 -66 -60Z" FILL ${STROKE}/><path d="M0 -114V-62" stroke="#000" stroke-width="3.5"/>`,
-      quarter: `<path d="M-60 -56C-62 -98 -32 -116 4 -116C40 -116 62 -98 60 -60Z" FILL ${STROKE}/><path d="M-66 -60H76Q81 -59 79 -54Q77 -50 71 -50H-64Q-70 -50 -69 -55Q-69 -60 -66 -60Z" FILL ${STROKE}/><path d="M16 -114Q20 -90 18 -62" stroke="#000" stroke-width="3.5" fill="none"/>`,
+      // 斜めは山を 3 左へ、つばの前の出を 76 → 68 にした（右に寄って見えた。11/6 作者）
+      quarter: `<path d="M-63 -56C-65 -98 -35 -116 1 -116C37 -116 59 -98 57 -60Z" FILL ${STROKE}/><path d="M-69 -60H68Q73 -59 71 -54Q69 -50 63 -50H-67Q-73 -50 -72 -55Q-72 -60 -69 -60Z" FILL ${STROKE}/><path d="M13 -114Q17 -90 15 -62" stroke="#000" stroke-width="3.5" fill="none"/>`,
       side: `<path d="M-62 -56C-64 -100 -30 -116 0 -116C36 -116 56 -98 56 -60Z" FILL ${STROKE}/><path d="M-68 -60H80Q85 -59 83 -54Q81 -50 75 -50H-66Q-72 -50 -71 -55Q-71 -60 -68 -60Z" FILL ${STROKE}/>`,
     },
   },
@@ -322,8 +323,12 @@ export const headwearSvg = (kind: HeadwearKind, view: View, role: CharacterRole)
 
 /** 横に大きく広がる髪。かぶり物をかぶると、縁の高さで頭の幅まで内へ寄せ、下へ行くほど元の広がりに戻す */
 const PINCH = new Set<Hair>(["curly", "twinTails"]);
-const PINCH_HALF = 48, PINCH_BAND = 34;
-/** パス（M と C だけの絶対座標）の点を、高さ y ごとの倍率で横に縮める。縁（b）より上は同じ倍率 */
+const PINCH_HALF = 48, PINCH_BAND = 34, PINCH_FACE = 44;
+/**
+ * パス（M と C だけの絶対座標）の点を、高さ y ごとの倍率で横に縮める。縁（b）より上は同じ倍率。
+ * 顔の幅（PINCH_FACE）の内の点は動かさず、外へはみ出た分だけを縮める
+ * （全体を縮めると、斜めで顔の横の髪が目の上へ寄り、眼帯のように見えた。11/6 作者の指摘）
+ */
 function pinch(svg: string, b: number) {
   const ds = [...svg.matchAll(/ d="([^"]+)"/g)].map((m) => m[1]);
   const pts = ds.flatMap((d) => {
@@ -331,16 +336,17 @@ function pinch(svg: string, b: number) {
     return n.flatMap((v, i) => (i % 2 ? [[n[i - 1], v]] : []));
   });
   const wide = Math.max(0, ...pts.filter(([, y]) => y <= b + 4).map(([x]) => Math.abs(x)));
-  const kTop = Math.min(1, PINCH_HALF / (wide || PINCH_HALF));
-  if (kTop === 1) return svg;
+  if (wide <= PINCH_HALF) return svg;
+  const kTop = (PINCH_HALF - PINCH_FACE) / (wide - PINCH_FACE);
   const k = (y: number) => {
     const t = Math.min(1, Math.max(0, (y - b) / PINCH_BAND));
     return kTop + (1 - kTop) * t * t * (3 - 2 * t);
   };
+  const squeeze = (x: number, kk: number) => (Math.abs(x) <= PINCH_FACE ? x : Math.sign(x) * (PINCH_FACE + (Math.abs(x) - PINCH_FACE) * kk));
   return svg.replace(/ d="([^"]+)"/g, (_, d: string) => {
     let x = 0, i = 0;
     const out = d.replace(/-?\d*\.?\d+/g, (v) => {
-      const r = i++ % 2 ? `${+(x * k(Number(v))).toFixed(1)} ${v}` : ((x = Number(v)), "");
+      const r = i++ % 2 ? `${+squeeze(x, k(Number(v))).toFixed(1)} ${v}` : ((x = Number(v)), "");
       return r ? ` ${r} ` : "";
     });
     return ` d="${out.replace(/\s+/g, " ").trim()}"`;
@@ -454,7 +460,8 @@ const tag = (s: string) => {
 // sx は顔の幅に合わせた髪の横の倍率（avatar.ts の hairScale）。1 のときは今までと同じ文字列
 // skin はスキンヘッドとソフトモヒカンの頭の丸みの色
 export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1, skin = "#fff") => {
-  if (headwear !== "none" && (HEADWEAR[headwear].hair === "hide" || hair === "skinhead")) return { back: "", front: "", behind: "" };
+  // スキンヘッドは頭の丸みが髪の絵にあるので、頭に載せる帽子（看護の帽子）では描く（描かないと頭が平らで帽子が浮いた。11/6 作者）
+  if (headwear !== "none" && (HEADWEAR[headwear].hair === "hide" || (hair === "skinhead" && !HEADWEAR[headwear].perch))) return { back: "", front: "", behind: "" };
   const bare = headwear === "none";
   const h: { back?: string; front: string; gloss?: string } = hair === "bob" ? HAIR_B.bob[view] : TRACED[hair][view];
   const fill = HAIR_FILL[hair] ?? "#000";
@@ -471,6 +478,11 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
   const sq = (s: string) => (bare || !PINCH.has(hair) || HEADWEAR[headwear].bottom < -70 ? s : pinch(s, HEADWEAR[headwear].bottom));
   const back = fit(sq((h.back ?? "").replaceAll("HAIRFILL", fill))), front = fit(sq(body + gloss)), tail = fit(sq(behind));
+  // 載せる帽子の上へ、ソフトモヒカンのとさかが突き抜けないよう、帽子の上の線（y −108）より上を切る（11/6 作者）
+  if (perch && hair === "softMohawk") {
+    const id = `pc${tag(view + front)}`;
+    return { back, front: `<clipPath id="${id}"><rect x="-200" y="-108" width="400" height="400"/></clipPath><g clip-path="url(#${id})">${front}</g>`, behind: tail };
+  }
   if (!cut || perch) return { back, front, behind: tail };
   // かぶり物の縁と髪の間のすき間は、髪を上へ伸ばして埋める: 同じ髪を LIFT_STEP ずつ上へずらして、顔より後ろ（後ろの層）に重ねる。
   // 伸ばした分はかぶり物のある列の、切り口より下だけに残す（上は帽子の中に隠れる）。顔の上には出ない（顔が前に描かれる）
