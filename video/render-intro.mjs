@@ -1,5 +1,6 @@
 // 冒頭 0:00〜0:13 だけを書き出す（ローカルで書き出すだけ。API は使わない）。
 //   node render-intro.mjs --stills [秒,秒,...]  0.5 秒おきの静止画（と、渡した秒の原寸のコマ）を video/out/intro/ へ
+//   node render-intro.mjs --grid 4,7,0.1        折っている所を 0.1 秒おきに（g000.png …）
 //   node render-intro.mjs --video               opening.mp4（1920×1080）を video/out/intro/ へ
 // 置き場は英数字だけの video/out/intro/（git の外）。private/material/ へは書き出したあとに写す
 import { bundle } from "@remotion/bundler";
@@ -26,6 +27,14 @@ if (args[0] === "--stills") {
     await renderStill({ composition: comp, serveUrl, frame: j.frame, output: path.join(OUT, j.file), scale: j.scale, browserExecutable: CHROME });
   }
   console.log(`静止画 ${jobs.length} 枚 → ${OUT}`);
+} else if (args[0] === "--grid") {
+  // 折っている所の細かい一覧: --grid 開始秒,終わり秒,きざみ秒 → g000.png …
+  const [a, b, st] = args[1].split(",").map(Number);
+  let i = 0;
+  for (let t = a; t <= b + 1e-6; t += st, i++) {
+    await renderStill({ composition: comp, serveUrl, frame: Math.round(t * 30), output: path.join(OUT, `g${String(i).padStart(3, "0")}.png`), scale: 0.4, browserExecutable: CHROME });
+  }
+  console.log(`細かい一覧 ${i} 枚 → ${OUT}`);
 } else if (args[0] === "--video") {
   const t0 = Date.now();
   await renderMedia({ composition: comp, serveUrl, codec: "h264", outputLocation: path.join(OUT, "opening.mp4"), scale: 1.5, browserExecutable: CHROME, crf: 16 });
