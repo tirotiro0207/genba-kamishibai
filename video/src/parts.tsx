@@ -14,10 +14,12 @@ export const FONT_JP = JP;
 export const CARD_STOP = 1.4 * FPS;
 export const handDeg = (side: "text" | "card", g: number) => {
   const per = 80 / FPS; // 1 コマで 2.67 度（数ではなく、見た目の速さ）
-  return side === "card" ? Math.min(g, CARD_STOP) * per : g * per;
+  const t = Math.max(0, g - 2.5 * FPS); // 時計を描き終えた 0:02.5 から針が動く
+  return side === "card" ? Math.min(t, CARD_STOP) * per : t * per;
 };
 
-const Dial: React.FC<{ cx: number; deg: number; done: boolean; label: string; underline?: number; opacity?: number }> = ({ cx, deg, done, label, underline = 0, opacity = 1 }) => {
+/** labelP は見出しの字を何割まで書いたか、drawP は時計の線を何割まで描いたか（0:00〜0:03 に鉛筆で 1 つずつ描く） */
+const Dial: React.FC<{ cx: number; deg: number; done: boolean; label: string; underline?: number; opacity?: number; labelP?: number; drawP?: number }> = ({ cx, deg, done, label, underline = 0, opacity = 1, labelP = 1, drawP = 1 }) => {
   const { r, y, labelY } = CLOCKS;
   const a = ((deg - 90) * Math.PI) / 180;
   const hx = cx + Math.cos(a) * (r - 14);
@@ -32,9 +34,14 @@ const Dial: React.FC<{ cx: number; deg: number; done: boolean; label: string; un
   const w = 168;
   return (
     <g opacity={opacity}>
-      <text x={cx} y={labelY} textAnchor="middle" fontFamily={JP} fontSize={34} fontWeight={700} fill={INK}>
-        {label}
+      <text x={cx} y={labelY} textAnchor="middle" fontFamily={JP} fontSize={34} fontWeight={700} fill={INK} opacity={labelP > 0 ? 1 : 0}>
+        <tspan>{label.slice(0, Math.ceil(label.length * labelP))}</tspan>
+        <tspan fill="transparent">{label.slice(Math.ceil(label.length * labelP))}</tspan>
       </text>
+      {drawP < 1 ? (
+        <circle cx={cx} cy={y} r={r} fill="none" stroke={INK} strokeWidth={5} pathLength={1} strokeDasharray={`${drawP} 1`} transform={`rotate(-90 ${cx} ${y})`} opacity={drawP > 0 ? 1 : 0} />
+      ) : (
+        <g>
       {underline > 0 && <rect x={cx - w / 2} y={labelY + 14} width={w * underline} height={6} rx={3} fill={INK} />}
       <circle cx={cx} cy={y} r={r} fill={FACE} stroke={INK} strokeWidth={5} />
       {under && <circle cx={cx} cy={y} r={r - 2.5} fill={under} />}
@@ -45,24 +52,27 @@ const Dial: React.FC<{ cx: number; deg: number; done: boolean; label: string; un
       })}
       <line x1={cx} y1={y} x2={hx} y2={hy} stroke={done ? LAP_FILLS[3] : INK} strokeWidth={done ? 9 : 6} strokeLinecap="round" />
       <circle cx={cx} cy={y} r={9} fill={done ? LAP_FILLS[3] : INK} />
+      <text x={cx} y={y + r + 46} textAnchor="middle" fontFamily={FONT_PEN} fontSize={30} fill={INK} opacity={0.75}>〜秒</text>
+        </g>
+      )}
     </g>
   );
 };
 
 /** 時計 2 つ（g は冒頭からのコマ） */
-export const Clocks: React.FC<{ g: number; underline?: number; opacity?: number }> = ({ g, underline = 0, opacity = 1 }) => (
+export const Clocks: React.FC<{ g: number; underline?: number; opacity?: number; draw?: [number, number, number, number] }> = ({ g, underline = 0, opacity = 1, draw = [1, 1, 1, 1] }) => (
   <g>
-    <Dial cx={CLOCKS.text} deg={handDeg("text", g)} done={false} label="文書で読む" underline={underline} opacity={opacity} />
-    <Dial cx={CLOCKS.card} deg={handDeg("card", g)} done={g >= CARD_STOP} label="絵のカードで読む" opacity={opacity} />
+    <Dial cx={CLOCKS.text} deg={handDeg("text", g)} done={false} label="文書で読む" underline={underline} opacity={opacity} labelP={draw[0]} drawP={draw[2]} />
+    <Dial cx={CLOCKS.card} deg={handDeg("card", g)} done={g - 2.5 * FPS >= CARD_STOP} label="絵のカードで読む" opacity={opacity} labelP={draw[1]} drawP={draw[3]} />
   </g>
 );
 
 // ---- 木の紙芝居の枠（両開きの扉つき） ----
 
-// 11/5 夜の直し: 枠は画面の主役。横幅の約 6 割・高さの約 6 割で上に寄せ、0:13 から 3:00 まで同じ所に置く
-export const FRAME = { w: 768, h: 432, cy: 262, inset: 30 };
-/** 床（画面の下の約 3 割）の上の端 */
-export const FLOOR_Y = 504;
+// 11/5 夜 v3（絵コンテの割り付け）: 枠の外側は横 280〜1000・縦 117〜527（1920×1080 では 420〜1500・175〜790）。0:13 から 3:00 まで同じ所に置く
+export const FRAME = { w: 720, h: 410, cy: 322, inset: 30 };
+/** 床（画面の下の約 3 割。1080 では 800 より下）の上の端 */
+export const FLOOR_Y = 533;
 export const FLOOR = "#3a316c";
 const WOOD = "#8a5a32";
 const WOOD_DARK = "#5c3a1e";
@@ -172,3 +182,35 @@ export const BrushPaper: React.FC<{ x: number; y: number; w: number; h: number; 
 
 /** 手書きの文字の字体（題・めでたし） */
 export const FONT_HAND = "Segoe Print, Comic Sans MS, cursive";
+
+/** 手書き風の字体（字幕・見出し・めでたし） */
+export const FONT_PEN = "HGKyokashotai, HG教科書体, UD Digi Kyokasho NK-R, Yu Gothic, sans-serif";
+
+/**
+ * 枠のまわりの光の輪（∞ の形に重なる横長の 2 つの輪）。0:16 から最後まで残る。
+ * クリーム色・半透明・筆でこすった線（太い線と細い線を重ね、揺らす）
+ */
+export const LightRings: React.FC<{ o: number; k?: number; glow?: number }> = ({ o, k = 1, glow = 0 }) => {
+  if (o <= 0) return null;
+  const cy = FRAME.cy;
+  return (
+    <g opacity={o} transform={`translate(640 ${cy}) scale(${k}) translate(-640 ${-cy})`} filter="url(#wobble-strong)" style={{ mixBlendMode: "screen" }}>
+      {[-1, 1].map((s) => (
+        <g key={s} transform={`rotate(${s * -4} ${640 + s * 175} ${cy})`}>
+          <ellipse cx={640 + s * 175} cy={cy} rx={330} ry={228} fill="none" stroke="#efe2c0" strokeOpacity={0.34 + glow * 0.3} strokeWidth={30} />
+          <ellipse cx={640 + s * 175} cy={cy + 6} rx={318} ry={216} fill="none" stroke="#fff6dc" strokeOpacity={0.22} strokeWidth={8} strokeDasharray="120 40 60 30" />
+        </g>
+      ))}
+    </g>
+  );
+};
+
+/** 舞台のぼかした丸い光 2 つ（0:13.5 と 0:14.0 に灯り、2:56.5 と 2:57.0 に消える）。t は冒頭からの秒 */
+export const stageLights = (t: number) => {
+  const on = (a: number, b: number) => Math.min(Math.max((t - a) / 0.4, 0), 1) * (1 - Math.min(Math.max((t - b) / 0.4, 0), 1));
+  const settle = Math.min(Math.max((t - 16) / 1.5, 0), 1);
+  return [
+    { x: 470, y: 280, r: 175, o: on(13.5, 176.5) * (1 - settle * 0.5) },
+    { x: 830, y: 390, r: 195, o: on(14.0, 177.0) * (1 - settle * 0.5) },
+  ];
+};

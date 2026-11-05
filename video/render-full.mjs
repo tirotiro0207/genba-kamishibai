@@ -1,7 +1,8 @@
 // 3 分の通しの仮版を書き出す: 1 本の mp4、場面ごとの真ん中のコマの静止画、場面の一覧の 1 枚。
 // 冒頭も舞台もコードから描く。機能の場面は録画（runs-video）を、git の外から写して使う（英数字だけの場所に写し、Remotion の public に渡す）。
 // ポータルの印は private/brand/portal-mark.svg があれば読み、無ければ一般的な印。
-// 書き出すのは git の外（../private/material/2026-11-05-通し-v2/。前の版の置き場は上書きしない）。ローカルで書き出すだけで、API は使わない。
+// 書き出すのは git の外（../private/material/2026-11-05-通し-v3/。前の版の置き場は上書きしない）。ローカルで書き出すだけで、API は使わない。
+// 1280×720 の座標で描き、1.5 倍の 1920×1080 で書き出す。
 // 使い方: node render-full.mjs [--stills]（--stills は静止画と一覧だけ）
 import { bundle } from "@remotion/bundler";
 import { renderMedia, renderStill, selectComposition } from "@remotion/renderer";
@@ -14,7 +15,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const priv = path.join(here, "..", "private");
 const PUB = path.join(here, "out", "pub");
 const OUT_TMP = path.join(here, "out", "full");
-const DEST = path.join(priv, "material", process.env.VIDEO_TAG ?? "2026-11-05-通し-v2");
+const DEST = path.join(priv, "material", process.env.VIDEO_TAG ?? "2026-11-05-通し-v3");
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const stillsOnly = process.argv.includes("--stills");
 for (const d of [PUB, OUT_TMP, path.join(DEST, "scenes")]) fs.mkdirSync(d, { recursive: true });
@@ -42,14 +43,14 @@ console.log("印:", inputProps.mark ? "素材を読んだ" : "素材が無いの
 const serveUrl = await bundle({ entryPoint: path.join(here, "src", "index.ts"), publicDir: PUB });
 const comp = await selectComposition({ serveUrl, id: "full", inputProps, browserExecutable: CHROME });
 if (!stillsOnly) {
-  await renderMedia({ serveUrl, composition: comp, codec: "h264", pixelFormat: "yuv420p", outputLocation: path.join(OUT_TMP, "full.mp4"), inputProps, browserExecutable: CHROME, imageFormat: "jpeg", jpegQuality: 92 });
+  await renderMedia({ serveUrl, composition: comp, codec: "h264", pixelFormat: "yuv420p", outputLocation: path.join(OUT_TMP, "full.mp4"), inputProps, browserExecutable: CHROME, imageFormat: "jpeg", jpegQuality: 92, scale: 1.5 });
   copyOut("full.mp4");
   console.log("full", execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height,r_frame_rate,nb_frames:format=duration", "-of", "json", "full.mp4"], { cwd: OUT_TMP }).toString().replace(/\s+/g, " "));
 }
 // 場面ごとの真ん中のコマ
 // 場面の表は full.tsx の SEGS の id・at・len を読む（書き出しの台本に写さないため）
-const SEGS = [...fs.readFileSync(path.join(here, "src", "full.tsx"), "utf8").matchAll(/\{ id: "([^"]+)", title: "[^"]*", at: (\d+), len: (\d+)/g)].map((m) => ({ id: m[1], at: +m[2], len: +m[3] }));
-if (SEGS.length === 0 || SEGS.reduce((a, s) => a + s.len, 0) !== 180) throw new Error(`場面の表が読めない（${SEGS.length} 場面）`);
+const SEGS = [...fs.readFileSync(path.join(here, "src", "full.tsx"), "utf8").matchAll(/\{ id: "([^"]+)", title: "[^"]*", at: ([\d.]+), len: ([\d.]+)/g)].map((m) => ({ id: m[1], at: +m[2], len: +m[3] }));
+if (SEGS.length === 0 || Math.abs(SEGS.reduce((a, s) => a + s.len, 0) - 180) > 1e-6) throw new Error(`場面の表が読めない（${SEGS.length} 場面）`);
 for (const [i, s] of SEGS.entries()) {
   const name = `${String(i + 1).padStart(2, "0")}-${s.id}.png`;
   await renderStill({ serveUrl, composition: comp, frame: Math.round((s.at + s.len / 2) * 30), output: path.join(OUT_TMP, name), inputProps, browserExecutable: CHROME });

@@ -4,7 +4,7 @@ import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import { POSES } from "../../src/shared/picto/poses";
 import { BODY_STEPS, Folding, JOIN_STEPS, type Layer, LEG_STEPS, SheetPatterns, type Step } from "./origami";
 import { gait, mixAngles, PaperDefs, PaperPerson, type Pt, Shadow } from "./paper";
-import { BrushPaper, Clocks, FLOOR, FLOOR_Y, FONT_HAND, FONT_JP, FRAME, Light, StageFrame, WobbleDefs } from "./parts";
+import { BrushPaper, Clocks, FLOOR, FLOOR_Y, FONT_HAND, FONT_JP, FONT_PEN, FRAME, Light, LightRings, StageFrame, stageLights, WobbleDefs } from "./parts";
 import { ASIDE, CLOCKS, FIGURE_K, FOLD_AT, FPS, GROUND, H, INK, lengthOf, PAPER_K, PERSON_H, PRINT_FRAMES, PURPLE, type SceneId, startOf, STEP_FRAMES, TO_FOLD_FRAMES, W } from "./timeline";
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -31,11 +31,14 @@ const useScene = (id: SceneId) => {
 // ---- 1 時計の比べ（0:00〜0:03） ----
 export const S1Clocks: React.FC = () => {
   const { f, g } = useScene("s1-clocks");
-  const appear = interpolate(f, [0, 10], [0, 1], clamp);
-  const underline = interpolate(f, [sec(2.2), sec(2.9)], [0, 1], { ...clamp, easing: ease });
+  // 0:00.5 左の見出しを 1 文字ずつ → 0:01.5 右の見出し → 0:02.0 左の時計 → 0:02.5 右の時計 → 下線
+  const p = (a: number, b: number) => interpolate(f, [sec(a), sec(b)], [0, 1], clamp);
+  const underline = interpolate(f, [sec(2.4), sec(2.8)], [0, 1], { ...clamp, easing: ease });
   return (
     <Svg>
-      <Clocks g={g} opacity={appear} underline={underline} />
+      {/* うすい紙の目 */}
+      <rect width={W} height={H} fill="#fbfaf5" />
+      <Clocks g={g} underline={underline} draw={[p(0.5, 1.4), p(1.5, 2.0), p(2.0, 2.45), p(2.5, 2.8)]} />
     </Svg>
   );
 };
@@ -169,7 +172,7 @@ export const S5Name: React.FC = () => {
       <Clocks g={g} underline={1} opacity={0.35} />
       <Shadow x={FOLD_AT.x} ground={GROUND} w={110} />
       {swap < 1 && <Joined p={JOIN_STEPS.length - 0.001} opacity={1 - swap} />}
-      <PaperPerson angles={angles} x={FOLD_AT.x} ground={GROUND} height={PERSON_H} view="front" opacity={swap} />
+      <PaperPerson angles={angles} x={FOLD_AT.x} ground={GROUND - Math.max(0, Math.sin(((f - 40) / 10) * Math.PI)) * (f >= 40 && f < 50 ? 30 : 0)} height={PERSON_H} view="front" opacity={swap} />
       <g transform={`translate(${FOLD_AT.x + 230} 150) scale(${bub * 0.85})`}>
         <path d="M-150 -60H380Q400 -60 400 -40V60Q400 80 380 80H-40L-100 120L-90 80H-150Q-170 80 -170 60V-40Q-170 -60 -150 -60Z" fill="#fff" stroke={INK} strokeWidth={5} strokeLinejoin="round" />
         {lines.map((l, i) => (
@@ -184,10 +187,11 @@ export const S5Name: React.FC = () => {
 
 // ---- 6 枠を引っぱる ----
 // 歩いて右の枠の端へ → 枠をつかんで後ろ向きに引き、中央まで運ぶ → 手を放して左へ走り去る
-const WALK_END = sec(0.8);
+const WALK_END = sec(0.5);
 /** 紙の人の手が枠の端に届く間（背の高さに合わせる） */
 const HAND = (58 * PERSON_H) / 356;
-const PULL_END = sec(2.05);
+const PULL_END = sec(1.5);
+const RUN_AT = sec(2.0);
 const frameCx = (f: number) =>
   f < WALK_END
     ? interpolate(f, [0, WALK_END], [W + FRAME.w / 2 + 40, W + FRAME.w / 2 - 170], { ...clamp, easing: Easing.out(Easing.quad) })
@@ -207,19 +211,39 @@ export const S6Pull: React.FC = () => {
     // 引く: 足を交互に後ろへ運びながら、体を後ろへ預ける
     const step = gait("walk", (f - WALK_END) / sec(0.45));
     angles = mixAngles(POSES.pull, { ...POSES.pull, leg_near_upper: step.leg_near_upper, leg_near_lower: step.leg_near_lower, leg_far_upper: step.leg_far_upper, leg_far_lower: step.leg_far_lower }, 0.6);
+  } else if (f < RUN_AT) {
+    // 枠が止まって小さく弾む間、手を放して立つ
+    x = edge - HAND;
+    angles = mixAngles(POSES.pull, POSES.stand, interpolate(f, [PULL_END, RUN_AT], [0, 1], clamp));
   } else {
     facing = "left";
-    x = interpolate(f, [PULL_END, sec(2.9)], [edge - HAND, -260], { ...clamp, easing: Easing.in(Easing.quad) });
-    angles = gait("run", (f - PULL_END) / sec(0.32));
+    x = interpolate(f, [RUN_AT, sec(2.6)], [edge - HAND, -300], { ...clamp, easing: Easing.in(Easing.quad) });
+    angles = gait("run", (f - RUN_AT) / sec(0.2));
   }
-  const clocksOut = interpolate(f, [0, WALK_END], [0.35, 0], clamp);
-  const bob = facing === "left" ? Math.abs(Math.sin(((f - PULL_END) / sec(0.32)) * Math.PI)) * -10 : 0;
+  const clocksOut = interpolate(f, [sec(2.5), sec(3)], [0.35, 0], clamp);
+  const bob = facing === "left" ? Math.abs(Math.sin(((f - RUN_AT) / sec(0.2)) * Math.PI)) * -14 : 0;
+  // 枠が止まったときの弾み（0:11.5）と、ほこり
+  const bounce = f >= PULL_END && f < PULL_END + 9 ? Math.sin(((f - PULL_END) / 9) * Math.PI) * -10 : 0;
+  const puff = interpolate(f - PULL_END, [0, 6, 22], [0, 0.55, 0], clamp);
+  const tata = interpolate(f, [RUN_AT, RUN_AT + 4, sec(2.9)], [0, 1, 0], clamp);
   // 走り去る足元の土ぼこり
-  const dust = f > PULL_END ? [0, 1, 2].map((i) => ({ x: x + 70 + i * 70, o: interpolate(f - PULL_END - i * 3, [0, 6, 18], [0, 0.5, 0], clamp), r: 16 + i * 6 })) : [];
+  const dust = f > RUN_AT ? [0, 1, 2].map((i) => ({ x: x + 70 + i * 70, o: interpolate(f - RUN_AT - i * 3, [0, 6, 18], [0, 0.5, 0], clamp), r: 16 + i * 6 })) : [];
   return (
     <Svg>
       {clocksOut > 0 && <Clocks g={g} underline={1} opacity={clocksOut} />}
-      <StageFrame cx={cx} />
+      <g transform={`translate(0 ${bounce})`}>
+        <StageFrame cx={cx} />
+      </g>
+      {puff > 0 && [-1, -0.4, 0.4, 1].map((k) => <ellipse key={k} cx={W / 2 + k * (FRAME.w / 2)} cy={FRAME.cy + FRAME.h / 2 + 18 - puff * 10} rx={40 + puff * 40} ry={14 + puff * 8} fill="#d8cfbf" opacity={puff} />)}
+      {/* 「タタタ」と速さの線 */}
+      {tata > 0 && (
+        <g opacity={tata}>
+          {[0, 1, 2].map((i) => <path key={i} d={`M${x + 90 + i * 10} ${GROUND - 300 + i * 70}h${120 + i * 30}`} stroke={INK} strokeWidth={4} strokeLinecap="round" filter="url(#wobble)" />)}
+          <text x={Math.max(60, x + 60)} y={GROUND - 20} fontFamily={FONT_PEN} fontSize={44} fill={INK} transform={`rotate(-8 ${Math.max(60, x + 60)} ${GROUND - 20})`}>
+            タタタ
+          </text>
+        </g>
+      )}
       {dust.map((p, i) => (
         <circle key={i} cx={p.x} cy={GROUND - 6} r={p.r} fill="#c8bfae" opacity={p.o} />
       ))}
@@ -229,59 +253,69 @@ export const S6Pull: React.FC = () => {
   );
 };
 
-// ---- 7 開演: 紫に暗転して、ライトが 2 つ入る ----
-const lightsAt = (g: number) => {
-  const s = startOf("s7-curtain");
-  const o = interpolate(g, [s + sec(0.6), s + sec(1.3)], [0, 1], clamp);
-  const drift = interpolate(g, [s + sec(0.6), s + sec(4)], [0, 1], clamp);
-  return [
-    { x: 470 + drift * 30, y: 270, r: 170, o },
-    { x: 820 - drift * 30, y: 380, r: 190, o },
-  ];
-};
+// ---- 7 開演（0:13〜0:15）: 画面のふちから紫に染まり、光が 1 つずつ灯り、扉が左右に開く ----
+const Lights: React.FC<{ g: number }> = ({ g }) => (
+  <>
+    {stageLights(g / FPS).map((l, i) => (
+      <Light key={i} id={`l${i}`} x={l.x} y={l.y} r={l.r} opacity={l.o} />
+    ))}
+  </>
+);
 export const S7Curtain: React.FC = () => {
   const { f, g } = useScene("s7-curtain");
-  const dark = interpolate(f, [0, sec(0.5)], [0, 1], { ...clamp, easing: ease });
-  return (
-    <Svg>
-      <rect width={W} height={H} fill={PURPLE} opacity={dark} />
-      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} opacity={dark} />
-      <StageFrame cx={W / 2} />
-      {lightsAt(g).map((l, i) => (
-        <Light key={i} id={`l${i}`} x={l.x} y={l.y} r={l.r} opacity={l.o} />
-      ))}
-    </Svg>
-  );
-};
-
-// ---- 8 題: 扉が開いて「Genba-Kamishibai」 ----
-export const S8Title: React.FC = () => {
-  const { f, g } = useScene("s8-title");
-  const open = interpolate(f, [2, sec(1.1)], [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) });
-  const glow = interpolate(f, [sec(0.6), sec(1.4)], [0, 1], clamp);
+  const edge = interpolate(f, [0, sec(0.3)], [0, 1], { ...clamp, easing: ease });
+  const dark = interpolate(f, [sec(0.15), sec(0.5)], [0, 1], { ...clamp, easing: ease });
+  const open = interpolate(f, [sec(1.5), sec(2)], [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) });
   const iw = FRAME.w - FRAME.inset * 2;
   const ih = FRAME.h - FRAME.inset * 2;
   return (
-    <Svg bg={PURPLE}>
-      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} />
+    <Svg>
+      <defs>
+        <radialGradient id="edge-in" cx="50%" cy="50%" r="75%">
+          <stop offset="35%" stopColor={PURPLE} stopOpacity={0} />
+          <stop offset="100%" stopColor={PURPLE} stopOpacity={1} />
+        </radialGradient>
+      </defs>
+      <rect width={W} height={H} fill="url(#edge-in)" opacity={edge} />
+      <rect width={W} height={H} fill={PURPLE} opacity={dark} />
+      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} opacity={dark} />
       <StageFrame cx={W / 2} open={open}>
-        <TitlePaper iw={iw} ih={ih} o={interpolate(f, [sec(0.4), sec(1.0)], [0, 1], clamp)} />
+        <TitlePaper iw={iw} ih={ih} o={0} />
       </StageFrame>
-      {lightsAt(g).map((l, i) => (
-        <Light key={i} id={`l${i}`} x={l.x} y={l.y} r={l.r * (1 + glow * 0.25)} opacity={l.o * (1 - glow * 0.35)} />
-      ))}
+      <Lights g={g} />
     </Svg>
   );
 };
 
+// ---- 8 題（0:15〜0:17）: 筆が「Genba-Kamishibai」を 1 文字ずつ書く。0:16 に光の輪が広がる ----
+export const S8Title: React.FC = () => {
+  const { f, g } = useScene("s8-title");
+  const iw = FRAME.w - FRAME.inset * 2;
+  const ih = FRAME.h - FRAME.inset * 2;
+  const chars = interpolate(f, [0, sec(1.5)], [0, 1], clamp);
+  const ring = interpolate(f, [sec(1), sec(1.6)], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
+  return (
+    <Svg bg={PURPLE}>
+      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} />
+      <StageFrame cx={W / 2} open={1}>
+        <TitlePaper iw={iw} ih={ih} p={chars} />
+      </StageFrame>
+      <LightRings o={ring} k={0.9 + ring * 0.1} />
+      <Lights g={g} />
+    </Svg>
+  );
+};
+
+const TITLE = "Genba-Kamishibai";
 /** 題の紙: 枠の奥の暗い板に、筆でこすったような白い紙を貼り、手書きの題（通しの版でも同じ絵を使う） */
-export const TitlePaper: React.FC<{ iw: number; ih: number; o?: number; sub?: string; subO?: number }> = ({ iw, ih, o = 1, sub, subO = 1 }) => (
+export const TitlePaper: React.FC<{ iw: number; ih: number; o?: number; sub?: string; subO?: number; p?: number }> = ({ iw, ih, o = 1, sub, subO = 1, p = 1 }) => (
   <>
     <rect width={iw} height={ih} fill="#3b2a1a" />
     <BrushPaper x={iw * 0.08} y={ih * 0.12} w={iw * 0.84} h={ih * 0.76} />
     <g filter="url(#wobble)">
       <text x={iw / 2} y={sub ? ih / 2 - 10 : ih / 2 + 22} textAnchor="middle" fontFamily={FONT_HAND} fontSize={56} fontWeight={700} fill={INK} opacity={o}>
-        Genba-Kamishibai
+        <tspan>{TITLE.slice(0, Math.ceil(TITLE.length * p))}</tspan>
+        <tspan fill="transparent">{TITLE.slice(Math.ceil(TITLE.length * p))}</tspan>
       </text>
       {sub && (
         <text x={iw / 2} y={ih / 2 + 70} textAnchor="middle" fontFamily={FONT_JP} fontSize={40} fontWeight={700} fill={INK} opacity={subO}>
