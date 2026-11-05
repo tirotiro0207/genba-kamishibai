@@ -849,7 +849,7 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
     }
     case "wristband":
     case "armband": {
-      // リストバンド・腕章: 腕に巻いた輪を少し上から見た形（奥の内側は濃く、手前の帯は明るい）。腕章は帯が広く、左寄りに小さい十字の印。
+      // リストバンド・腕章: 腕に巻いた輪を少し上から見た形（奥の内側は濃く、手前の帯は明るい）。腕章は帯が広く、左寄りに小さい十字の印（11/5 作者の判断）。
       // 写真の字・会社名は入れない。手に着けたときは、手首の上を横切る帯。c は輪の真ん中
       if (worn && kind === "wristband") {
         const [ex, ey] = elbow ?? [cx, cy - s];
