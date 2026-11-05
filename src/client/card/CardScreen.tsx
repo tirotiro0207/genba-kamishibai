@@ -188,11 +188,11 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/route/${encodeURIComponent(card.id)}`} data-testid="card-route">
             経路を見る（部品 → 元の文）
           </a>
-          {card.status !== "signed" && card.status !== "stopped" && (
-            <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}`} data-testid="card-fix">
-              枠で囲んで直す
-            </a>
-          )}
+          {/* 署名済み・停止のカードも直せる（11/5 作者）。直すと新しい版の下書きになり、署名が外れる */}
+          <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}`} data-testid="card-fix">
+            枠で囲んで直す
+          </a>
+          {card.status === "signed" && <p className="card-note" data-testid="card-fix-note">直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。配るには、確かめ直して署名し直します。</p>}
           <button className="card-show" onClick={() => setOpen(false)} data-testid="card-hide">
             閉じる
           </button>

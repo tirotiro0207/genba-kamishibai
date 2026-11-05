@@ -229,11 +229,22 @@ cards.post("/:id/verify", async (c) => {
   return c.json({ version: r.version, evidence });
 });
 
-// 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。署名済みは先に停止する
+/**
+ * 署名済み・停止のカードを直したとき（11/5 作者「承認済みも全部編集できるように」）。新しい版は下書きに戻り、署名は外れる。
+ * 状態が移った 1 行を監査に足し、署名済みだったなら、前の版を印刷した人が回収できるよう回収の知らせを出す（止めたときと同じ）
+ */
+async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string) {
+  if (r.status !== "signed" && r.status !== "stopped") return;
+  const reason = `直したため（版 ${r.version} → ${r.version + 1}）: ${why}`.slice(0, 200);
+  await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason } });
+  if (r.status === "signed") await createRecall(db, tenantId, r, by, reason);
+}
+
+// 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。
+// 署名済みも直せる。直すと署名が外れ、前の版に回収の知らせが出る（reopenOnEdit）。配るには確かめ直して署名し直す
 cards.put("/:id", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  if (r.status === "signed") return c.json({ error: "署名済みのカードは直せない（先に停止）" }, 409);
   const b = await readBody(c);
   const card = b.card as CardBody;
   const errs = validateCard(card);
@@ -259,15 +270,16 @@ cards.put("/:id", async (c) => {
   await c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
     .bind(JSON.stringify(card), reasons.length ? "ai_draft" : "draft", r.id, c.var.tenant.id)
     .run();
+  await reopenOnEdit(c.env.DB, c.var.tenant.id, r, reasons.length ? "ai_draft" : "draft", by, reason);
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 });
 
-// 枠と指示（044a）: 直したい部分の枠と「ここをこうしたい」を ④ 人の直しの 1 行として残す。作り直すのは 044b
+// 枠と指示（044a）: 直したい部分の枠と「ここをこうしたい」を ④ 人の直しの 1 行として残す。作り直すのは 044b。
+// 署名済み・停止のカードにも送れる（11/5）。送っただけでは状態は変わらず、作り直して版が上がったときに署名が外れる
 cards.post("/:id/fix", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードには直しを送れない" }, 409);
   const b = await c.req.json<Partial<FixRequest> & { actor?: string }>().catch(() => null);
   const body = JSON.parse(r.body) as CardBody;
   const errs = validateFix(b, body.frames.length);
@@ -284,7 +296,6 @@ cards.post("/:id/redo", async (c) => {
   const tid = c.var.tenant.id;
   const r = await getCard(db, tid, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードは作り直さない" }, 409);
   const b = await c.req.json<{ n?: number }>().catch(() => ({}) as { n?: number });
   const row = Number.isInteger(b.n) ? await db.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND n = ? AND kind = 'edit'").bind(tid, r.id, b.n).first<{ payload: string }>() : null;
   const ask = row ? (JSON.parse(row.payload) as { request?: string; version?: number } & FixRequest) : null;
@@ -307,6 +318,8 @@ cards.post("/:id/redo", async (c) => {
     .bind(JSON.stringify(out.body), aiDraftReasons(out.body).length ? "ai_draft" : "draft", r.id, tid, r.version)
     .run();
   if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
+  // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5）
+  await reopenOnEdit(db, tid, r, aiDraftReasons(out.body).length ? "ai_draft" : "draft", "maker", ask.text);
   const count = (done?.n ?? 0) + 1;
   const key = (body: CardBody) => (body.motion.kind === "keyframes" ? body.motion.json.keyframes[out.keyIndex] : null);
   await appendAudit(db, tid, {

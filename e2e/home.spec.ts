@@ -94,8 +94,8 @@ test("ホーム: キャラクターを作ってから、カードの管理とキ
   await page.getByTestId("home-stop-go").click();
   await expect(page.getByTestId(`home-status-${id}`)).toHaveText("停止");
   await expect(page.getByTestId("home-stop-dialog")).toHaveCount(0);
-  // 止めたカードも、絵のカードは見られる
-  await expect(page.getByTestId("home-edit")).toHaveText("絵のカードを見る");
+  // 止めたカードも編集できる
+  await expect(page.getByTestId("home-edit")).toHaveText("編集する（絵のカード）");
 
   // 署名済みのカード: 札の下に署名した人。開くと署名の行と、絵のカードを見る・止める（監修者）
   await expect(page.getByTestId(`home-status-${sid}`)).toHaveText("署名済み");
@@ -110,9 +110,14 @@ test("ホーム: キャラクターを作ってから、カードの管理とキ
   await expect(page.getByTestId("home-stop-go")).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("home-stop-dialog")).toHaveCount(0);
-  // 絵のカードの画面へ行けること
+  // 編集する → 絵のカードの画面。署名済みでも「枠で囲んで直す」が出る
+  await expect(page.getByTestId(`home-detail-${sid}`).getByTestId("home-edit")).toHaveText("編集する（絵のカード）");
   await page.getByTestId(`home-detail-${sid}`).getByTestId("home-edit").click();
   await expect(page).toHaveURL(new RegExp(`/card/${sid}$`));
+  await page.getByTestId("card-face").click();
+  await expect(page.getByTestId("card-fix")).toHaveAttribute("href", `#/t/${T}/fix/${sid}`);
+  await expect(page.getByTestId("card-fix-note")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("home-3d-signed-edit.png") });
   await page.goto(`/#/t/${T}/home`);
   await expect(page.getByTestId("home")).toBeVisible();
 

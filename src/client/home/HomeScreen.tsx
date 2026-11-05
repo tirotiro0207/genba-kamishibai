@@ -152,11 +152,10 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
       {card.ask && <p className="home-ask">監修者に確認: {card.ask}</p>}
-      {s === "signed" && <p className="home-meta">署名済みのカードの中身を直すときは、先に止めてから「下書きに戻して直す」を押します。{role !== "supervisor" ? "署名済みのカードを止められるのは監修者だけです。" : ""}</p>}
-      {s === "stopped" && <p className="home-meta">止めたカードです。直すときは「下書きに戻して直す」を押します。</p>}
+      {s === "signed" && <p className="home-meta">署名済みのカードも直せます。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "署名済みのカードを止められるのは監修者だけです。" : ""}</p>}
       <div className="home-actions">
         <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
-          {s === "signed" || s === "stopped" ? "絵のカードを見る" : "編集する（絵のカード）"}
+          編集する（絵のカード）
         </a>
         {(s === "draft" || s === "ai_draft") && (
           <button className="pick go-pick" onClick={() => void move("pending")} data-testid="home-request">

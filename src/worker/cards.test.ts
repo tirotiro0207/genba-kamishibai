@@ -37,14 +37,21 @@ describe("カードの保存と状態（019）", () => {
     expect((await move(c.id, "nope")).status).toBe(400);
   });
 
-  it("直すと版が上がって下書きに戻り、署名済みは直せない", async () => {
+  it("直すと版が上がって下書きに戻る。署名済みも直せ、直すと署名が外れて前の版に回収の知らせが出る（11/5）", async () => {
     const c = await newCard();
     await move(c.id, "pending");
     const fixed = { ...sampleCard(), why: "感電して大けがをするから" };
     const r = (await (await call(`${base}/${c.id}`, json("PUT", { card: fixed, reason: "文を直す" }))).json()) as { status: string; version: number };
     expect(r).toMatchObject({ status: "draft", version: 2 });
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
-    expect((await call(`${base}/${c.id}`, json("PUT", { card: fixed }))).status).toBe(409);
+    const again = { ...fixed, why: "感電して大けがをするおそれがあるから" };
+    const r2 = (await (await call(`${base}/${c.id}`, json("PUT", { card: again, reason: "理由の言い方を直す" }))).json()) as { status: string; version: number };
+    expect(r2).toMatchObject({ status: "draft", version: 3 });
+    const recall = await env.DB.prepare("SELECT version, reason FROM recall_notices WHERE card_id = ?").bind(c.id).first<{ version: number; reason: string }>();
+    expect(recall).toMatchObject({ version: 2, reason: expect.stringContaining("直したため（版 2 → 3）") });
+    const log = (await (await call(`/api/t/practice/audit/cards/${c.id}`)).json()) as { entries: { kind: string; payload: Record<string, unknown> }[] };
+    expect(log.entries.filter((e) => e.kind === "status").at(-1)!.payload).toMatchObject({ version: 2, from: "signed", to: "draft" });
+    await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
     // 停止は監修者だけ（030b）
     const sup = await signRole("test-secret", "practice", { role: "supervisor", slot: 1 });
     expect((await call(`${base}/${c.id}/status`, { ...json("POST", { to: "stopped", reason: "テストで止める" }), headers: { "content-type": "application/json", "x-role": sup } })).status).toBe(200);
@@ -85,10 +92,13 @@ describe("枠と指示（044a）", () => {
     ]) expect((await fix(c.id, b)).status).toBe(400);
   });
 
-  it("署名済みと停止したカードには送れない", async () => {
+  it("署名済みと停止したカードにも送れる。送っただけでは状態は変わらない（11/5）", async () => {
     const c = await newCard();
-    await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
-    expect((await fix(c.id, { frame: 0, box, text: "x" })).status).toBe(409);
+    for (const st of ["signed", "stopped"]) {
+      await env.DB.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(st, c.id).run();
+      expect((await fix(c.id, { frame: 0, box, text: "x" })).status).toBe(202);
+      expect(((await (await call(`${base}/${c.id}`)).json()) as { status: string }).status).toBe(st);
+    }
   });
 });
 

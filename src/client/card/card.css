@@ -35,3 +35,4 @@
 .card-wait strong { font-size: 20px; }
 .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .card-actions > * { flex: 1; }
+.card-note { margin: 0; font-size: 14px; color: var(--muted); border-left: 3px solid #d9a400; padding-left: 8px; }
