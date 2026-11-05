@@ -5,9 +5,6 @@ import { avatarParts } from "./avatar-pick";
 import { characterSvg } from "../../shared/picto/character";
 import { STANDING } from "../../shared/picto/skeleton";
 
-/** 線の色（11/5 作者「それぞれ色があって、ランダムに」）。白い地の上で線が読める濃さの色だけ */
-export const LINE_COLORS = ["#d64545", "#e07b00", "#c99700", "#3f9142", "#0f8a7e", "#1f78c8", "#4b55c4", "#8a4fc8", "#c23d8a", "#6b6b6b", "#a0522d", "#2a2a2a"];
-
 const pick = <T,>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 /** 胸から上の正方形（人形の背の高さ 434 で描いたときの頭まわり） */
@@ -37,10 +34,9 @@ function person(): string {
   return pick(people);
 }
 
-/** カードの片面: 乱数で選んだ人を、乱数で選んだ線の色で描いた画像（data: の URL） */
-export function randomSide(): { face: string; color: string } {
+/** カードの片面: 乱数で選んだ人を、渡した線の色（色の配り方は palette.ts）で描いた画像（data: の URL） */
+export function sideIn(color: string): { face: string; color: string } {
   const svg = person();
-  const color = pick(LINE_COLORS);
   const key = `${people.indexOf(svg)}:${color}`;
   let u = urls.get(key);
   if (!u) {
