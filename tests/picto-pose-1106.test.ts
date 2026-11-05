@@ -35,13 +35,19 @@ describe("横になる（lie_down）", () => {
       expect(characterJoints(spec("lie_down", v)).head[0], v).toBeGreaterThan(characterJoints(spec("lie_down", v)).foot_near[0]);
     }
   });
-  it("横になる姿勢は、目だけ閉じた痛い目（くの字の線 2 本）になる。立ち姿の目は変わらない", () => {
+  it("横になる姿勢は、表情が全部痛い顔（pain）になる。場面の表情を選んでも同じ。立ち姿は変わらない", () => {
     const painEyes = (svg: string) => (svg.match(/<path d="M[-\d.]+ [-\d.]+L[-\d.]+ [-\d.]+L[-\d.]+ [-\d.]+" stroke="#000" stroke-width="3.5"/g) ?? []).length;
     for (const v of ["quarter", "side"] as const) {
       expect(painEyes(characterSvg(spec("stand", v))), v).toBe(0);
       const want = painEyes(characterSvg(spec("stand", v, { expression: "pain" })));
       expect(want, v).toBeGreaterThan(0);
-      for (const name of ["lie_down", "lie_down_back"] as const) expect(painEyes(characterSvg(spec(name, v))), `${name} ${v}`).toBe(want);
+      for (const name of ["lie_down", "lie_down_back"] as const) {
+        expect(painEyes(characterSvg(spec(name, v))), `${name} ${v}`).toBe(want);
+        // 表情を指定しないとき・笑う顔を選んだときも、pain を選んだときと同じ絵
+        const pain = characterSvg(spec(name, v, { expression: "pain" }));
+        expect(characterSvg(spec(name, v)), `${name} ${v}`).toBe(pain);
+        expect(characterSvg(spec(name, v, { expression: "joy" })), `${name} ${v}`).toBe(pain);
+      }
     }
   });
 });

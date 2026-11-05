@@ -664,7 +664,7 @@ export function characterSvg(c: CharacterSpec): string {
   const headAt = (inner: string) => r.neck === 0
     ? `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`
     : `<g transform="matrix(${hm.map((v) => n(v)).join(" ")})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak, eyes: lying(c.angles) ? "pain" : undefined }));
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: lying(c.angles) ? "pain" : c.expression, speak: c.speak }));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）。
   // 首を傾けるときは、付け根で首ごと半分傾ける（headMat）。下の端は胴の中まで伸ばし、傾けても襟から抜けて見えないようにする
   const neck = look !== "b" ? "" : r.neck === 0 ? headAt(neckB(skin)) :
@@ -689,8 +689,8 @@ export function characterSvg(c: CharacterSpec): string {
 }
 
 /**
- * 横になっている（胴を前か後ろへ 75 度より倒した）姿勢。倒れて目を開けているのはおかしいので、目だけ閉じた痛い目にする（11/6 作者）。
- * 眉と口は場面の表情のまま。立ち姿・おじぎなど、ほかの姿勢の胴は 40 度までなので変わらない
+ * 横になっている（胴を前か後ろへ 75 度より倒した）姿勢。倒れて目を開けている・口が笑っているのはおかしいので、表情を全部（目・眉・口）痛い顔（pain）にする（11/6 作者）。
+ * 場面の表情より先に使う。立ち姿・おじぎなど、ほかの姿勢の胴は 40 度までなので変わらない
  */
 const lying = (a: Angles) => Math.abs(a.torso) >= 75;
 

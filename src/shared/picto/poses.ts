@@ -61,7 +61,7 @@ export const POSES = {
   trip: pose({ torso: 30, neck: -10, arm_near_upper: 110, arm_near_lower: 10, arm_far_upper: 95, arm_far_lower: 20, leg_near_upper: 25, leg_near_lower: -15, leg_far_upper: -35, leg_far_lower: -40 }),
   /** 走る（体を前へ倒し、ひじを曲げて腕を前後に大きく振る） */
   run: pose({ torso: 14, neck: -4, arm_near_upper: -30, arm_near_lower: 85, arm_far_upper: 60, arm_far_lower: 75, leg_near_upper: 55, leg_near_lower: -70, leg_far_upper: -30, leg_far_lower: -65 }),
-  // 11/6 現場のヒアリングから足した 3 つ（横になるは、うつぶせと仰向けの 2 つ。どちらも目は閉じた痛い目: characterSvg が胴の傾きから決める）
+  // 11/6 現場のヒアリングから足した 3 つ（横になるは、うつぶせと仰向けの 2 つ。どちらも表情は痛い顔: characterSvg が胴の傾きから決める）
   /** 倒れて横になる（床にうつぶせに横たわる。胴を前へ 90 度倒し、足を後ろへまっすぐ伸ばし、腕は体に沿わせる） */
   lie_down: pose({ torso: 90, neck: -10, arm_near_upper: 0, arm_near_lower: 0, arm_far_upper: -5, arm_far_lower: 0, leg_near_upper: -90, leg_near_lower: 0, leg_far_upper: -88, leg_far_lower: 0 }),
   /** 倒れて仰向けに横になる（顔が上。胴を後ろへ 90 度倒し、足を前へまっすぐ伸ばし、腕は体に沿わせる） */
