@@ -1,5 +1,5 @@
 // 入口の背景のカードに描く顔（11/5 作者）。人形の部品（髪・かぶり物・目・まつ毛・口など）を乱数で組み、胸から上を正方形に切り抜く。
-// 色は 11/5 の作者の直し: 黒い線と黒い塗りだけにカードの色を付け、ほかは全部透かす（カードの地も透かし、入口の地の色がそのまま見える）。
+// 色は 11/5 の作者の直し: 黒い線と黒い塗りだけにカードの色を付け、ほかは全部白で抜く（カードの地も白）。
 // 1 枚ごとに SVG を描くと流れる行が重くなるので、data: の画像にして同じ絵を使い回す（POOL 人を先に描き、色ごとに覚えておく）
 import { avatarParts } from "./avatar-pick";
 import { characterSvg } from "../../shared/picto/character";
@@ -19,9 +19,9 @@ function lightness(hex: string): number {
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
-/** 暗い色（線・黒い塗り・濃い灰色のかぶり物）だけを線の色に、ほかの色（灰色の服・肌・白）は透かす（none） */
+/** 暗い色（線・黒い塗り・濃い灰色のかぶり物）だけを線の色に、ほかの色（灰色の服・肌・白）は白にする */
 const DARK = 0.3;
-const recolor = (svg: string, line: string) => svg.replace(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g, (c) => (lightness(c) < DARK ? line : "none"));
+const recolor = (svg: string, line: string) => svg.replace(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g, (c) => (lightness(c) < DARK ? line : "#fff"));
 
 const POOL = 72;
 const people: string[] = [];
