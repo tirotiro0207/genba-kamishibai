@@ -1,6 +1,10 @@
-/* 会社のテナントに PIN で入る部品（038） */
-.pin { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+/* 会社のテナントに PIN で入る部品（038）。11/5 作者: 画面の真ん中に置き、後ろは入口と同じ顔のカードの背景（暗い幕の上なので文字は白） */
+.pin { position: relative; z-index: 1; max-width: 420px; min-height: calc(100dvh - 32px); margin: 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 12px; color: #fff; }
 .pin h1 { font-size: 22px; margin: 0; }
-.pin label { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
-.pin input { font-size: 24px; letter-spacing: 0.2em; padding: 8px 12px; }
-.pin select { font-size: 20px; padding: 8px 12px; }
+.pin label { display: flex; flex-direction: column; gap: 6px; font-size: 18px; color: rgba(255, 255, 255, 0.85); }
+.pin input { font-size: 24px; letter-spacing: 0.2em; padding: 8px 12px; color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
+.pin select { font-size: 20px; padding: 8px 12px; color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
+.pin select option { color: #000; }
+.pin .err { color: #ff8a8a; }
+/* 押せないときの「入る」は透かすと後ろのカードが透けて見えるので、入口の「進む」と同じく透かさない暗い緑 */
+.pin .big.go:disabled { opacity: 1; background: #1d4a3a; color: rgba(255, 255, 255, 0.45); }

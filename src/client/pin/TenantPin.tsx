@@ -2,6 +2,7 @@
 // ほかの画面（req）がそれを付けて API を呼ぶ。PIN そのものはどこにも残さない。
 // 会社のテナントは、テナントの PIN のあとに役割の PIN でも入る（052 の続き）。役割のしるしは role:<テナント> に残す。
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { Backdrop } from "../login/Backdrop";
 import "./pin.css";
 
 export const tokenKey = (tenant: string) => `token:${tenant}`;
@@ -121,7 +122,10 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
     }
   }
 
+  // 後ろは入口と同じ顔のカードの背景（11/5 作者「あれをデフォルトに」）。フォームは画面の真ん中
   return (
+    <>
+    <Backdrop />
     <form className="pin" onSubmit={enter} data-testid="tenant-pin" data-step={step}>
       <h1>{step === "tenant" ? "会社のテナントに入る" : "役割で入る"}</h1>
       {step === "role" && roles.length > 1 && (
@@ -145,5 +149,6 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
       </button>
       {err && <p className="err">{err}</p>}
     </form>
+    </>
   );
 }
