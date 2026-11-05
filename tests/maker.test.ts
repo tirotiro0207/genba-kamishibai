@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { MemoryCallLog } from "../src/shared/claude";
-import { assign, makeCard, makerParams, type OkRule } from "../src/shared/make/maker";
+import { assign, edgeErrors, makeCard, makerParams, type OkRule } from "../src/shared/make/maker";
 import { boardParams, PROP_JA, scriptErrors, storyErrors, storyParams, writeScript } from "../src/shared/make/script";
 import { PROP_KINDS } from "../src/shared/picto/props";
-import { SCRIPT, STORY } from "./fixtures/card";
+import { MOTION, SCRIPT, STORY } from "./fixtures/card";
 import { fakeMaker } from "./fixtures/maker";
 
 const from = (line: number) => ({ quote: "q", line, line_end: line, found: true });
@@ -103,5 +103,20 @@ describe("正式な流れの作成（034a）", () => {
     expect(card.why).toBe("電気が来ていると感電する");
     const inferred = { ...RULE, reasons: [{ text: "下の人に当たる", from: from(3), stated: false }] };
     expect(assign(inferred, locate)[1].ai).toBe(true);
+  });
+
+  it("枠の端で半分切れる人を断る。全部入っているか、全部外に出ていればよい（11/5）", () => {
+    expect(edgeErrors(MOTION)).toEqual([]);
+    const at = (x: number) => ({ keyframes: MOTION.keyframes.map((k) => ({ ...k, figures: k.figures.map((f) => ({ ...f, x })) })) });
+    expect(edgeErrors(at(0.97))).toHaveLength(3);
+    expect(edgeErrors(at(0.97))[0]).toMatch(/^1 コマ目の figures\[0\]（new）が枠の端で切れている/);
+    expect(edgeErrors(at(1.5))).toEqual([]);
+  });
+
+  it("コマ割りの係は、小物を見た目どおりにだけ使い、電気を止めるのは分電盤に手を伸ばす姿で見せる（11/5）", () => {
+    const sys = String(boardParams(RULE, assign(RULE, locate), STORY).system);
+    expect(sys).toMatch(/箱（box）を「元の電源」[\s\S]*使い方はしない/);
+    expect(sys).toMatch(/電気を止める・切るは、人が分電盤（panel）の前まで行き/);
+    expect(sys).toMatch(/知らせる人は知らせる相手のほうを向いて立ち/);
   });
 });

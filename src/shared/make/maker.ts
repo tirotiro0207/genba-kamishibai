@@ -8,7 +8,8 @@ import { validateCard } from "../card";
 import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import type { From } from "../extract/rules";
 import { drawParams } from "../picto/draw";
-import { MOTION_JSON_SCHEMA, type MotionJson } from "../picto/motion";
+import { cutFrames, MOTION_JSON_SCHEMA, type MotionJson } from "../picto/motion";
+import { renderFrame, SIZE } from "../picto/scene";
 
 export const MAKER_MODEL = "claude-opus-5-5";
 
@@ -105,6 +106,36 @@ export function checklistErrors(rule: OkRule, motion: MotionJson): string[] {
   return e;
 }
 
+/**
+ * 枠の端で半分切れる人を断る（11/5。右端の親方が体の半分しか見えず、何をしているか読めなかった）。
+ * 人は枠の中に全部入れるか、そのコマに出ないなら枠の外に全部出す。体の幅は関節の外に頭 1 つぶんの余白を見る
+ */
+export function edgeErrors(motion: MotionJson): string[] {
+  let frames: ReturnType<typeof cutFrames>;
+  try {
+    frames = cutFrames(motion);
+  } catch {
+    return [];
+  }
+  const e: string[] = [];
+  frames.forEach(({ frame }, i) => {
+    let posed;
+    try {
+      posed = renderFrame(frame).posed;
+    } catch {
+      return;
+    }
+    posed.forEach((p, j) => {
+      const xs = Object.values(p.joints).map((q) => q[0]);
+      const pad = p.h * 0.12;
+      const x0 = Math.min(...xs) - pad;
+      const x1 = Math.max(...xs) + pad;
+      if (x1 > 0 && x0 < SIZE && (x0 < 0 || x1 > SIZE)) e.push(`${i + 1} コマ目の figures[${j}]（${frame.figures[j].role ?? "人"}）が枠の端で切れている。x を内へ寄せるか、そのコマに出ないなら枠の外へ全部出す`);
+    });
+  });
+  return e;
+}
+
 /** 1 項目から未承認の下書き 1 枚の中身を作る（保存は呼ぶ側）。feedback は前の絵を確かめる AI がどう読んだか */
 export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule, locate: Locate, feedback?: string, scene?: Scene, examples?: string): Promise<Made> {
   const base = assign(rule, locate);
@@ -130,6 +161,8 @@ export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule
       script,
     };
     const errs = [...validateCard(card), ...checklistErrors(rule, out.motion)];
+    // 端で切れる人は 1 回だけ直させる（2 回目も切れていたら、形は正しいのでそのまま返し、確かめる AI の読みに任せる）
+    if (!errs.length && i === 0) errs.push(...edgeErrors(out.motion));
     if (!errs.length) return { card, messages };
     fix = errs.slice(0, 6).join(" / ");
   }
