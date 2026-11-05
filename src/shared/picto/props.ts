@@ -40,6 +40,8 @@ export const PROP_KINDS = [
   // カードの右上の空きに置く。字は字形を塗りの path で持つ。たった時間の札と同じ扱いの例外。作者の判断）、安全の十字の印、
   // 吹き出しの中の「1…2…3 SEC」（数字・点々・SEC を線で描く。たった時間の札と同じ扱い）、元気に笑った顔（熱の顔と対）
   "bulb_off", "label_teiatsu", "label_anzen", "safety_cross", "count_3sec", "healthy",
+  // 11/6 朝 作者「3 メートル離れる」: 人と人（人と吊り荷）のあいだの横の距離の矢印と「3m」の札
+  "distance_3m",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -189,6 +191,7 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   chair: "hip",
   bulb_off: "hand_near",
   label_teiatsu: null,
+  distance_3m: null,
   label_anzen: null,
   safety_cross: null,
   count_3sec: null,
@@ -1264,6 +1267,25 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
           out += cord(`M${n(end)} ${n(cy + v * W * 0.5)}L${n(tip[0])} ${n(tip[1])}`, W * 1.7, PAPER);
         }
       }
+      return out;
+    }
+    case "distance_3m": {
+      // 距離の札（11/6 朝 作者「3 メートル離れる」）: 横の矢印（両はしに矢じりと縦の線）と、まん中の上に「3m」を線で描いた札。
+      // c は矢印のまん中、矢印の長さが size。人の足もとの高さに置き、2 人のあいだの距離を示す
+      const label = "3m";
+      const l = cx - s / 2;
+      const r = cx + s / 2;
+      const aw = Math.max(W * 2.2, s * 0.05);
+      let out = line(l + aw, cy, r - aw, cy, INK, 1.3) +
+        path(poly([[l, cy], [l + aw * 1.3, cy - aw * 0.75], [l + aw * 1.3, cy + aw * 0.75]]), INK, 0.6) +
+        path(poly([[r, cy], [r - aw * 1.3, cy - aw * 0.75], [r - aw * 1.3, cy + aw * 0.75]]), INK, 0.6) +
+        line(l, cy - aw * 1.4, l, cy + aw * 1.4, INK, 1) + line(r, cy - aw * 1.4, r, cy + aw * 1.4, INK, 1);
+      const gh = Math.max(W * 5, Math.min(s * 0.12, W * 10));
+      const gw = gh * 0.6;
+      const tw = glyphsWidth(label, gw);
+      const pad = gh * 0.35;
+      const yb = cy - aw * 1.6;
+      out += box(cx - tw / 2 - pad, yb - gh - pad * 2, cx + tw / 2 + pad, yb, PAPER, pad) + glyphs(label, cx - tw / 2, yb - gh - pad, gw, gh, W * 1.15);
       return out;
     }
     case "height_2m": {

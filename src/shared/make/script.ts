@@ -113,6 +113,7 @@ export const PROP_JA: Record<PropKind, string> = {
   safety_cross: "安全の十字の印",
   count_3sec: "「1…2…3 SEC」（3 秒数える）",
   healthy: "元気に笑った顔",
+  distance_3m: "3m の距離の矢印（2 人のあいだ）",
 };
 
 const HEADGEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead"]);

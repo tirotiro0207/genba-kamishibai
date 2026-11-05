@@ -86,3 +86,13 @@ describe("チェック表の欄", () => {
     expect(validateFrame({ figures: [F()], props: [{ kind: "box", at, size: 0.3, rows: 6 }] }).join()).toMatch(/checklist/);
   });
 });
+
+describe("3m の距離の矢印（11/6 朝 作者「3 メートル離れる」）", () => {
+  it("横の矢印と「3m」の札を線で描き、絵柄の検査が通る。長さは size で変わる", () => {
+    expect(PROP_KINDS).toContain("distance_3m");
+    const svg = svgOf([{ kind: "distance_3m", at: { x: 0.5, y: 0.84 }, size: 0.3 }]);
+    expect(checkStyle(svg)).toEqual([]);
+    expect(svg).not.toMatch(/<text/);
+    expect(svg).not.toBe(svgOf([{ kind: "distance_3m", at: { x: 0.5, y: 0.84 }, size: 0.45 }]));
+  });
+});
