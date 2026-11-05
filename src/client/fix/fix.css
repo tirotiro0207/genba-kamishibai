@@ -22,3 +22,4 @@
 .touch-box { position: absolute; border: 4px dashed #111; border-radius: 4px; pointer-events: none; }
 .fix-undo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .fix-undo p, .fix-undo span { margin: 0; }
+.touch-state { margin: 0; font-size: 20px; }

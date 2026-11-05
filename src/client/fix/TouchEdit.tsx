@@ -103,6 +103,8 @@ export function TouchEdit({ body, at, busy, onSave }: { body: CardBody; at: numb
     setMoved(new Set());
   };
   const names = [...moved].filter(Boolean);
+  const value = (tg: Target) =>
+    tg.type === "figure" ? (({ x, facing }) => ({ x, facing }))(json.keyframes[keyIndex].figures[tg.index]) : (({ kind, dx, dy, x, y, size }) => ({ kind, dx, dy, x, y, size }))(json.keyframes[keyIndex].props[tg.index]);
 
   return (
     <div className="fix-main">
@@ -123,13 +125,13 @@ export function TouchEdit({ body, at, busy, onSave }: { body: CardBody; at: numb
             向きを左右に入れかえる
           </button>
         )}
+        {/* 監修者には言葉だけを見せる（11/6 本部: 数字の列は出さない）。値は data-value に置き、試験と開発のときに読む */}
         {sel && (
-          <pre className="pose-json" data-testid="touch-json" data-part={part ?? ""}>
-            {JSON.stringify(
-              sel.type === "figure" ? (({ x, facing }) => ({ x, facing }))(json.keyframes[keyIndex].figures[sel.index]) : (({ kind, dx, dy, x, y, size }) => ({ kind, dx, dy, x, y, size }))(json.keyframes[keyIndex].props[sel.index]),
-              (_, v) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v),
-            )}
-          </pre>
+          <p className="touch-state" data-testid="touch-json" data-part={part ?? ""} data-value={JSON.stringify(value(sel))}>
+            {sel.type === "figure"
+              ? `向き: ${json.keyframes[keyIndex].figures[sel.index].facing === "right" ? "右向き" : "左向き"}${moved.has(part ?? "") ? "（動かした）" : ""}`
+              : `大きさ ${Math.round(json.keyframes[keyIndex].props[sel.index].size * 100)}%${moved.has(part ?? "") ? "（動かした）" : ""}`}
+          </p>
         )}
         <div className="fix-nav">
           <button className="big" disabled={!names.length || busy} onClick={reset} data-testid="touch-reset">

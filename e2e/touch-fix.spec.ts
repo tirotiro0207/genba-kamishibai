@@ -44,7 +44,7 @@ test("タブレット: 部品をタップで選び、指で動かし、2 本指�
   expect(b1.x + b1.w / 2 - (b0.x + b0.w / 2)).toBeCloseTo(-0.1, 1);
   expect(b1.y + b1.h / 2 - (b0.y + b0.h / 2)).toBeCloseTo(-0.05, 1);
   // 2 本指で広げると大きくなる
-  const size0 = JSON.parse((await page.getByTestId("touch-json").textContent())!).size;
+  const size0 = JSON.parse((await page.getByTestId("touch-json").getAttribute("data-value"))!).size;
   const c = [b1.x + b1.w / 2, b1.y + b1.h / 2];
   await touch(
     cdp,
@@ -57,17 +57,21 @@ test("タブレット: 部品をタップで選び、指で動かし、2 本指�
       ];
     }),
   );
-  const size1 = JSON.parse((await page.getByTestId("touch-json").textContent())!).size;
+  const size1 = JSON.parse((await page.getByTestId("touch-json").getAttribute("data-value"))!).size;
   expect(size1 / size0).toBeCloseTo(2, 0);
   expect((await boxIn(face)).w).toBeGreaterThan(b1.w * 1.5);
+  // 監修者に見えるのは言葉だけ（数字の列や JSON を出さない）
+  await expect(page.getByTestId("touch-json")).toHaveText(/^大きさ \d+%（動かした）$/);
+  expect(await page.getByTestId("fix").textContent()).not.toContain('"kind"');
   if (shots) await page.screenshot({ path: `${shots}/touch-1-moved.png` });
 
   // 人をタップして選び、向きを左右に入れかえる
   await touch(cdp, face, [[[0.2, 0.5]]]);
   await expect(page.getByTestId("touch-json")).toHaveAttribute("data-part", "p1");
-  const f0 = JSON.parse((await page.getByTestId("touch-json").textContent())!).facing;
+  const f0 = JSON.parse((await page.getByTestId("touch-json").getAttribute("data-value"))!).facing;
+  await expect(page.getByTestId("touch-json")).toHaveText(/^向き: (右|左)向き$/);
   await page.getByTestId("touch-flip").tap();
-  expect(JSON.parse((await page.getByTestId("touch-json").textContent())!).facing).not.toBe(f0);
+  expect(JSON.parse((await page.getByTestId("touch-json").getAttribute("data-value"))!).facing).not.toBe(f0);
 
   // 保存すると版が上がり、④ に前後が残る
   await page.getByTestId("touch-save").tap();
