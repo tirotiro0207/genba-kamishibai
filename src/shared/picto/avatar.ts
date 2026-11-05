@@ -17,7 +17,10 @@ export type Brows = "none" | "flat" | "arch" | "angled";
  * 表情（場面ごとに描く側が選ぶ。キャラクターを作る画面では選ばない）。口はキャラクターの部品にせず、表情と話す口で決める。
  * neutral は今までの笑った口の顔と 1 文字も変わらない
  */
-/** serious（真剣）は 11/6 作者の指示で足した。眉を少し寄せて、口を横にまっすぐ結ぶ（怒りほど眉を下げず、口を開けない） */
+/**
+ * serious（真剣）は 11/6 作者の指示で足した。眉は短い直線で、ふつうの眉の高さのまま鼻の側を少し下げる（傾き約 18°。怒りは低く急）。
+ * 口は横にまっすぐ結ぶ。目は変えない（11/6 作り直し: 眉が目に近く低いと、にらんで見えた）
+ */
 export type Expression = "neutral" | "joy" | "fun" | "anger" | "sad" | "surprise" | "worry" | "pain" | "serious";
 export const EXPRESSIONS: readonly Expression[] = ["neutral", "joy", "fun", "anger", "sad", "surprise", "worry", "pain", "serious"];
 /** 話している口の形（あ・い・う・え・お）。表情の口より先に使う */
@@ -176,7 +179,7 @@ const lashSvg = (e: Landmarks["eyes"][number], rx: number, ry: number, kind: Las
  * [鼻の側の端の y, 外の端の y]。怒りは鼻の側を下げ、悲しみ・困る・痛いは鼻の側を上げ、驚きは全体を上げる
  */
 const MOOD_BROW: Partial<Record<Expression, [number, number]>> = {
-  anger: [-43.5, -50], serious: [-45.5, -48], sad: [-51, -45.5], worry: [-51, -46], pain: [-50, -45], surprise: [-52, -52],
+  anger: [-43.5, -50], serious: [-47, -51.5], sad: [-51, -45.5], worry: [-51, -46], pain: [-50, -45], surprise: [-52, -52],
 };
 const browSvg = (lm: Landmarks, kind: Brows, view: View, ex: Expression = "neutral") => {
   const mb = MOOD_BROW[ex];
