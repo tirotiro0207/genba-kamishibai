@@ -1,7 +1,8 @@
 // 冒頭の 8 場面を 1 つずつの Composition にし、つないだ 1 本（opening）も置く
 import React from "react";
 import { Composition, Sequence } from "remotion";
-import { Full, FULL_FRAMES, FullIndex } from "./full";
+import { Full, FULL_FRAMES, FullIndex, FullLayer } from "./full";
+import { LAYERS } from "./layers";
 import { StepsSheet } from "./origami";
 import { Portal, PORTAL_FRAMES } from "./portal";
 import { DISSOLVE_TEST_FRAMES, DissolveTest } from "./parts-test";
@@ -32,6 +33,10 @@ export const Root: React.FC = () => (
     <Composition id="p1-portal" component={Portal} durationInFrames={PORTAL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{}} />
     {/* 3 分の通しの仮版（枠と床の舞台は 0:13〜3:00 で変えない）と、その場面の一覧（静止画 1 枚）。印は inputProps の mark */}
     <Composition id="full" component={Full} durationInFrames={FULL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{}} />
+    {/* 通しの動画のレイヤー（L1〜L5）。L2〜L5 は透明のまま書き出す（render-layers.mjs） */}
+    {LAYERS.map((l) => (
+      <Composition key={l.id} id={l.id} component={FullLayer} durationInFrames={FULL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{ layer: l.n }} />
+    ))}
     <Composition id="full-index" component={FullIndex} durationInFrames={1} fps={FPS} width={1990} height={720} />
     {/* 部品の試し: ドットに分解して吸い込まれる */}
     <Composition id="test-dissolve" component={DissolveTest} durationInFrames={DISSOLVE_TEST_FRAMES} fps={FPS} width={W} height={H} />

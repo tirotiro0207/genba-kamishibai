@@ -69,48 +69,73 @@ export const Clocks: React.FC<{ g: number; underline?: number; opacity?: number;
 
 // ---- 木の紙芝居の枠（両開きの扉つき） ----
 
-// 11/5 夜 v3（絵コンテの割り付け）: 枠の外側は横 280〜1000・縦 117〜527（1920×1080 では 420〜1500・175〜790）。0:13 から 3:00 まで同じ所に置く
-export const FRAME = { w: 720, h: 410, cy: 322, inset: 30 };
-/** 床（画面の下の約 3 割。1080 では 800 より下）の上の端 */
-export const FLOOR_Y = 533;
+// 11/5 夜 v4（作者の「枠を大きく」）: 枠の外側は横 200〜1080・縦 36.5〜563.5（1920×1080 では 300〜1620・55〜845。横幅の 69%）。屋根の山は y=10 まで。
+// 窓（紙）は 786.7×442.7（1080 では 1180×664。ちょうど 16:9 で、録画が余白なしで入る）。0:13 から 3:00 まで同じ所に置く
+export const FRAME = { w: 880, h: 527, cy: 300, inset: 46.67, insetY: 42 };
+/** 枠の窓（紙の入る所） */
+export const WIN = { x: 640 - FRAME.w / 2 + FRAME.inset, y: FRAME.cy - FRAME.h / 2 + FRAME.insetY, w: FRAME.w - FRAME.inset * 2, h: FRAME.h - FRAME.insetY * 2 };
+/** 床（1080 では 850 より下）の上の端 */
+export const FLOOR_Y = 566.7;
 export const FLOOR = "#3a316c";
 const WOOD = "#8a5a32";
 const WOOD_DARK = "#5c3a1e";
 const WOOD_DOOR = "#b07a46";
+const WOOD_INNER = "#d9a96f";
 
-/** open は扉の開き（0 で閉じる、1 で開ききる）。children は扉の奥の絵（題など）。線は手で描いたように少し揺らす（WobbleDefs が要る） */
-export const StageFrame: React.FC<{ cx: number; open?: number; children?: React.ReactNode }> = ({ cx, open = 0, children }) => {
-  const { w, h, cy, inset } = FRAME;
+/**
+ * 扉の開く角度（11/5 夜 v4 作者の「実際の木の箱は外側にパカッと開く」）。lt は開き始めからの秒。
+ * 0〜0.35 秒で 0°→90°（こちらへ回って外の面が細くなる）、0.35〜0.55 秒で 90°→125°（内の面が見えて外へ広がる）、0.55〜0.7 秒で 115° に戻る（カタッ）
+ */
+export const doorDeg = (lt: number) => {
+  if (lt <= 0) return 0;
+  if (lt < 0.35) return 90 * Math.sin((lt / 0.35) * (Math.PI / 2));
+  if (lt < 0.55) return 90 + 35 * ((lt - 0.35) / 0.2);
+  if (lt < 0.7) return 125 - 10 * ((lt - 0.55) / 0.15);
+  return 115;
+};
+
+/** 扉が窓にかぶっている幅（片側。90° を越えると扉は窓の外なので 0）。枠の中の紙（L3）を扉の所で切り取るのに使う */
+export const doorCover = (deg: number) => (WIN.w / 2) * Math.max(0, Math.cos((deg * Math.PI) / 180));
+
+/** deg は扉の開く角度（0 で閉じる、115 で開ききる。open を渡すと open×115）。children は扉の奥の絵（題など）。線は手で描いたように少し揺らす（WobbleDefs が要る） */
+export const StageFrame: React.FC<{ cx: number; open?: number; deg?: number; children?: React.ReactNode }> = ({ cx, open = 0, deg, children }) => {
+  const { w, h, cy } = FRAME;
   const x0 = cx - w / 2;
   const y0 = cy - h / 2;
-  const iw = w - inset * 2;
-  const ih = h - inset * 2;
-  const ix = x0 + inset;
-  const iy = y0 + inset;
+  const ix = x0 + FRAME.inset;
+  const iy = y0 + FRAME.insetY;
+  const iw = WIN.w;
+  const ih = WIN.h;
   const half = iw / 2;
-  // 扉は蝶番の側を軸に回る。見かけの幅は cos で縮み、開くほど暗くなる
-  const sw = Math.cos((open * Math.PI) / 2 * 0.98);
+  const th = ((deg ?? open * 115) * Math.PI) / 180;
+  // 扉はちょうつがい（窓の左右の端）を軸にこちらへ回る。見かけの幅は |cos θ|。自由な側の端は近づくので少し背が高くなる。90° を越えると内の面が外へ出る
   const door = (side: -1 | 1) => {
     const hinge = side < 0 ? ix : ix + iw;
-    const dw = half * sw;
-    const x = side < 0 ? hinge : hinge - dw;
-    const shade = 1 - open * 0.45;
+    const c = Math.cos(th);
+    const dw = half * Math.abs(c);
+    const grow = ih * 0.054 * Math.sin(th);
+    const inward = c >= 0; // まだ窓の上にかぶっている（外の面が見える）
+    const fx = inward ? hinge - side * dw : hinge + side * dw;
+    const pts = `${hinge},${iy} ${fx},${iy - grow / 2} ${fx},${iy + ih + grow / 2} ${hinge},${iy + ih}`;
+    const shade = inward ? 1 - 0.45 * Math.sin(th) : 0.8 + 0.2 * Math.min(1, (th - Math.PI / 2) / 0.4);
+    const mid = (hinge + fx) / 2;
     return (
       <g>
-        <rect x={x} y={iy} width={Math.max(0.5, dw)} height={ih} fill={WOOD_DOOR} stroke={WOOD_DARK} strokeWidth={4} style={{ filter: `brightness(${shade})` }} />
-        {dw > 30 && <rect x={x + dw * 0.12} y={iy + 26} width={dw * 0.76} height={ih - 52} fill="none" stroke={WOOD_DARK} strokeWidth={3} opacity={0.55} />}
-        {dw > 30 && <circle cx={side < 0 ? x + dw - 22 : x + 22} cy={cy} r={9} fill="#e8d6a8" stroke={WOOD_DARK} strokeWidth={3} />}
+        <polygon points={pts} fill={inward ? WOOD_DOOR : WOOD_INNER} stroke={WOOD_DARK} strokeWidth={4} strokeLinejoin="round" style={{ filter: `brightness(${shade})` }} />
+        {dw > 30 && <polygon points={`${hinge + (fx - hinge) * 0.12},${iy + 26} ${hinge + (fx - hinge) * 0.88},${iy + 26 - grow * 0.4} ${hinge + (fx - hinge) * 0.88},${iy + ih - 26 + grow * 0.4} ${hinge + (fx - hinge) * 0.12},${iy + ih - 26}`} fill="none" stroke={WOOD_DARK} strokeWidth={3} opacity={0.5} />}
+        {inward && dw > 30 && <circle cx={fx + side * 22} cy={cy} r={9} fill="#e8d6a8" stroke={WOOD_DARK} strokeWidth={3} />}
+        {!inward && dw > 20 && <path d={`M${mid} ${iy + 40}V${iy + ih - 40}`} stroke={WOOD_DARK} strokeWidth={2} opacity={0.3} />}
       </g>
     );
   };
   return (
     <g filter="url(#wobble)">
-      {/* 枠の上の飾り（ゆるい山形） */}
-      <path d={`M${x0 + 40} ${y0}Q${cx} ${y0 - 70} ${x0 + w - 40} ${y0}Z`} fill={WOOD} stroke={WOOD_DARK} strokeWidth={5} />
-      <rect x={x0} y={y0} width={w} height={h} rx={10} fill={WOOD} stroke={WOOD_DARK} strokeWidth={6} />
+      {/* 枠の上の飾り（ゆるい山形。真ん中で y=10） */}
+      <path d={`M${x0 + 50} ${y0}Q${cx} ${2 * 10 - y0} ${x0 + w - 50} ${y0}Z`} fill={WOOD} stroke={WOOD_DARK} strokeWidth={5} />
+      <rect x={x0} y={y0} width={w} height={h} rx={12} fill={WOOD} stroke={WOOD_DARK} strokeWidth={6} />
       {/* 木目 */}
       {[0.25, 0.5, 0.75].map((t) => (
-        <path key={t} d={`M${x0 + 8} ${y0 + 12 + t * 6}H${x0 + w - 8}`} stroke={WOOD_DARK} strokeWidth={2} opacity={0.35} />
+        <path key={t} d={`M${x0 + 8} ${y0 + 12 + t * 8}H${x0 + w - 8}M${x0 + 8} ${y0 + h - 30 + t * 8}H${x0 + w - 8}`} stroke={WOOD_DARK} strokeWidth={2} opacity={0.35} />
       ))}
       <rect x={ix} y={iy} width={iw} height={ih} fill="#2a1b0e" />
       <svg x={ix} y={iy} width={iw} height={ih} viewBox={`0 0 ${iw} ${ih}`}>
@@ -118,7 +143,6 @@ export const StageFrame: React.FC<{ cx: number; open?: number; children?: React.
       </svg>
       {door(-1)}
       {door(1)}
-      <rect x={x0 + 20} y={y0 + h} width={w - 40} height={16} fill={WOOD_DARK} />
     </g>
   );
 };
@@ -192,18 +216,69 @@ export const FONT_PEN = "HGKyokashotai, HG教科書体, UD Digi Kyokasho NK-R, Y
  */
 export const LightRings: React.FC<{ o: number; k?: number; glow?: number }> = ({ o, k = 1, glow = 0 }) => {
   if (o <= 0) return null;
-  const cy = FRAME.cy;
+  const cy = 301.3;
   return (
     <g opacity={o} transform={`translate(640 ${cy}) scale(${k}) translate(-640 ${-cy})`} filter="url(#wobble-strong)" style={{ mixBlendMode: "screen" }}>
       {[-1, 1].map((s) => (
-        <g key={s} transform={`rotate(${s * -4} ${640 + s * 175} ${cy})`}>
-          <ellipse cx={640 + s * 175} cy={cy} rx={330} ry={228} fill="none" stroke="#efe2c0" strokeOpacity={0.34 + glow * 0.3} strokeWidth={30} />
-          <ellipse cx={640 + s * 175} cy={cy + 6} rx={318} ry={216} fill="none" stroke="#fff6dc" strokeOpacity={0.22} strokeWidth={8} strokeDasharray="120 40 60 30" />
+        <g key={s} transform={`rotate(${s * -3} ${640 + s * 133.3} ${cy})`}>
+          <ellipse cx={640 + s * 133.3} cy={cy} rx={353} ry={253} fill="none" stroke="#efe2c0" strokeOpacity={0.3 + glow * 0.3} strokeWidth={30} />
+          <ellipse cx={640 + s * 133.3} cy={cy + 6} rx={341} ry={241} fill="none" stroke="#fff6dc" strokeOpacity={0.2} strokeWidth={8} strokeDasharray="120 40 60 30" />
         </g>
       ))}
     </g>
   );
 };
+
+/**
+ * 上から下りるステージライト 2 つと、その光の丸（11/5 夜 v4 作者の「ショーの前にライトがぐるぐる回って、最後に焦点が真ん中に合う」）。t は冒頭からの秒。
+ * 0:13.5 に左、0:14.0 に右が下りる → 0:14.5〜0:16.0 に光が円を描いて回る → 0:16.0〜0:16.5 に真ん中で重なる → 0:17.5〜0:18.0 に輪へ溶けて消え、ライトの頭だけ残る。
+ * 2:55.0 に左、2:55.5 に右が消えて上へ引き上げられる
+ */
+const C = { x: 640, y: 306.7 };
+const LAMPS = [
+  { x: 320, drop: 13.5, up: 175.0, spot: { x: 426.7, y: 200 }, dir: 1 },
+  { x: 960, drop: 14.0, up: 175.5, spot: { x: 853.3, y: 200 }, dir: -1 },
+];
+const clampN = (v: number) => Math.min(1, Math.max(0, v));
+export const lampSpot = (i: number, t: number) => {
+  const L = LAMPS[i];
+  const a0 = Math.atan2(L.spot.y - C.y, L.spot.x - C.x);
+  const r0 = Math.hypot(L.spot.x - C.x, L.spot.y - C.y);
+  const spin = clampN((t - 14.5) / 1.5);
+  const shrink = clampN((t - 16.0) / 0.5);
+  const ease = shrink * shrink * (3 - 2 * shrink);
+  const a = a0 + L.dir * spin * Math.PI * 2;
+  const r = r0 * (1 - ease);
+  const on = clampN((t - L.drop - 0.4) / 0.15);
+  const melt = 1 - clampN((t - 17.5) / 0.5);
+  return { x: C.x + Math.cos(a) * r, y: C.y + Math.sin(a) * r, r: 173 + ease * 47, o: on * melt * (0.35 - ease * 0.05) };
+};
+export const StageLamps: React.FC<{ t: number }> = ({ t }) => (
+  <g>
+    {LAMPS.map((L, i) => {
+      if (t < L.drop) return null;
+      const d = clampN((t - L.drop) / 0.5);
+      const bounce = t > L.drop + 0.5 && t < L.drop + 0.75 ? Math.sin(((t - L.drop - 0.5) / 0.25) * Math.PI) * 5 : 0;
+      const up = clampN((t - L.up - 0.15) / 0.5);
+      const y = -40 + (d * d * (3 - 2 * d)) * 60 + bounce - up * up * 90;
+      const sp = lampSpot(i, t);
+      const aim = t < 16.5 && sp.o > 0 ? Math.max(-15, Math.min(15, (Math.atan2(sp.y - y, sp.x - L.x) * 180) / Math.PI - 90)) : 0;
+      const lit = t < L.up ? 1 : 0;
+      const flick = 0.75 + 0.25 * Math.sin(t * 7 + i * 2);
+      return (
+        <g key={i}>
+          {sp.o > 0 && <Light id={`lamp${i}`} x={sp.x} y={sp.y} r={sp.r} opacity={sp.o * 2.2} />}
+          <line x1={L.x} y1={-10} x2={L.x} y2={y - 16} stroke="#20202a" strokeWidth={1.4} />
+          <g transform={`translate(${L.x} ${y}) rotate(${-aim})`}>
+            <rect x={-4} y={-20} width={8} height={6} fill="#2a2a33" />
+            <path d="M-20 16Q-20 -16 0 -16Q20 -16 20 16Z" fill="#3b3b46" stroke="#1d1d24" strokeWidth={2} />
+            <ellipse cx={0} cy={16} rx={20} ry={5} fill={lit ? "#ffe9a8" : "#555"} opacity={lit ? flick : 1} />
+          </g>
+        </g>
+      );
+    })}
+  </g>
+);
 
 /** 舞台のぼかした丸い光 2 つ（0:13.5 と 0:14.0 に灯り、2:56.5 と 2:57.0 に消える）。t は冒頭からの秒 */
 export const stageLights = (t: number) => {

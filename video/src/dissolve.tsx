@@ -1,5 +1,5 @@
 // 体が細かいドットに分かれて、1 つの点（ポータルの口）へ吸い込まれる仕組み（v4 でも使う部品。11/5 夜）。
-// 人の絵は、マスクで小さな四角に切って順に消し、消えた四角の所から同じ色のドットが出て、渦を巻きながら吸い込まれる。
+// 人の絵は、マスクで小さな四角に切って順に消し、消えた四角の所から元の色のドットが出て、口の真ん中へまっすぐ吸い込まれる（v4）。
 // ドットが出る所は人の形のあらまし（頭・胴・脚。リュックがあれば背中の箱）に絞り、何も無い所からドットが出ないようにする
 import React from "react";
 import { interpolate } from "remotion";
@@ -9,7 +9,7 @@ const hash = (i: number) => {
   const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return s - Math.floor(s);
 };
-interface Box { x0: number; y0: number; x1: number; y1: number }
+interface Box { x0: number; y0: number; x1: number; y1: number; colors?: string[] }
 /** 立った人のあらまし（足元 x・地面 g・背の高さ h）。pack が -1 / 1 なら背中の左 / 右にリュックの箱 */
 export const bodyBoxes = (x: number, g: number, h: number, pack: -1 | 0 | 1 = 0): Box[] => {
   const b: Box[] = [
@@ -30,7 +30,7 @@ export const bodyBoxes = (x: number, g: number, h: number, pack: -1 | 0 | 1 = 0)
  */
 export const Dissolve: React.FC<{ id: string; p: number; boxes: Box[]; to: [number, number]; cell?: number; color?: string[]; children: React.ReactNode }> = ({ id, p, boxes, to, cell = 6, color = ["#2b2550", "#ffffff", "#d97757"], children }) => {
   if (p <= 0) return <>{children}</>;
-  const cells: { x: number; y: number; thr: number; i: number }[] = [];
+  const cells: { x: number; y: number; thr: number; i: number; col: string }[] = [];
   const seen = new Set<string>();
   const near = boxes.reduce((a, b) => Math.max(a, Math.hypot((b.x0 + b.x1) / 2 - to[0], (b.y0 + b.y1) / 2 - to[1])), 1);
   let i = 0;
@@ -42,7 +42,8 @@ export const Dissolve: React.FC<{ id: string; p: number; boxes: Box[]; to: [numb
         seen.add(key);
         // 吸い込む口に近い所から先にほどける（少しばらつかせる）
         const d = Math.hypot(x - to[0], y - to[1]) / near;
-        cells.push({ x, y, thr: Math.min(0.62, d * 0.45 + hash(i) * 0.17), i });
+        const cs = b.colors ?? color;
+        cells.push({ x, y, thr: Math.min(0.62, d * 0.45 + hash(i) * 0.17), i, col: cs[Math.floor(hash(i + 3) * cs.length)] });
         i++;
       }
     }
@@ -59,14 +60,16 @@ export const Dissolve: React.FC<{ id: string; p: number; boxes: Box[]; to: [numb
       {cells.map((c) => {
         const q = interpolate(p, [c.thr, c.thr + FLY], [0, 1], clamp);
         if (q <= 0 || q >= 1) return null;
-        const e = q * q;
-        // 渦: 口のまわりを回りながら近づく
-        const ang = Math.atan2(c.y - to[1], c.x - to[0]) + e * 1.6 * (hash(c.i + 7) > 0.5 ? 1 : -1);
-        const r = Math.hypot(c.x - to[0], c.y - to[1]) * (1 - e);
-        const x = to[0] + Math.cos(ang) * r;
-        const y = to[1] + Math.sin(ang) * r;
-        const s = cell * (1 - e * 0.7);
-        return <rect key={c.i} x={x - s / 2} y={y - s / 2} width={s} height={s} fill={color[c.i % color.length]} opacity={1 - e * 0.5} />;
+        // v4（作者の指示）: 渦を巻かず、元の所から口の真ん中へまっすぐ飛ぶ。口に近づくほど速い。後ろに 2 個分の尾
+        return [0, 0.07, 0.14].map((lag, k) => {
+          const qq = Math.max(0, q - lag);
+          if (k > 0 && qq <= 0) return null;
+          const e = qq * qq;
+          const x = c.x + (to[0] - c.x) * e;
+          const y = c.y + (to[1] - c.y) * e;
+          const s = cell * (1 - e * 0.6) * (1 - k * 0.3);
+          return <rect key={`${c.i}-${k}`} x={x - s / 2} y={y - s / 2} width={s} height={s} fill={c.col} opacity={(1 - e * 0.4) * (1 - k * 0.35)} />;
+        });
       })}
     </g>
   );

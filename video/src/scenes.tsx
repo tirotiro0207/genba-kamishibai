@@ -1,18 +1,23 @@
 // 冒頭の 8 場面。どの場面も「冒頭からのコマ g」で描くので、場面ごとに書き出しても 1 本につないでも同じ絵になる
 import React from "react";
+import { L, useLayer } from "./layers";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import { POSES } from "../../src/shared/picto/poses";
 import { BODY_STEPS, Folding, JOIN_STEPS, type Layer, LEG_STEPS, SheetPatterns, type Step } from "./origami";
 import { gait, mixAngles, PaperDefs, PaperPerson, type Pt, Shadow } from "./paper";
-import { BrushPaper, Clocks, FLOOR, FLOOR_Y, FONT_HAND, FONT_JP, FONT_PEN, FRAME, Light, LightRings, StageFrame, stageLights, WobbleDefs } from "./parts";
+import { BrushPaper, Clocks, FLOOR, FLOOR_Y, FONT_HAND, FONT_JP, FONT_PEN, FRAME, LightRings, StageFrame, StageLamps, WIN, doorCover, doorDeg, WobbleDefs } from "./parts";
 import { ASIDE, CLOCKS, FIGURE_K, FOLD_AT, FPS, GROUND, H, INK, lengthOf, PAPER_K, PERSON_H, PRINT_FRAMES, PURPLE, type SceneId, startOf, STEP_FRAMES, TO_FOLD_FRAMES, W } from "./timeline";
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const ease = Easing.inOut(Easing.cubic);
 const sec = (s: number) => s * FPS;
 
-const Svg: React.FC<{ bg?: string; children: React.ReactNode }> = ({ bg = "#fff", children }) => (
-  <AbsoluteFill style={{ background: bg }}>
+/** bgLayer を渡すと、地の色はそのレイヤー（と全部を描くとき）だけ塗る */
+const Svg: React.FC<{ bg?: string; bgLayer?: number; children: React.ReactNode }> = ({ bg = "#fff", bgLayer, children }) => {
+  const l = useLayer();
+  const paint = bgLayer === undefined || l === 0 || l === bgLayer;
+  return (
+  <AbsoluteFill style={{ background: paint ? bg : "transparent" }}>
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
       <PaperDefs />
       <SheetPatterns />
@@ -20,7 +25,8 @@ const Svg: React.FC<{ bg?: string; children: React.ReactNode }> = ({ bg = "#fff"
       {children}
     </svg>
   </AbsoluteFill>
-);
+  );
+};
 
 /** 場面の中のコマ f と、冒頭からのコマ g */
 const useScene = (id: SceneId) => {
@@ -190,7 +196,8 @@ export const S5Name: React.FC = () => {
 const WALK_END = sec(0.5);
 /** 紙の人の手が枠の端に届く間（背の高さに合わせる） */
 const HAND = (58 * PERSON_H) / 356;
-const PULL_END = sec(1.5);
+// v4: 枠が大きくなった分、重そうに 0.2 秒遅く着き、大きく弾む
+const PULL_END = sec(1.7);
 const RUN_AT = sec(2.0);
 const frameCx = (f: number) =>
   f < WALK_END
@@ -223,7 +230,7 @@ export const S6Pull: React.FC = () => {
   const clocksOut = interpolate(f, [sec(2.5), sec(3)], [0.35, 0], clamp);
   const bob = facing === "left" ? Math.abs(Math.sin(((f - RUN_AT) / sec(0.2)) * Math.PI)) * -14 : 0;
   // 枠が止まったときの弾み（0:11.5）と、ほこり
-  const bounce = f >= PULL_END && f < PULL_END + 9 ? Math.sin(((f - PULL_END) / 9) * Math.PI) * -10 : 0;
+  const bounce = f >= PULL_END && f < PULL_END + 10 ? Math.sin(((f - PULL_END) / 10) * Math.PI) * -16 : 0;
   const puff = interpolate(f - PULL_END, [0, 6, 22], [0, 0.55, 0], clamp);
   const tata = interpolate(f, [RUN_AT, RUN_AT + 4, sec(2.9)], [0, 1, 0], clamp);
   // 走り去る足元の土ぼこり
@@ -253,55 +260,59 @@ export const S6Pull: React.FC = () => {
   );
 };
 
-// ---- 7 開演（0:13〜0:15）: 画面のふちから紫に染まり、光が 1 つずつ灯り、扉が左右に開く ----
-const Lights: React.FC<{ g: number }> = ({ g }) => (
-  <>
-    {stageLights(g / FPS).map((l, i) => (
-      <Light key={i} id={`l${i}`} x={l.x} y={l.y} r={l.r} opacity={l.o} />
-    ))}
-  </>
-);
+// ---- 7 開演（0:13.0〜0:16.5）: 画面のふちから紫に染まり、ステージライトが上から 1 つずつ下りる。光の丸がぐるぐる回って、真ん中で焦点が合う ----
 export const S7Curtain: React.FC = () => {
   const { f, g } = useScene("s7-curtain");
   const edge = interpolate(f, [0, sec(0.3)], [0, 1], { ...clamp, easing: ease });
   const dark = interpolate(f, [sec(0.15), sec(0.5)], [0, 1], { ...clamp, easing: ease });
-  const open = interpolate(f, [sec(1.5), sec(2)], [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) });
-  const iw = FRAME.w - FRAME.inset * 2;
-  const ih = FRAME.h - FRAME.inset * 2;
   return (
-    <Svg>
+    <Svg bgLayer={1}>
       <defs>
         <radialGradient id="edge-in" cx="50%" cy="50%" r="75%">
           <stop offset="35%" stopColor={PURPLE} stopOpacity={0} />
           <stop offset="100%" stopColor={PURPLE} stopOpacity={1} />
         </radialGradient>
       </defs>
-      <rect width={W} height={H} fill="url(#edge-in)" opacity={edge} />
-      <rect width={W} height={H} fill={PURPLE} opacity={dark} />
-      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} opacity={dark} />
-      <StageFrame cx={W / 2} open={open}>
-        <TitlePaper iw={iw} ih={ih} o={0} />
-      </StageFrame>
-      <Lights g={g} />
+      <L n={1}>
+        <rect width={W} height={H} fill="url(#edge-in)" opacity={edge} />
+        <rect width={W} height={H} fill={PURPLE} opacity={dark} />
+        <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} opacity={dark * 0.9} />
+      </L>
+      <L n={2}>
+        <StageFrame cx={W / 2} open={0} />
+        <StageLamps t={g / FPS} />
+      </L>
     </Svg>
   );
 };
 
-// ---- 8 題（0:15〜0:17）: 筆が「Genba-Kamishibai」を 1 文字ずつ書く。0:16 に光の輪が広がる ----
+// ---- 8 扉と題（0:16.5〜0:19.0）: 扉が外へパカッと開く（0.7 秒）→ 筆が「Genba-Kamishibai」を 1 文字ずつ書く。0:17.5 に光の輪が広がる ----
 export const S8Title: React.FC = () => {
   const { f, g } = useScene("s8-title");
-  const iw = FRAME.w - FRAME.inset * 2;
-  const ih = FRAME.h - FRAME.inset * 2;
-  const chars = interpolate(f, [0, sec(1.5)], [0, 1], clamp);
-  const ring = interpolate(f, [sec(1), sec(1.6)], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
+  const t = g / FPS;
+  const chars = interpolate(t, [17.2, 18.5], [0, 1], clamp);
+  const ring = interpolate(t, [17.5, 18.1], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
+  const deg = doorDeg(f / FPS);
+  const cover = doorCover(deg);
   return (
-    <Svg bg={PURPLE}>
-      <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} />
-      <StageFrame cx={W / 2} open={1}>
-        <TitlePaper iw={iw} ih={ih} p={chars} />
-      </StageFrame>
-      <LightRings o={ring} k={0.9 + ring * 0.1} />
-      <Lights g={g} />
+    <Svg bg={PURPLE} bgLayer={1}>
+      <L n={1}>
+        <rect y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill={FLOOR} />
+      </L>
+      <L n={2}>
+        <StageFrame cx={W / 2} deg={deg} />
+        <LightRings o={ring} k={0.9 + ring * 0.1} />
+        <StageLamps t={t} />
+      </L>
+      {/* 題の紙は L3。L2 の扉より上に重なるので、扉がかぶっている所は切り取る */}
+      <L n={3}>
+        <svg x={WIN.x} y={WIN.y} width={WIN.w} height={WIN.h} viewBox={`0 0 ${WIN.w} ${WIN.h}`}>
+          <clipPath id="title-door"><rect x={cover} y={-20} width={Math.max(0, WIN.w - cover * 2)} height={WIN.h + 40} /></clipPath>
+          <g clipPath="url(#title-door)">
+            <g filter="url(#wobble)"><TitlePaper iw={WIN.w} ih={WIN.h} p={chars} /></g>
+          </g>
+        </svg>
+      </L>
     </Svg>
   );
 };
@@ -310,10 +321,10 @@ const TITLE = "Genba-Kamishibai";
 /** 題の紙: 枠の奥の暗い板に、筆でこすったような白い紙を貼り、手書きの題（通しの版でも同じ絵を使う） */
 export const TitlePaper: React.FC<{ iw: number; ih: number; o?: number; sub?: string; subO?: number; p?: number }> = ({ iw, ih, o = 1, sub, subO = 1, p = 1 }) => (
   <>
-    <rect width={iw} height={ih} fill="#3b2a1a" />
-    <BrushPaper x={iw * 0.08} y={ih * 0.12} w={iw * 0.84} h={ih * 0.76} />
+    <rect width={iw} height={ih} fill="#fffdf6" />
+    <BrushPaper x={iw * 0.02} y={ih * 0.03} w={iw * 0.96} h={ih * 0.94} rot={-0.6} />
     <g filter="url(#wobble)">
-      <text x={iw / 2} y={sub ? ih / 2 - 10 : ih / 2 + 22} textAnchor="middle" fontFamily={FONT_HAND} fontSize={56} fontWeight={700} fill={INK} opacity={o}>
+      <text x={iw / 2} y={sub ? ih / 2 - 10 : ih / 2 + 22} textAnchor="middle" fontFamily={FONT_HAND} fontSize={68} fontWeight={700} fill={INK} opacity={o}>
         <tspan>{TITLE.slice(0, Math.ceil(TITLE.length * p))}</tspan>
         <tspan fill="transparent">{TITLE.slice(Math.ceil(TITLE.length * p))}</tspan>
       </text>

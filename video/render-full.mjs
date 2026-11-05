@@ -1,7 +1,7 @@
 // 3 分の通しの仮版を書き出す: 1 本の mp4、場面ごとの真ん中のコマの静止画、場面の一覧の 1 枚。
 // 冒頭も舞台もコードから描く。機能の場面は録画（runs-video）を、git の外から写して使う（英数字だけの場所に写し、Remotion の public に渡す）。
 // ポータルの印は private/brand/portal-mark.svg があれば読み、無ければ一般的な印。
-// 書き出すのは git の外（../private/material/2026-11-05-通し-v3/。前の版の置き場は上書きしない）。ローカルで書き出すだけで、API は使わない。
+// 書き出すのは git の外（../private/material/2026-11-05-通し-v4/。前の版の置き場は上書きしない）。ローカルで書き出すだけで、API は使わない。
 // 1280×720 の座標で描き、1.5 倍の 1920×1080 で書き出す。
 // 使い方: node render-full.mjs [--stills]（--stills は静止画と一覧だけ）
 import { bundle } from "@remotion/bundler";
@@ -15,7 +15,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const priv = path.join(here, "..", "private");
 const PUB = path.join(here, "out", "pub");
 const OUT_TMP = path.join(here, "out", "full");
-const DEST = path.join(priv, "material", process.env.VIDEO_TAG ?? "2026-11-05-通し-v3");
+const DEST = path.join(priv, "material", process.env.VIDEO_TAG ?? "2026-11-05-通し-v4");
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const stillsOnly = process.argv.includes("--stills");
 for (const d of [PUB, OUT_TMP, path.join(DEST, "scenes")]) fs.mkdirSync(d, { recursive: true });

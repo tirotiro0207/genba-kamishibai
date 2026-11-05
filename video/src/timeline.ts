@@ -1,4 +1,4 @@
-// 冒頭の 17 秒（台本 v2 の 0:00〜0:17。11/5 夜の直しで 1 手順 3 コマにして 17 秒に戻した）の場面の割り振り。1 場面 1 つの Composition にして、最後に 1 本につなぐ。
+// 冒頭の 19 秒（11/5 夜 v4: 開幕のライトと扉に 2 秒足した。v4 より前は 17 秒）（台本 v2 の 0:00〜0:17。11/5 夜の直しで 1 手順 3 コマにして 17 秒に戻した）の場面の割り振り。1 場面 1 つの Composition にして、最後に 1 本につなぐ。
 // 場面の名前と秒は docs/video.md の「台本 v2」に合わせる。秒は目安で、ここを直せば全部の場面がずれる
 export const FPS = 30;
 export const W = 1280;
@@ -14,8 +14,8 @@ export const SCENES = [
   { id: "s4-join", title: "組む・仕上げ", frames: 30 },
   { id: "s5-name", title: "名のり", frames: 55 },
   { id: "s6-pull", title: "枠を引っぱる", frames: 90 },
-  { id: "s7-curtain", title: "開演", frames: 60 },
-  { id: "s8-title", title: "題", frames: 60 },
+  { id: "s7-curtain", title: "開演（ライトが下りて焦点が合う）", frames: 105 },
+  { id: "s8-title", title: "扉が外へ開く・題", frames: 75 },
 ] as const;
 export type SceneId = (typeof SCENES)[number]["id"];
 
