@@ -413,8 +413,10 @@ const EDGE = 3;
 const RIM = 14;
 const SPREAD = 14;
 const HAT_CLIP = new Map<string, { id: string; fillId: string; def: string }>();
-function hatClip(kind: HeadwearKind, view: View) {
-  const id = `hcut-${kind}-${view}`;
+function hatClip(kind: HeadwearKind, view: View, lift = 0) {
+  const id = `hcut-${kind}-${view}${lift ? `-l${lift}` : ""}`;
+  // 持ち上げる（案内人の hatLift）ときは、切る線ごと同じだけ上げる。0 のときは今までと 1 文字も同じ
+  const up = lift ? ` transform="translate(0 ${-lift})"` : "";
   if (!HAT_CLIP.has(id)) {
     const b = HEADWEAR[kind].bottom;
     const all = hatColumns(HEADWEAR[kind].draw[view]);
@@ -439,9 +441,9 @@ function hatClip(kind: HeadwearKind, view: View) {
     };
     HAT_CLIP.set(id, {
       id, fillId: `${id}-fill`,
-      def: `<clipPath id="${id}"><path d="M-200 ${out(-200, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}L200 ${out(200, x1, y1)}V400H-200Z"/></clipPath>` +
+      def: `<clipPath id="${id}"><path${up} d="M-200 ${out(-200, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}L200 ${out(200, x1, y1)}V400H-200Z"/></clipPath>` +
         // 伸ばす範囲は縁の列と、その両端から SPREAD だけ外へ斜めに下がる分（縁の端で髪が垂直な壁にならず、斜めにつながる）
-        `<clipPath id="${id}-fill"><path d="M${x0 - EDGE - SPREAD} ${out(x0 - EDGE - SPREAD, x0, y0)}${side(x0 - EDGE - SPREAD + 1, x0 - EDGE - 1, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}${side(x1 + EDGE + 1, x1 + EDGE + SPREAD - 1, x1, y1)}L${x1 + EDGE + SPREAD} ${out(x1 + EDGE + SPREAD, x1, y1)}V400H${x0 - EDGE - SPREAD}Z"/></clipPath>`,
+        `<clipPath id="${id}-fill"><path${up} d="M${x0 - EDGE - SPREAD} ${out(x0 - EDGE - SPREAD, x0, y0)}${side(x0 - EDGE - SPREAD + 1, x0 - EDGE - 1, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}${side(x1 + EDGE + 1, x1 + EDGE + SPREAD - 1, x1, y1)}L${x1 + EDGE + SPREAD} ${out(x1 + EDGE + SPREAD, x1, y1)}V400H${x0 - EDGE - SPREAD}Z"/></clipPath>`,
     });
   }
   return HAT_CLIP.get(id)!;
@@ -459,7 +461,7 @@ const tag = (s: string) => {
 // behind（後ろ髪・ポニーテールの尾）は胴より後ろに描くので、頭とは別に返す。縁より下に垂れる髪なので、髪を見せるかぶり物では残す。
 // sx は顔の幅に合わせた髪の横の倍率（avatar.ts の hairScale）。1 のときは今までと同じ文字列
 // skin はスキンヘッドとソフトモヒカンの頭の丸みの色
-export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1, skin = "#fff") => {
+export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none", sx = 1, skin = "#fff", hatUp = 0) => {
   // スキンヘッドは頭の丸みが髪の絵にあるので、頭に載せる帽子（看護の帽子）では描く（描かないと頭が平らで帽子が浮いた。11/6 作者）
   if (headwear !== "none" && (HEADWEAR[headwear].hair === "hide" || (hair === "skinhead" && !HEADWEAR[headwear].perch))) return { back: "", front: "", behind: "" };
   const bare = headwear === "none";
@@ -472,7 +474,7 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
   const behind = !src.behind ? "" : hair === "bob" ? `<path d="${src.behind}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : `<path d="${src.behind}" fill="${fill}"/>`;
   // かぶり物の下も同じ髪を使い、列ごとにかぶり物より上へ出る髪だけを切り落とす（hatClip。かぶり物は髪の上に描く）。
   // 切る線はかぶり物と同じ座標で決めるので、顔の幅に合わせた横の倍率（fit）の外で切る
-  const cut = bare ? undefined : hatClip(headwear, view);
+  const cut = bare ? undefined : hatClip(headwear, view, hatUp);
   const perch = !bare && HEADWEAR[headwear].perch;
   const clip = (s: string) => (!cut || !s ? s : `${cut.def}<g clip-path="url(#${cut.id})">${s}</g>`);
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
@@ -504,10 +506,11 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
 // tilt は正面で顔の部品（目・鼻・口・眼鏡）を上下にずらす量（うつむくと下、見上げると上）
 const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts, tilt = 0, mood: Mood = {}) => {
-  const h = hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize), SKIN_TONE[f.skin]);
+  const h = hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize), SKIN_TONE[f.skin], o.hatLift);
   const k = faceHalfWidth(f.face, f.faceSize) / 45;
-  const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
+  const hat0 = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
+  const hat = hat0 && o.hatLift ? `<g transform="translate(0 ${-o.hatLift})">${hat0}</g>` : hat0;
   // 耳はどの髪でも髪の前の層の上に描く
   const ears = earsSvg(view, f);
   return `${h.back}${faceSvg(view, f, tilt, mood)}${o.mask ? maskSvg(view, k) : ""}${o.respirator ? respiratorSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${o.eyewear ? gogglesSvg(view, landmarks(f.face, view, f.faceSize).eyes.map((e) => e.x), k) : ""}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
@@ -658,7 +661,7 @@ export function characterSvg(c: CharacterSpec): string {
     `<g transform="translate(${n(NECK_X[view])} ${n(-TORSO_TOP * kT)}) rotate(${n(r.neck / 2)})"><rect x="-11" y="${-L.headUp - NECK_LEN[look] - 6}" width="22" height="${L.headUp + NECK_LEN[look] + 26}" fill="${skin}" stroke="#000" stroke-width="5"/></g>`;
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
   // 前の層と同じ横の倍率で描く（倍率を外すと、細い顔で毛先だけ外へずれて段や平らな切れ目が出る）
-  const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize)).behind : "";
+  const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize), undefined, o.hatLift).behind : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;

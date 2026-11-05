@@ -44,7 +44,14 @@ export function guidePose(view: View, wave = false): ViewPose {
   for (const k of Object.keys(GUIDE_WAVE[view])) delete len[k as keyof typeof len];
   return { ...p, angles: { ...p.angles, ...GUIDE_WAVE[view] }, len };
 }
-/** 案内人の CharacterSpec の見た目と、その向きの杖の持ち方 */
-export const guideLook = (view: View): Pick<CharacterSpec, "look" | "hair" | "headwear" | "face" | "outfit"> => ({
-  ...GUIDE, outfit: { ...GUIDE.outfit, wand: GUIDE_HOLD[view].wand },
+/**
+ * ヘルメットをかぶるとき、ヘルメットを持ち上げる量（顔の座標）。前髪のふぞろいな下のふちが、つばの下からぎりぎり見える高さ。
+ * 11/6 作者: 動画の 0:52〜 は案内人もかぶる（安全の話でかぶっていないと決まりを破って見える）。ただ、この案内人らしさは前髪のギザギザなので、下のふちだけ残す
+ */
+export const GUIDE_HELMET_LIFT = 5;
+/** 案内人の CharacterSpec の見た目と、その向きの杖の持ち方。helmet なら白いヘルメット（新人と同じ色）をかぶる */
+export const guideLook = (view: View, helmet = false): Pick<CharacterSpec, "look" | "hair" | "headwear" | "face" | "outfit" | "role"> => ({
+  ...GUIDE,
+  ...(helmet ? { headwear: "helmet" as const, role: "new" as const } : {}),
+  outfit: { ...GUIDE.outfit, wand: GUIDE_HOLD[view].wand, ...(helmet ? { hatLift: GUIDE_HELMET_LIFT } : {}) },
 });

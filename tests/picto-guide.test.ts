@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FACE, FACE_OPTIONS, faceSvg } from "../src/shared/picto/avatar";
 import { characterJoints, characterSvg, type View } from "../src/shared/picto/character";
 import { SPECIAL_HAIRS, TRACED, TRACED_HAIRS } from "../src/shared/picto/hair-traced";
-import { GUIDE_HOLD, guideLook, guidePose } from "../src/shared/picto/guide";
+import { GUIDE_HELMET_LIFT, GUIDE_HOLD, guideLook, guidePose } from "../src/shared/picto/guide";
 import { poseAngles, vary } from "../src/shared/picto/poses";
 
 const VIEWS: View[] = ["front", "quarter", "side"];
@@ -53,5 +53,17 @@ describe("案内人（動画だけの特別なキャラ）", () => {
     const ys = [...s.matchAll(/M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)/g)].filter((m) => Number(m[4]) < Number(m[2]) - 2);
     expect(ys.length).toBe(6);
     for (const m of ys) expect(Math.abs(Number(m[3]) - Number(m[1]))).toBeLessThan(3);
+  });
+  it("ヘルメットは案内人だけ持ち上げる（ほかのキャラのヘルメットと髪の切り口は前のまま）", () => {
+    for (const v of VIEWS) {
+      const p = guidePose(v);
+      const base = { angles: p.angles, len: p.len, x: 0, groundY: 0, height: 300, facing: "right" as const, view: v };
+      const on = characterSvg({ ...guideLook(v, true), ...base });
+      expect(on).toContain(`<g transform="translate(0 ${-GUIDE_HELMET_LIFT})">`);
+      expect(on).toContain(`hcut-helmet-${v}-l${GUIDE_HELMET_LIFT}`);
+      const other = characterSvg({ ...guideLook(v), headwear: "helmet", role: "new", ...base });
+      expect(other).not.toContain("translate(0 -5)");
+      expect(other).not.toContain(`-l${GUIDE_HELMET_LIFT}`);
+    }
   });
 });
