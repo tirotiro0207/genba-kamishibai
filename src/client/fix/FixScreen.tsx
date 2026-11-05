@@ -1,6 +1,7 @@
 // 枠と指示の画面（044a・工程 7）。監修者が直したいコマを選び、指かマウスで直したい部分を枠で囲む。
 // 「ここをこうしたい」は大きな欄に書くか、端末の音声入力（キーボードのマイク）で話す。送る前に、枠と文字を並べて確かめてから送る。
 // 送った依頼は監査の記録 ④ に残る。続けて「この 1 枚を作り直す」で、枠に入った部品だけを作り直す（044b。1 枚 5 回まで）。
+// 「言葉で直す」（11/6）では、部品を選ばずに、カード全体か 1 コマを話すか書いて作り直す（WordsEdit.tsx）。
 import { useEffect, useRef, useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { boxFrom, FIX_BOX_MIN, type FixBox } from "../../shared/fix";
@@ -9,6 +10,7 @@ import { renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
 import { Slide } from "../motion/Slide";
 import { TouchEdit } from "./TouchEdit";
+import { WordsEdit } from "./WordsEdit";
 import "./fix.css";
 
 interface CardView {
@@ -73,8 +75,8 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<{ n: number; version: number } | null>(null);
   const [redone, setRedone] = useState<{ version: number; redo: { parts: string[]; count: number; left: number } } | null>(null);
-  // 直し方（11/6）: なぞって AI に頼むか、指で部品を動かすか
-  const [mode, setMode] = useState<"ask" | "touch">("ask");
+  // 直し方（11/6）: なぞって AI に頼むか、指で部品を動かすか、言葉でカード全体か 1 コマを直すか
+  const [mode, setMode] = useState<"ask" | "touch" | "words">("ask");
   const [note, setNote] = useState("");
   useEffect(() => {
     req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)
@@ -132,6 +134,14 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
     }
   }
 
+  // 言葉で直す（11/6）。作り直した絵が出て版が上がる。戻すのは「1 つ前の版に戻す」
+  async function sendWords(words: string, frame: number | null) {
+    const out = await req<CardView & { rework: { count: number; left: number } }>(tenant, `/cards/${encodeURIComponent(cardId)}/rework`, { method: "POST", body: JSON.stringify({ text: words, frame }) });
+    setCard(out);
+    setNote("");
+    return out;
+  }
+
   // 1 つ前の版に戻す（11/6）。戻すのも直しの 1 つで、④ に理由・直した人・日時が残る（記録は消さない）
   async function undo() {
     setBusy(true);
@@ -165,7 +175,7 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
       <Slide k={step} dir={step === "draw" ? -1 : 1}>
         {step === "draw" && (
           <section className="fix-step" data-testid="fix-draw">
-            <h1>{mode === "ask" ? "直したい部分を枠で囲む" : "部品をタップして、指で動かす"}</h1>
+            <h1>{mode === "ask" ? "直したい部分を枠で囲む" : mode === "touch" ? "部品をタップして、指で動かす" : "どう直したいかを、言葉で伝える"}</h1>
             {undoBar}
             <nav className="fix-frames" aria-label="直し方">
               <button className={`pick${mode === "ask" ? " on" : ""}`} onClick={() => setMode("ask")} data-testid="fix-mode-ask">
@@ -173,6 +183,9 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
               </button>
               <button className={`pick${mode === "touch" ? " on" : ""}`} onClick={() => setMode("touch")} data-testid="fix-mode-touch">
                 指で動かす
+              </button>
+              <button className={`pick${mode === "words" ? " on" : ""}`} onClick={() => setMode("words")} data-testid="fix-mode-words">
+                言葉で直す
               </button>
               <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="fix-to-pose">
                 つまみで角度まで動かす
@@ -183,6 +196,7 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
                 {note}
               </p>
             )}
+            {mode !== "words" && (
             <nav className="fix-frames" aria-label="コマ">
               {frames.map((f, j) => (
                 <button
@@ -198,7 +212,10 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
                 </button>
               ))}
             </nav>
-            {mode === "touch" ? (
+            )}
+            {mode === "words" ? (
+              <WordsEdit body={b} version={card.version} busy={busy} setBusy={setBusy} onSend={sendWords} />
+            ) : mode === "touch" ? (
               <TouchEdit key={`${card.version}-${at}`} body={b} at={at} busy={busy} onSave={saveTouch} />
             ) : (
             <div className="fix-main">

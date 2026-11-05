@@ -7,6 +7,7 @@ import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
 import { REDO_MAX, RedoError, redoCard } from "../shared/redo";
+import { REWORK_MAX, REWORK_TEXT_MAX, ReworkError, reworkCard } from "../shared/rework";
 import { summarize } from "../shared/stats";
 import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
@@ -363,6 +364,37 @@ cards.post("/:id/redo", async (c) => {
     payload: { request: "redone", from_n: b.n, from_version: r.version, to_version: r.version + 1, frame: ask.frame, parts: out.targets.parts, figures: out.targets.figures, props: out.targets.props, before: key(before), after: key(out.body), count },
   });
   return c.json({ ...cardView((await getCard(db, tid, r.id))!), redo: { ...out.targets, count, left: REDO_MAX - count } });
+});
+
+// 言葉で直す（11/6）: 監修者・作者の口語の頼みで、カード全体（frame が null）か 1 コマ（frame が番号）を作り直し、新しい版として保存する。
+// AI の呼び方・費用の上限・用途はその 1 枚の作り直し（/:id/redo）と同じ。1 枚につき 5 回まで。保存は直しと同じ saveEdit で、状態は下書きに戻る
+cards.post("/:id/rework", async (c) => {
+  const db = c.env.DB;
+  const tid = c.var.tenant.id;
+  const r = await getCard(db, tid, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await c.req.json<{ text?: unknown; frame?: unknown; actor?: string }>().catch(() => ({}) as { text?: unknown; frame?: unknown; actor?: string });
+  const text = typeof b.text === "string" ? b.text.trim().slice(0, REWORK_TEXT_MAX) : "";
+  if (!text) return c.json({ error: "頼み（text）が空" }, 400);
+  const before = JSON.parse(r.body) as CardBody;
+  const frame = b.frame === undefined || b.frame === null ? null : b.frame;
+  if (frame !== null && !(Number.isInteger(frame) && (frame as number) >= 0 && (frame as number) < before.frames.length)) return c.json({ error: "frame は null かコマの番号" }, 400);
+  const done = await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'edit' AND json_extract(payload, '$.request') = 'rework'").bind(tid, r.id).first<{ n: number }>();
+  if ((done?.n ?? 0) >= REWORK_MAX) return c.json({ error: `言葉で直すのは 1 枚 ${REWORK_MAX} 回まで。部品を枠で囲んで直すか、指で動かして直す`, count: done!.n }, 429);
+  const client = claudeClient(c.env);
+  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
+  let out;
+  try {
+    out = await reworkCard({ client, log: new D1CallLog(db) }, "app", before, text, frame as number | null);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, e instanceof ReworkError ? e.status : 502);
+  }
+  const res = await saveEdit(c, r, out.body, `言葉で直した: ${text}`.slice(0, 1000), actorOf({ actor: b.actor }, "supervisor"), { request: "rework", frame, text });
+  if (res.status !== 200) return res;
+  const view = (await res.json()) as { changed?: unknown };
+  // 何も変わらなかったときは版も記録も増えないので、回数にも数えない
+  const count = (done?.n ?? 0) + (Array.isArray(view.changed) ? 0 : 1);
+  return c.json({ ...view, rework: { count, left: REWORK_MAX - count } });
 });
 
 cards.post("/:id/status", async (c) => {
