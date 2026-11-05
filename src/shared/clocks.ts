@@ -33,5 +33,35 @@ export function clockTimes(rows: { item: string; shown: Shown; ms: number | null
   return { card: side("card"), text: side("text"), fake: false };
 }
 
-/** 作りものの数（本物の結果が入るまで）。画面に「作りもの」と出す */
+/** 画面に並べる時計の組。項目ごとにカードと文の 2 つ */
+export interface ClockRow {
+  item: "A" | "B";
+  card: ClockSide;
+  text: ClockSide;
+}
+
+/** 交差の回の結果の 1 つの欄（/summary の Cell のうち、時計に要る分） */
+export interface ClockCell {
+  item: "A" | "B";
+  shown: Shown;
+  n: number;
+  median_ms: number | null;
+}
+
+/**
+ * 交差の回は項目ごとに 1 行（カードと文の 2 つ）にする。A と B は別の素材で、/summary が持つのは欄ごとの中央値だけ。
+ * 2 項目を混ぜた中央値は欄の中央値から作れず、混ぜると素材の難しさも混ざるため
+ */
+export function crossClockRows(cells: ClockCell[]): ClockRow[] {
+  const side = (item: "A" | "B", shown: Shown): ClockSide => {
+    const c = cells.find((x) => x.item === item && x.shown === shown);
+    return { n: c?.n ?? 0, median_ms: c?.median_ms ?? null };
+  };
+  return (["A", "B"] as const).map((item) => ({ item, card: side(item, "card"), text: side(item, "text") }));
+}
+
+/** 答えが 1 件も無い（仮の数字を出す）か */
+export const noAnswers = (cells: ClockCell[]) => cells.every((c) => c.n === 0);
+
+/** 仮の数字（本物の結果が入るまで）。画面に「仮の数字」と出す */
 export const FAKE_CLOCKS: Clocks = { card: { n: 10, median_ms: 4200 }, text: { n: 10, median_ms: 13800 }, fake: true };

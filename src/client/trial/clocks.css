@@ -14,6 +14,10 @@
 .clock figcaption { display: flex; flex-direction: column; align-items: center; }
 .clock-label { font-size: 20px; color: var(--muted); }
 .clock-sec { font-size: 40px; font-variant-numeric: tabular-nums; }
+.clocks-block { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.clocks-item { font-size: 20px; margin: 0; }
+.clocks-multi .clock { width: min(220px, 30vw); }
+.clocks-multi .clock-sec { font-size: 30px; }
 .clocks-note { color: var(--muted); font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 0; }
 .clocks-fake { border: 1px dashed var(--muted); border-radius: 8px; padding: 0 8px; }
 .clocks-again { font-size: 14px; padding: 4px 12px; }
