@@ -42,7 +42,30 @@ export const PaperDefs: React.FC = () => (
   <defs>
     <PaperPattern id="paper" dy={0} />
     <PaperPattern id="paper-body" dy={74} />
+    {/* 紙の人の胴の前の 1 面（ピクトグラムの単位。腰が原点、胸が y -142） */}
+    <TorsoPattern id="person-torso" x={-34} y={-136} w={68} h={124} />
   </defs>
+);
+
+/**
+ * 胴の前の 1 面にだけ、ぼかした文字を薄く刷った紙（ほかは無地のクリーム）。x・y・w・h はその面の置き場（使う側の座標）。
+ * 全身に横線があると包帯に見えるので、文字は胴の前だけにし、濃さも折る紙の半分にする
+ */
+export const TorsoPattern: React.FC<{ id: string; x: number; y: number; w: number; h: number }> = ({ id, x, y, w, h }) => (
+  <>
+    <filter id={`${id}-blur`} x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="1.6" />
+    </filter>
+    <pattern id={id} patternUnits="userSpaceOnUse" x={x - 1000} y={y - 1000} width={2000 + w} height={2000 + h}>
+      <rect width={2000 + w} height={2000 + h} fill={PAPER} />
+      <g transform={`translate(1000 1000)`} filter={`url(#${id}-blur)`} opacity={0.42}>
+        <rect x={w * 0.1} y={h * 0.06} width={w * 0.8} height={h * 0.11} rx={2} fill="#c94a3a" />
+        {Array.from({ length: 5 }, (_, i) => (
+          <rect key={i} x={w * 0.12} y={h * (0.27 + i * 0.13)} width={w * (i % 2 ? 0.55 : 0.75)} height={h * 0.04} rx={1.5} fill="#777" />
+        ))}
+      </g>
+    </pattern>
+  </>
 );
 
 // ---- 形を変える（多角形を同じ点の数に並べ直してから、点ごとに動かす） ----
@@ -67,61 +90,6 @@ export function resample(poly: Pt[], n = 64): Pt[] {
 export const lerpPoly = (a: Pt[], b: Pt[], t: number): Pt[] => a.map((p, i) => [p[0] + (b[i][0] - p[0]) * t, p[1] + (b[i][1] - p[1]) * t]);
 export const d = (poly: Pt[]) => `M${poly.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L")}Z`;
 
-const rect = (x0: number, y0: number, x1: number, y1: number): Pt[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-const shift = (poly: Pt[], dx: number, dy: number): Pt[] => poly.map(([x, y]) => [x + dx, y + dy]);
-
-/**
- * 折り紙 ① の 8 コマ（紙 → 紙の人）。上の正方形が腕と頭、下の正方形が 2 本の脚になる。
- * 形は折り方の手順（上下 2 枚の正方形 → 下は対角 → 菱形 → 細い菱形 → 2 本の脚 / 上は菱形 → 腕と頭 → 体を脚にかぶせる）を、自分で多角形に描き起こしたもの。
- * crease は、そのコマで付いた折り目（以降のコマでも薄く残す）
- */
-export interface FoldKey { top: Pt[]; bottom: Pt[]; crease: [Pt, Pt][] }
-const LEGS: Pt[] = [[-38, 30], [38, 30], [42, 214], [14, 214], [0, 92], [-14, 214], [-42, 214]];
-const SHIRT: Pt[] = [[-22, -212], [22, -212], [22, -168], [80, -148], [96, -36], [70, -36], [56, -116], [40, 2], [-40, 2], [-56, -116], [-70, -36], [-96, -36], [-80, -148], [-22, -168]];
-export const FOLDS: FoldKey[] = [
-  // 1 印刷された 1 枚
-  { top: rect(-100, -200, 100, 0), bottom: rect(-100, 0, 100, 200), crease: [] },
-  // 2 上下 2 枚の正方形に分かれる
-  { top: rect(-100, -215, 100, -15), bottom: rect(-100, 15, 100, 215), crease: [] },
-  // 3 下を対角に折る
-  { top: rect(-100, -215, 100, -15), bottom: [[-100, 15], [100, 15], [100, 215]], crease: [[[-100, 15], [100, 215]]] },
-  // 4 上も下も菱形に
-  { top: [[0, -215], [100, -115], [0, -15], [-100, -115]], bottom: [[0, 15], [100, 115], [0, 215], [-100, 115]], crease: [[[-100, -115], [100, -115]], [[0, 15], [0, 215]]] },
-  // 5 下を細い菱形に
-  { top: [[0, -215], [100, -115], [0, -15], [-100, -115]], bottom: [[0, 5], [44, 115], [0, 230], [-44, 115]], crease: [[[0, -215], [0, -15]]] },
-  // 6 下を 2 本の脚に、上を腕と頭の形に
-  { top: SHIRT, bottom: LEGS, crease: [[[0, 92], [0, 30]], [[-22, -168], [22, -168]]] },
-  // 7 体を脚にかぶせて、パチンとはめる
-  { top: shift(SHIRT, 0, 30), bottom: LEGS, crease: [[[-40, 32], [40, 32]]] },
-  // 8 頭・首・足先のある紙の人が立つ
-  {
-    top: [[-26, -205], [26, -205], [32, -180], [10, -162], [10, -150], [70, -140], [92, -30], [72, -26], [56, -110], [42, 36], [-42, 36], [-56, -110], [-72, -26], [-92, -30], [-70, -140], [-10, -150], [-10, -162], [-32, -180]],
-    bottom: [[-38, 30], [38, 30], [42, 200], [62, 214], [14, 214], [0, 92], [-14, 214], [-62, 214], [-42, 200]],
-    crease: [[[0, -150], [0, 36]]],
-  },
-];
-
-/** 折る 1 コマの時間（0.35 秒）の中で、形が動く割合。残りは止めて見せる */
-export const FOLD_MOVE = 0.6;
-
-/** 0〜(コマ数-1) の進み p での形（整数で止まる。間は easeInOut で動く） */
-export function foldAt(p: number) {
-  const n = 64;
-  const i = Math.max(0, Math.min(FOLDS.length - 1, Math.floor(p)));
-  const j = Math.min(FOLDS.length - 1, i + 1);
-  const f = p - i;
-  const m = Math.min(1, f / FOLD_MOVE);
-  const t = m < 0.5 ? 2 * m * m : 1 - (-2 * m + 2) ** 2 / 2;
-  const A = FOLDS[i];
-  const B = FOLDS[j];
-  return {
-    top: lerpPoly(resample(A.top, n), resample(B.top, n), t),
-    bottom: lerpPoly(resample(A.bottom, n), resample(B.bottom, n), t),
-    creases: FOLDS.slice(1, i + 1).flatMap((k) => k.crease),
-    fresh: j > i ? B.crease : [],
-    t,
-  };
-}
 
 // ---- 紙の人（ピクトグラムの骨格を、折った紙の形で描く） ----
 
@@ -175,7 +143,7 @@ export const PaperPerson: React.FC<{ angles: Angles; x: number; ground: number; 
   height = 356,
   facing = "right",
   view = "quarter",
-  pattern = "paper-body",
+  pattern = "person-torso",
   opacity = 1,
 }) => {
   const j = stickJoints(poseAngles(angles, view), view);
@@ -210,19 +178,24 @@ export const PaperPerson: React.FC<{ angles: Angles; x: number; ground: number; 
   );
   const headRot = (Math.atan2(j.head[1] - j.neck[1], j.head[0] - j.neck[0]) * 180) / Math.PI + 90;
   const stroke = { stroke: PAPER_EDGE, strokeWidth: 2.5 / k, strokeLinejoin: "round" as const };
+  // 手足の真ん中の折り筋（紙を細く折った帯に見せる）
+  const crease = (a: Pt, b: Pt, key: string) => <path key={key} d={`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`} fill="none" stroke={PAPER_EDGE} strokeWidth={1.2 / k} opacity={0.7} />;
+  const limbCreases = (i: number) => [crease(j.hipJoint[i], j.knee[i], `k${i}a`), crease(j.knee[i], j.ankle[i], `k${i}b`), crease(j.shoulder[i], j.elbow[i], `k${i}c`), crease(j.elbow[i], j.hand[i], `k${i}d`)];
   return (
     <g transform={`translate(${x} ${ground}) scale(${sx} ${k}) translate(0 ${-low})`} opacity={opacity}>
       <g fill={PAPER_FAR} {...stroke}>
         {arm(0)}
         {limb(0)}
+        {limbCreases(0)}
       </g>
-      <g fill={fill} {...stroke}>
+      <g fill={PAPER} {...stroke}>
         {limb(1)}
-        <path d={d(torso)} />
+        <path d={d(torso)} fill={fill} />
         <path d={`M${j.neck[0]} ${j.neck[1]}L${j.hip[0]} ${j.hip[1]}`} fill="none" stroke={PAPER_EDGE} strokeWidth={1.5 / k} opacity={0.6} />
         <path d={d(band(j.neck, [j.neck[0], j.neck[1] - 14], 9, 9))} />
         <path d={d(hexagon(j.head, 40, headRot))} />
         {arm(1)}
+        {limbCreases(1)}
       </g>
     </g>
   );

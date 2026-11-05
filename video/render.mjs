@@ -10,9 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT_TMP = path.join(here, "out"); // 英数字だけの場所で書き出してから写す（日本語の場所に直接書かない）
-const DEST = path.join(here, "..", "private", "material", `${process.env.VIDEO_DATE ?? "2026-11-05"}-冒頭`);
+// 前の版の書き出しを上書きしないように、版ごとに置き場を分ける（VIDEO_TAG。前の版は 2026-11-05-冒頭）
+const DEST = path.join(here, "..", "private", "material", process.env.VIDEO_TAG ?? "2026-11-05-冒頭-v2");
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const SCENES = ["s1-clocks", "s2-print", "s3-origami", "s4-name", "s5-pull", "s6-curtain", "s7-title"];
+const SCENES = ["s1-clocks", "s2-legs", "s3-body", "s4-join", "s5-name", "s6-pull", "s7-curtain", "s8-title"];
+const OPENING = "opening.mp4";
 const want = process.argv.slice(2).length ? process.argv.slice(2) : SCENES;
 
 fs.mkdirSync(OUT_TMP, { recursive: true });
@@ -37,10 +39,16 @@ for (const id of want) {
 if (SCENES.every((id) => fs.existsSync(path.join(OUT_TMP, `${id}.mp4`)))) {
   const list = path.join(OUT_TMP, "list.txt");
   fs.writeFileSync(list, SCENES.map((id) => `file '${id}.mp4'`).join("\n") + "\n");
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "-movflags", "+faststart", "opening_0-17.mp4"], { cwd: OUT_TMP });
-  copy("opening_0-17.mp4");
-  const probe = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height,r_frame_rate,nb_frames:format=duration", "-of", "json", "opening_0-17.mp4"], { cwd: OUT_TMP }).toString();
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "-movflags", "+faststart", OPENING], { cwd: OUT_TMP });
+  copy(OPENING);
+  const probe = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height,r_frame_rate,nb_frames:format=duration", "-of", "json", OPENING], { cwd: OUT_TMP }).toString();
   console.log("opening", probe.replace(/\s+/g, " "));
+}
+// 折り紙の手順の一覧（静止画 1 枚）
+{
+  const comp = await selectComposition({ serveUrl, id: "origami-steps", browserExecutable: CHROME });
+  await renderStill({ serveUrl, composition: comp, frame: 0, output: path.join(OUT_TMP, "origami-steps.png"), browserExecutable: CHROME });
+  copy("origami-steps.png");
 }
 fs.writeFileSync(path.join(OUT_TMP, "render-log.json"), JSON.stringify({ at: new Date().toISOString(), totalSec: (Date.now() - t0) / 1000, scenes: log }, null, 2));
 copy("render-log.json");
