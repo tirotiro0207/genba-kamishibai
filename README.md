@@ -61,7 +61,7 @@ Also built:
 - Folding screen: shows the source pages stacking up and folding into one card with no text.
 - Answer recording app for the on-site check: timing (card vs. text), free answers, two graders, anonymized CSV export, erasing a participant who withdraws, and the trainer's forecast per card written before any answer comes in.
 - Overnight sorting of a whole manual (which pages hold rules a worker must follow), with a supervisor screen to swap the answers.
-- Reader panel: 24 simulated readers (country of origin × Japanese reading level × background), each a Claude Code subagent, used to find pictures that do not get through before the real check. Results: [docs/readers.md](docs/readers.md).
+- Reader panel: 24 simulated readers (country of origin × Japanese reading level × background), each a Claude Code subagent, used to find pictures that do not get through before the real check. For the 30 rules whose answers were fixed (with a hash) before any reading, each reader saw all 30 pictures at once in a different order; two risky cards and one easy card were also read one at a time by the same 24 readers to check the score shift (no card was read the opposite way either way, so the fallback to one-at-a-time reading was not triggered). Results: [docs/readers.md](docs/readers.md).
 - MCP server: other tools can ask for cards; it can only make **unapproved drafts**.
 - PNG / SVG export with version, signature date and frame number on each picture.
 

@@ -56,6 +56,14 @@ describe("読み手に渡す指示の型（027）", () => {
     expect(orders.size).toBeGreaterThan(5);
   });
 
+  it("開き方は既定が 1 枚ずつで、together のときだけまとめて開かせる（絵の順番は同じ乱数）", () => {
+    expect(readerPrompt(run, READERS[0], pictures)).toContain("1 枚ずつ Read");
+    const t = readerPrompt({ ...run, reading: "together" }, READERS[0], pictures);
+    expect(t).toContain("まとめて開いて");
+    expect(t).not.toContain("1 枚ずつ Read");
+    expect(findBias(t)).toEqual([]);
+  });
+
   it("既定は Sonnet 5.5 で、切り替えは 1 か所。どちらで回したかを答えに書かせる", () => {
     expect(PANEL_MODEL).toBe("sonnet");
     expect(PANEL_MODELS.sonnet.id).toBe("claude-sonnet-5-5");

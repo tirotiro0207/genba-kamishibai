@@ -37,6 +37,8 @@ export interface PanelRun {
   model: PanelModel;
   /** 答えを書くフォルダ（private/readers/<回>/answers） */
   answersDir: string;
+  /** 絵の開き方。one = 1 枚ずつ（既定）、together = 全部を 1 回のメッセージでまとめて開く（11/6。30 枚で使用量を 10 分の 1 にする） */
+  reading?: "one" | "together";
 }
 
 export function readerPrompt(run: PanelRun, reader: Reader, pictures: PanelPicture[]): string {
@@ -50,7 +52,7 @@ ${describeReader(reader)}
 この設定にある事実だけを手がかりにしてください。設定に書いていないことは足さないでください。
 
 ## やること
-次の絵を、上から順に 1 枚ずつ Read ツールで開いて見てください。絵のほかには何も読まないでください（ほかのファイル、ほかの読み手の答え、カードの文や資料は開かない）。
+${run.reading === "together" ? "次の絵を全部、1 回のメッセージの中で Read ツールを絵の数だけ並べて、まとめて開いて見てください。" : "次の絵を、上から順に 1 枚ずつ Read ツールで開いて見てください。"}絵のほかには何も読まないでください（ほかのファイル、ほかの読み手の答え、カードの文や資料は開かない）。
 
 ${ordered.map((p) => `- ${p.label}: ${p.path}`).join("\n")}
 

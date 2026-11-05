@@ -3,7 +3,7 @@
 // 読み手ごとの指示と、名前と元のファイルの対応表を書く。読み手に元のファイル名（カードが分かる名前）は見せない。
 // 対応表（manifest.json）は読み手に渡さない。
 //
-//   npx tsx scripts/readers-prompts.ts <絵の PNG のフォルダ> [種]
+//   npx tsx scripts/readers-prompts.ts <絵の PNG のフォルダ> [種] [--together]（--together: 絵を全部まとめて開かせる。回の名前の後ろに -together が付く）
 import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { privatePath } from "../src/node/private-dir";
@@ -12,12 +12,14 @@ import { PANEL_MODEL, PANEL_MODELS, type PanelPicture, readerPrompt } from "../s
 import { READERS } from "../src/shared/readers/readers";
 
 function main() {
-  const [dirArg, seedArg] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const reading = args.includes("--together") ? "together" : "one";
+  const [dirArg, seedArg] = args.filter((a) => a !== "--together");
   if (!dirArg) throw new Error("絵の PNG のフォルダを渡す");
   const files = readdirSync(dirArg).filter((f) => f.endsWith(".png")).sort();
   if (files.length === 0) throw new Error("PNG が無い");
   const seed = seedArg || Date.now().toString(16);
-  const runId = `${new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 16).replace(/[-:T]/g, "")}-${PANEL_MODEL}`;
+  const runId = `${new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 16).replace(/[-:T]/g, "")}-${PANEL_MODEL}${reading === "together" ? "-together" : ""}`;
   // 名前の付け方も乱数にして、ファイル名の順番が読み手の答えに出ないようにする
   const r = rng(`labels:${seed}`);
   const shuffled = [...files];
@@ -35,7 +37,7 @@ function main() {
   const answersDir = join(out, "answers");
   mkdirSync(join(out, "prompts"), { recursive: true });
   mkdirSync(answersDir, { recursive: true });
-  const run = { runId, seed, model: PANEL_MODEL, answersDir };
+  const run = { runId, seed, model: PANEL_MODEL, answersDir, reading } as const;
   for (const reader of READERS) writeFileSync(join(out, "prompts", `${reader.id}.md`), readerPrompt(run, reader, pictures), "utf-8");
   writeFileSync(
     join(out, "manifest.json"),
