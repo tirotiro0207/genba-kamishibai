@@ -73,6 +73,17 @@ export const STAFF = [
 export const NEWHIRE = [{ value: "newhire.1", label: "新入社員" }] as const;
 /** 入口（ホーム）で選べる役割。作る側と新入社員 */
 export const ENTRY = [...STAFF, ...NEWHIRE] as const;
+/** 入ったしるしを両方消して入口に戻る（11/6 作者「ログアウトができるかどうか」）。PIN そのものは残していない */
+export function logout(tenant: string) {
+  try {
+    sessionStorage.removeItem(roleKey(tenant));
+    sessionStorage.removeItem(tokenKey(tenant));
+  } catch {
+    // 保存が使えない端末は、閉じれば消える
+  }
+  location.hash = `#/t/${encodeURIComponent(tenant)}/home`;
+  location.reload();
+}
 /** 新入社員だけが見る画面 */
 export const studentHome = (tenant: string) => `#/t/${encodeURIComponent(tenant)}/student`;
 
@@ -123,8 +134,15 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
         throw new Error("この端末では入ったしるしを残せない");
       }
       setPin("");
-      if (step === "tenant" && !has(roleKey(tenant))) setStep(roles.length === 1 && isStudent ? "student" : "role");
-      else onDone();
+      // テナントの PIN で入り直したら、前の人の役割のしるしは使わず、役割を選ぶ段を必ず出す（11/6 作者: 監修者を選ぶ画面が出なかった）
+      if (step === "tenant") {
+        try {
+          sessionStorage.removeItem(roleKey(tenant));
+        } catch {
+          // 保存が使えない端末は、閉じれば消える
+        }
+        setStep(roles.length === 1 && isStudent ? "student" : "role");
+      } else onDone();
     } catch (x) {
       setErr((x as Error).message);
     } finally {

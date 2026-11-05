@@ -10,7 +10,7 @@ import { STANDING } from "../../shared/picto/skeleton";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
-import { ENTRY, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
+import { ENTRY, logout, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
 
 interface Card {
@@ -320,7 +320,18 @@ export function HomeScreen({ tenant }: { tenant: string }) {
   }
   if (!role || !(role in ROLE_NAME)) return <RolePick tenant={tenant} onDone={check} />;
   // 自分のキャラクターをまだ持っていない人は、ホームの前にキャラクターを作る画面を 1 回通る
-  if (!avatar) return <AvatarSetup tenant={tenant} role={role} onDone={setAvatar} />;
+  if (!avatar)
+    return (
+      <>
+        <p className="home-who">
+          {ROLE_NAME[role]}として入っています{" "}
+          <button type="button" className="pick home-logout" onClick={() => logout(tenant)} data-testid="home-logout">
+            ログアウト
+          </button>
+        </p>
+        <AvatarSetup tenant={tenant} role={role} onDone={setAvatar} />
+      </>
+    );
   return (
     <div className="home" data-testid="home">
       <header className="home-head">
@@ -329,6 +340,9 @@ export function HomeScreen({ tenant }: { tenant: string }) {
           <h1>現場の紙芝居</h1>
           <p className="home-who">{ROLE_NAME[role]}として入っています</p>
         </div>
+        <button type="button" className="pick home-logout" onClick={() => logout(tenant)} data-testid="home-logout">
+          ログアウト
+        </button>
       </header>
       <div className="av-seg home-tabs" role="tablist" aria-label="ホーム">
         <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "on" : ""} onClick={() => setTab("cards")} data-testid="home-tab-cards">

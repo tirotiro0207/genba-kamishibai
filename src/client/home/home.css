@@ -71,3 +71,4 @@
 .home-more { display: flex; flex-wrap: wrap; gap: 8px; }
 .home-more a { text-decoration: none; }
 .trials-new { display: block; text-decoration: none; }
+.home-logout { margin-left: auto; }
