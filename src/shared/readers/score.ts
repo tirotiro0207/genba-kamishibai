@@ -83,12 +83,28 @@ const tally = (js: Judgment[]): Tally => {
   return t;
 };
 
+/** カードの分け方（11/5 読ませる前に決めた。あとで動かさない。docs/decisions.md）。伝わったとするのは「合う」が答えの 3 分の 2 以上 */
+export const CONVEY_LINE = { num: 2, den: 3 } as const;
+export type CardClass = "conveyed" | "ambiguous" | "reversed";
+export const CLASS_LABEL: Record<CardClass, string> = { conveyed: "伝わった", ambiguous: "あいまい", reversed: "逆の意味に読めた" };
+/** 1 人でも危ない読み違い → 逆。危ない読み違いが 0 で「合う」が線以上 → 伝わった。ほかはあいまい（割り算はせず、整数で比べる） */
+export function classifyCard(t: Pick<Tally, "n" | "match" | "danger">): CardClass {
+  if (t.danger > 0) return "reversed";
+  if (t.n > 0 && t.match * CONVEY_LINE.den >= t.n * CONVEY_LINE.num) return "conveyed";
+  return "ambiguous";
+}
+
 /** カードごと・読み手ごと・全体の数 */
 export function aggregate(keys: KeyCard[], js: Judgment[]) {
-  const byCard = keys.map((k) => ({ ...k, ...tally(js.filter((j) => j.label === k.label)) }));
+  const byCard = keys.map((k) => {
+    const t = tally(js.filter((j) => j.label === k.label));
+    return { ...k, ...t, cls: classifyCard(t) };
+  });
   const readers = [...new Set(js.map((j) => j.reader))].sort();
   const byReader = readers.map((reader) => ({ reader, ...tally(js.filter((j) => j.reader === reader)) }));
-  return { byCard, byReader, total: tally(js) };
+  const classes = { conveyed: 0, ambiguous: 0, reversed: 0 } as Record<CardClass, number>;
+  for (const c of byCard) classes[c.cls]++;
+  return { byCard, byReader, total: tally(js), classes };
 }
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -98,9 +114,10 @@ export function cardTable(agg: ReturnType<typeof aggregate>, modelId: string): s
   const rows = [...agg.byCard].sort((a, b) => b.danger - a.danger || a.rate - b.rate);
   return [
     `モデル: ${modelId}。全体の伝わる率 ${pct(agg.total.rate)}、危ない読み違い ${agg.total.danger} 件（答え ${agg.total.n} 件）`,
+    `カード ${agg.byCard.length} 枚: 伝わった ${agg.classes.conveyed}・あいまい ${agg.classes.ambiguous}・逆の意味に読めた ${agg.classes.reversed}（伝わった＝合う ${CONVEY_LINE.num}/${CONVEY_LINE.den} 以上で危ない読み違い 0、逆＝危ない読み違いが 1 件でも）`,
     "",
-    "| カード | 守ること | 伝わる率 | 合う | 一部 | 合わない | 危ない読み違い |",
-    "|---|---|---|---|---|---|---|",
-    ...rows.map((c) => `| ${c.cardId} | ${c.rule} | ${pct(c.rate)} | ${c.match} | ${c.partial} | ${c.miss} | ${c.danger} |`),
+    "| カード | 守ること | 分け方 | 伝わる率 | 合う | 一部 | 合わない | 危ない読み違い |",
+    "|---|---|---|---|---|---|---|---|",
+    ...rows.map((c) => `| ${c.cardId} | ${c.rule} | ${CLASS_LABEL[c.cls]} | ${pct(c.rate)} | ${c.match} | ${c.partial} | ${c.miss} | ${c.danger} |`),
   ].join("\n");
 }

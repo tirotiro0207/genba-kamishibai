@@ -1,0 +1,250 @@
+{
+ "version": "rules30_v1",
+ "fixed_at": "2026-11-05",
+ "sha256_of_private_file": "45f4aaa861d68e678808cd238a3f40f611bc9beb560fd2e39b69278718cad2aa",
+ "note": "決まりの文と正解の文は会社の資料から作ったので git の外（private/rules30/）に置く。ここにはカードの番号と分け方とハッシュだけを置く",
+ "items": [
+  {
+   "no": 1,
+   "card_id": "99ae51cb-73df-4d0e-8233-868236ecd347",
+   "topic": "高所",
+   "polarity": "しない",
+   "new_props": [
+    "stepladder"
+   ]
+  },
+  {
+   "no": 2,
+   "card_id": "2c207952-dc1a-437d-9fd3-f6492d17a72e",
+   "topic": "高所",
+   "polarity": "しない",
+   "new_props": [
+    "stepladder"
+   ]
+  },
+  {
+   "no": 3,
+   "card_id": "90071236-0067-4b70-94d5-f8fa611b10e5",
+   "topic": "高所",
+   "polarity": "しない",
+   "new_props": [
+    "work_platform"
+   ]
+  },
+  {
+   "no": 4,
+   "card_id": "c8ea8d9d-4877-4138-939c-a56705bc91b3",
+   "topic": "高所",
+   "polarity": "しない",
+   "new_props": [
+    "work_platform"
+   ]
+  },
+  {
+   "no": 5,
+   "card_id": "861e540e-e3d2-44fe-94a5-2854210230fc",
+   "topic": "高所",
+   "polarity": "する",
+   "new_props": [
+    "work_platform",
+    "harness"
+   ]
+  },
+  {
+   "no": 6,
+   "card_id": "3d7472a2-791a-42cd-bb9e-77100d757bae",
+   "topic": "保護具",
+   "polarity": "する",
+   "new_props": [
+    "harness"
+   ]
+  },
+  {
+   "no": 7,
+   "card_id": "a589c5ba-1855-459a-88ea-b94862298ba9",
+   "topic": "高所",
+   "polarity": "する",
+   "new_props": [
+    "aerial_platform",
+    "harness"
+   ]
+  },
+  {
+   "no": 8,
+   "card_id": "b72da860-b38b-40d3-bbb4-aed8e286a33f",
+   "topic": "高所",
+   "polarity": "しない",
+   "new_props": [
+    "aerial_platform"
+   ]
+  },
+  {
+   "no": 9,
+   "card_id": "a33cb81d-1601-454e-bee5-a34bcf1cfa6e",
+   "topic": "高所",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 10,
+   "card_id": "0c333a2b-cc64-469b-80f3-9aa502abe876",
+   "topic": "感電",
+   "polarity": "する",
+   "new_props": [
+    "voltage_detector"
+   ]
+  },
+  {
+   "no": 11,
+   "card_id": "9aaf4931-1cec-400c-94a7-021e8fff0039",
+   "topic": "感電",
+   "polarity": "しない",
+   "new_props": [
+    "voltage_detector"
+   ]
+  },
+  {
+   "no": 12,
+   "card_id": "ead02d00-aa66-4675-aafe-e0387d713222",
+   "topic": "保護具",
+   "polarity": "する",
+   "new_props": [
+    "cut_gloves"
+   ]
+  },
+  {
+   "no": 13,
+   "card_id": "bf21e422-8e62-4152-8ecd-705978a3924b",
+   "topic": "感電",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 14,
+   "card_id": "1ad52c31-9680-48f4-92ee-94c1fb868dcc",
+   "topic": "感電",
+   "polarity": "しない",
+   "new_props": []
+  },
+  {
+   "no": 15,
+   "card_id": "fc723291-b3a9-4d46-81ac-73ca480c6917",
+   "topic": "感電",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 16,
+   "card_id": "dffaa533-9938-4989-b140-fd3660e7fac2",
+   "topic": "重量物",
+   "polarity": "しない",
+   "new_props": []
+  },
+  {
+   "no": 17,
+   "card_id": "dfe720f1-9704-41ab-93cf-a7fbabd2a229",
+   "topic": "重量物",
+   "polarity": "する",
+   "new_props": [
+    "crane"
+   ]
+  },
+  {
+   "no": 18,
+   "card_id": "b791e3d5-0fcd-4ca6-8248-68fd815b916a",
+   "topic": "重量物",
+   "polarity": "する",
+   "new_props": [
+    "crane"
+   ]
+  },
+  {
+   "no": 19,
+   "card_id": "374e35be-226c-4b02-be56-bd003ab667e0",
+   "topic": "保護具",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 20,
+   "card_id": "4d81ee00-fa59-4856-8b0f-0a9a5fa9bf58",
+   "topic": "保護具",
+   "polarity": "する",
+   "new_props": [
+    "goggles"
+   ]
+  },
+  {
+   "no": 21,
+   "card_id": "7d4e2835-847d-420c-871f-9432368e5778",
+   "topic": "保護具",
+   "polarity": "する",
+   "new_props": [
+    "dust_mask"
+   ]
+  },
+  {
+   "no": 22,
+   "card_id": "5b4546ad-ad24-4165-bce4-b274ca77dfc2",
+   "topic": "整理",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 23,
+   "card_id": "582f3ffd-8d5b-4078-aa18-4ec6c3ebe20c",
+   "topic": "整理",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 24,
+   "card_id": "8a04b8f8-a679-4756-9f84-0cde92da06b5",
+   "topic": "体調",
+   "polarity": "しない",
+   "new_props": []
+  },
+  {
+   "no": 25,
+   "card_id": "462c875f-70c9-4cb8-9f9a-b5066411bf5a",
+   "topic": "体調",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 26,
+   "card_id": "7f22a50d-fd31-47d8-adc3-df1e0f7b408c",
+   "topic": "火気",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 27,
+   "card_id": "f092a1cd-af2d-4443-a284-ae4ab08779d7",
+   "topic": "道具",
+   "polarity": "しない",
+   "new_props": []
+  },
+  {
+   "no": 28,
+   "card_id": "98c0aa09-1f79-4cfd-bec4-a12de0e4ab42",
+   "topic": "連絡",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 29,
+   "card_id": "86a79110-1129-4709-b06e-be486cee0aa5",
+   "topic": "連絡",
+   "polarity": "する",
+   "new_props": []
+  },
+  {
+   "no": 30,
+   "card_id": "6514b439-243f-4ecb-a1a9-ec6dffe256f5",
+   "topic": "連絡",
+   "polarity": "する",
+   "new_props": []
+  }
+ ]
+}

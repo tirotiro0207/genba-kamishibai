@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findBias } from "../src/shared/readers/bias";
 import type { ReaderResult } from "../src/shared/readers/prompt";
-import { aggregate, cardTable, judgePrompt, type KeyCard, parseJudgments } from "../src/shared/readers/score";
+import { aggregate, cardTable, classifyCard, judgePrompt, type KeyCard, parseJudgments } from "../src/shared/readers/score";
 import { sampleCard } from "./fixtures/card";
 
 const card = sampleCard();
@@ -35,7 +35,17 @@ describe("読み手パネルの採点（027）", () => {
     expect(agg.byReader.map((r) => [r.reader, r.rate])).toEqual([["R01", 0.5], ["R02", 0]]);
     const t = cardTable(agg, "claude-sonnet-5-5");
     expect(t).toContain("危ない読み違い 2 件");
-    expect(t.split("\n")[4]).toContain("c2"); // 危ない読み違いが多いカードが先頭
+    expect(t.split("\n")[5]).toContain("c2"); // 危ない読み違いが多いカードが先頭
+  });
+
+  it("カードを伝わった・あいまい・逆に分ける（線は合う 3 分の 2 以上。読ませる前に決めた）", () => {
+    expect(classifyCard({ n: 24, match: 16, danger: 0 })).toBe("conveyed");
+    expect(classifyCard({ n: 24, match: 15, danger: 0 })).toBe("ambiguous");
+    expect(classifyCard({ n: 24, match: 23, danger: 1 })).toBe("reversed");
+    expect(classifyCard({ n: 0, match: 0, danger: 0 })).toBe("ambiguous");
+    const agg = aggregate(keys, parseJudgments(judge(["match", "danger", "match", "partial"]), "r", "sonnet", keys, results));
+    expect(agg.classes).toEqual({ conveyed: 1, ambiguous: 0, reversed: 1 });
+    expect(cardTable(agg, "claude-sonnet-5-5")).toContain("伝わった 1・あいまい 0・逆の意味に読めた 1");
   });
 
   it("判定のモデルが違う・足りない・二重・値が違うときは数えない", () => {

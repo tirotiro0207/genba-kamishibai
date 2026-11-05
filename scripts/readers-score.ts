@@ -2,6 +2,7 @@
 //   npx tsx scripts/readers-score.ts judge <回のフォルダ> <cards.json>   # 判定役のサブエージェントへの指示 judge.md を書く
 //   npx tsx scripts/readers-score.ts tally <回のフォルダ>                 # judge.json を数えて score.md を書く
 // cards.json はカードの API（GET /api/t/<テナント>/cards）の返す { cards: [{ id, body }] }。
+// 先に決めた正解（eval/rules30 の 30 個。本体は git の外）で照らすときは、cards.json の代わりにその { items: [{ card_id, answer, why }] } を渡す（照らす相手は answer）。
 // 絵の元のファイル名は「<カードの ID>.png」か「<カードの ID>_<何か>.png」にしておく（その ID でカードと結ぶ）。
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,7 +42,8 @@ function main() {
   const keysPath = join(dir, "keys.json");
   if (cmd === "judge") {
     if (!cardsPath) throw new Error("cards.json を渡す");
-    const cards = (JSON.parse(readFileSync(cardsPath, "utf-8")) as { cards: { id: string; body: CardBody }[] }).cards;
+    const src = JSON.parse(readFileSync(cardsPath, "utf-8")) as { cards?: { id: string; body: CardBody }[]; items?: { card_id: string; answer: string; why: string }[] };
+    const cards = src.cards ?? (src.items ?? []).map((x) => ({ id: x.card_id, body: { rule: x.answer, why: x.why } as CardBody }));
     const keys: KeyCard[] = m.pictures.map((p) => {
       const c = cards.find((x) => x.id === cardIdOf(p.source));
       if (!c) throw new Error(`絵 ${p.source} のカードが無い`);
