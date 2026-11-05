@@ -1,6 +1,7 @@
 // 冒頭の 8 場面を 1 つずつの Composition にし、つないだ 1 本（opening）も置く
 import React from "react";
 import { Composition, Sequence } from "remotion";
+import { Full, FULL_FRAMES, FullIndex } from "./full";
 import { StepsSheet } from "./origami";
 import { Portal, PORTAL_FRAMES } from "./portal";
 import { SCENE_COMPONENTS } from "./scenes";
@@ -28,6 +29,9 @@ export const Root: React.FC = () => (
     <Composition id="origami-steps" component={StepsSheet} durationInFrames={1} fps={FPS} width={1800} height={940} />
     {/* ポータル（0:35〜0:39）。印は書き出しのときに inputProps の mark で渡す（無ければ一般的な印） */}
     <Composition id="p1-portal" component={Portal} durationInFrames={PORTAL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{}} />
+    {/* 3 分の通しの仮版と、その場面の一覧（静止画 1 枚） */}
+    <Composition id="full" component={Full} durationInFrames={FULL_FRAMES} fps={FPS} width={W} height={H} />
+    <Composition id="full-index" component={FullIndex} durationInFrames={1} fps={FPS} width={1990} height={720} />
     <Composition id="opening" component={Opening} durationInFrames={TOTAL} fps={FPS} width={W} height={H} />
   </>
 );
