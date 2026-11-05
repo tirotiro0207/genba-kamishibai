@@ -40,11 +40,11 @@ export function myRole(tenant: string): string | null {
   }
 }
 
-function BackBar({ tenant }: { tenant: string }) {
+function BackBar({ tenant, over }: { tenant: string; over: boolean }) {
   const student = myRole(tenant) === "newhire";
   const to = `#/t/${encodeURIComponent(tenant)}/${student ? "student" : "home"}`;
   return (
-    <nav className="back-bar" data-testid="back-bar">
+    <nav className={over ? "back-bar over" : "back-bar"} data-testid="back-bar">
       <a href={to} data-testid="back-home">
         {student ? "← じぶんの がめん" : "← ホーム"}
       </a>
@@ -127,7 +127,7 @@ export function App() {
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
   return (
     <main data-testid="app">
-      {back && <BackBar tenant={r[1]} />}
+      {back && <BackBar tenant={r[1]} over={maker} />}
       {maker && <StatsBar tenant={r[1]} />}
       <Slide k={r.slice(0, 4).join("/")}>{body}</Slide>
     </main>

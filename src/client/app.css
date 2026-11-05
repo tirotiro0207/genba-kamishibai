@@ -71,3 +71,8 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 /* 戻る帯（11/6 作者「ホームに戻る経路」）。作る側の画面はホームへ、新入社員はじぶんの画面へ戻る */
 .back-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.3)); font-size: 16px; }
 .back-bar a { color: inherit; text-decoration: none; font-weight: 600; padding: 6px 0; }
+/* 数字の帯のある作る側の画面では、広い画面なら帯を数字の帯の左に重ね、絵を下へ押し出さない（11/6。直す画面の絵が 1280×720 で画面の外にはみ出したため） */
+main[data-testid="app"] { position: relative; }
+@media (min-width: 1000px) {
+  .back-bar.over { position: absolute; top: 0; left: 0; border-bottom: 0; z-index: 2; }
+}
