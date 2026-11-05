@@ -12,35 +12,46 @@ const FLIP_MIN = 3000,
   FLIP_MAX = 14000;
 
 interface Side {
+  /** 線の色で焼いた PNG（焼き上がるまでは空。空の間は白い面だけ） */
   face: string;
   color: string;
 }
-/** (r, c) のカードの表と裏。表の色を見えている色として覚える。裏は裏返る直前に描き直すので、ここでは仮の色 */
-function firstSides(r: number, c: number): [Side, Side] {
-  const front = sideIn(pickColor(r, c));
-  setShown(r, c, front.color);
-  return [front, front];
+/** 片面を作り、マスクが焼き上がったら渡す */
+async function makeSide(color: string): Promise<Side> {
+  const s = sideIn(color);
+  return { face: await s.face, color };
 }
 
 function Card({ r, c }: { r: number; c: number }) {
-  const [sides, setSides] = useState<[Side, Side]>(() => firstSides(r, c));
+  const [sides, setSides] = useState<[Side, Side]>(() => {
+    const color = pickColor(r, c);
+    setShown(r, c, color);
+    return [{ face: "", color }, { face: "", color }];
+  });
   const [flipped, setFlipped] = useState(false);
   const flippedRef = useRef(false);
   const sidesRef = useRef(sides);
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>;
+    let alive = true;
+    const put = (ns: [Side, Side]) => {
+      sidesRef.current = ns;
+      setSides(ns);
+    };
+    // 表の絵は焼き上がりしだい出す
+    makeSide(sidesRef.current[0].color).then((f) => alive && put([f, sidesRef.current[1]]));
     const next = () => {
       t = setTimeout(
-        () => {
+        async () => {
           // 裏返る直前に、そのときの隣（左右 3 枚と上下の行）を見て色を決め、隠れた側を別の人に描き直す。
           // 前もって決めておくと、待つ間に隣が同じ色へ裏返ってしまう（11/5 の測りで、20 秒で隣同士が 13 か所そろった）
-          const s = sidesRef.current;
           const showing = flippedRef.current ? 1 : 0;
-          const fresh = sideIn(pickColor(r, c, [s[showing].color]));
-          const ns: [Side, Side] = showing ? [fresh, s[1]] : [s[0], fresh];
-          sidesRef.current = ns;
-          setSides(ns);
-          setShown(r, c, fresh.color);
+          const color = pickColor(r, c, [sidesRef.current[showing].color]);
+          setShown(r, c, color);
+          const fresh = await makeSide(color);
+          if (!alive) return;
+          const s = sidesRef.current;
+          put(showing ? [fresh, s[1]] : [s[0], fresh]);
           // 描き直した絵が入ってから回す
           t = setTimeout(() => {
             flippedRef.current = !flippedRef.current;
@@ -52,18 +63,17 @@ function Card({ r, c }: { r: number; c: number }) {
       );
     };
     next();
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, []);
   return (
     <div className="bd-card">
       <div className={`bd-inner${flipped ? " flip" : ""}`}>
         {sides.map((s, i) => (
-          <div
-            key={i}
-            className={`bd-side ${i ? "back" : "front"}`}
-            style={{ borderColor: s.color }}
-          >
-            <img src={s.face} alt="" draggable={false} />
+          <div key={i} className={`bd-side ${i ? "back" : "front"}`} style={{ borderColor: s.color }}>
+            {s.face && <img src={s.face} alt="" draggable={false} />}
           </div>
         ))}
       </div>
