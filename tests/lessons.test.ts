@@ -36,9 +36,22 @@ describe("作者の直しの教訓を作る係に入れる（11/6）", () => {
     expect(rulesOf(out).filter((l) => l.startsWith("- 登場人物は少なく"))).toHaveLength(1);
   });
 
+  it("作者の 2 回目のコメント（11/6 昼）の決まりが入り、書き換える前の d5 の 2 行は --draw-extra で渡されても足さない", () => {
+    const sys = String(makerParams(RULE, assign(RULE, locate)).system);
+    expect(sys).toContain("作者の 2 回目の直しから取り出した決まり");
+    expect(sys).toContain("insulated_gloves をその人の hand_near に 1 個付ける");
+    expect(sys).toContain("label_teiatsu");
+    const old = SUPERSEDED.filter((l) => l.includes("切れた線 wire_broken）だけ") || l.endsWith("人の体と重ねない。"));
+    expect(old).toHaveLength(2);
+    for (const l of old) expect(rulesOf(LESSONS)).not.toContain(l);
+    expect(addDrawExtra(sys, `前の d5:\n${old.join("\n")}`)).toBe(sys);
+  });
+
   it("前の足す決まり d4 を渡しても、教訓とぶつかる古い行（台に立たせない・灯りは変えられない）も脚本の見出しも足さない", () => {
     const sys = String(makerParams(RULE, assign(RULE, locate)).system);
-    for (const l of SUPERSEDED) expect(rulesOf(D4)).toContain(l);
+    const fromD4 = SUPERSEDED.filter((l) => l.includes("床より高い所には立たせない") || l.includes("灯り・止まった・壊れた"));
+    expect(fromD4).toHaveLength(2);
+    for (const l of fromD4) expect(rulesOf(D4)).toContain(l);
     expect(addDrawExtra(sys, D4)).toBe(sys);
     expect(addDrawExtra(sys, D4)).not.toContain("床より高い所には立たせない");
   });
