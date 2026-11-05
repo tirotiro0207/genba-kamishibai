@@ -25,13 +25,16 @@ export function wranglerExec(where: "local" | "remote"): Exec {
       } catch (e) {
         // wrangler は失敗の理由を標準出力の JSON か標準エラーに書く
         const x = e as { stdout?: string; stderr?: string };
-        const why = (x.stdout || x.stderr || String(e)).slice(-600);
+        const all = x.stdout || x.stderr || String(e);
+        const why = all.slice(-600);
         // 手元の D1 に何本も同時に書くと、ファイルの取り合いで internal error が返る（書けていない）。少し待って送り直す。
         // 4 本のときは、workerd が SQLITE_IOERR で立ち上がれないこともある（同じく書けていない）。
         // 本番は、INSERT を送り直すと二重に書く恐れがあるので、読み（SELECT）と WHERE 付きの UPDATE が 1 文だけのときに限って送り直す
         const local = where === "local" && /internal error|SQLITE_BUSY|SQLITE_IOERR|database is locked/i.test(why);
         const safe = where === "remote" && /^\s*(SELECT|UPDATE\b[\s\S]*\bWHERE\b)/i.test(sql) && !sql.includes(";\n");
-        if (attempt < 5 && (local || (safe && attempt < 3))) {
+        // 063 で、Cloudflare の API がときどき「アカウントが認められない（7403）」を返した。中身を流す前に断られているので、どの文でも送り直してよい
+        const denied = where === "remote" && /"code":\s*7403\b/.test(all);
+        if (attempt < 5 && (local || denied || (safe && attempt < 3))) {
           await new Promise((r) => setTimeout(r, 500 * attempt + Math.random() * 1000));
           continue;
         }
