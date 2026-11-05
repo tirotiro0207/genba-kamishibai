@@ -1,5 +1,6 @@
 // 場面をまたいで使う部品: 時計 2 つ・木の紙芝居の枠・ライト
 import React from "react";
+import { useCurrentFrame } from "remotion";
 import { FACE, LAP_FILLS } from "../../src/shared/clock-laps";
 import { CLOCKS, FPS, INK } from "./timeline";
 
@@ -58,12 +59,16 @@ export const Clocks: React.FC<{ g: number; underline?: number; opacity?: number 
 
 // ---- 木の紙芝居の枠（両開きの扉つき） ----
 
-export const FRAME = { w: 720, h: 400, cy: 312, inset: 30 };
+// 11/5 夜の直し: 枠は画面の主役。横幅の約 6 割・高さの約 6 割で上に寄せ、0:13 から 3:00 まで同じ所に置く
+export const FRAME = { w: 768, h: 432, cy: 262, inset: 30 };
+/** 床（画面の下の約 3 割）の上の端 */
+export const FLOOR_Y = 504;
+export const FLOOR = "#3a316c";
 const WOOD = "#8a5a32";
 const WOOD_DARK = "#5c3a1e";
 const WOOD_DOOR = "#b07a46";
 
-/** open は扉の開き（0 で閉じる、1 で開ききる）。children は扉の奥の絵（題など） */
+/** open は扉の開き（0 で閉じる、1 で開ききる）。children は扉の奥の絵（題など）。線は手で描いたように少し揺らす（WobbleDefs が要る） */
 export const StageFrame: React.FC<{ cx: number; open?: number; children?: React.ReactNode }> = ({ cx, open = 0, children }) => {
   const { w, h, cy, inset } = FRAME;
   const x0 = cx - w / 2;
@@ -89,7 +94,7 @@ export const StageFrame: React.FC<{ cx: number; open?: number; children?: React.
     );
   };
   return (
-    <g>
+    <g filter="url(#wobble)">
       {/* 枠の上の飾り（ゆるい山形） */}
       <path d={`M${x0 + 40} ${y0}Q${cx} ${y0 - 70} ${x0 + w - 40} ${y0}Z`} fill={WOOD} stroke={WOOD_DARK} strokeWidth={5} />
       <rect x={x0} y={y0} width={w} height={h} rx={10} fill={WOOD} stroke={WOOD_DARK} strokeWidth={6} />
@@ -118,6 +123,52 @@ export const Light: React.FC<{ x: number; y: number; r: number; opacity: number;
         <stop offset="100%" stopColor="#f2dfa0" stopOpacity={0} />
       </radialGradient>
     </defs>
-    <circle cx={x} cy={y} r={r} fill={`url(#${id})`} opacity={opacity} style={{ mixBlendMode: "screen" }} />
+    <circle cx={x} cy={y} r={r} fill={`url(#${id})`} opacity={opacity} filter="url(#soft-light)" style={{ mixBlendMode: "screen" }} />
   </g>
 );
+
+/**
+ * 手で描いた線の揺れ（11/5 夜の指示: 絵コンテの手描きの紙芝居の調子）。線を細かいノイズで少しずらし、4 コマごとに 3 通りの揺れを替える（線が「ふるえる」手描きアニメの見え方）。
+ * 筆でこすった紙（brush-paper）は、横に長いノイズで白い紙にかすれを付ける。どちらも SVG のフィルターだけで描く（外の部品は使わない）
+ */
+export const WobbleDefs: React.FC = () => {
+  const f = useCurrentFrame();
+  const seed = Math.floor(f / 4) % 3;
+  return (
+    <defs>
+      <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves={2} seed={seed + 1} result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale={4} xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="wobble-strong" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves={2} seed={seed + 4} result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale={7} xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="brush-paper" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.004 0.09" numOctaves={3} seed={7} result="n" />
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.86  0 0 0 0 0.83  0 0 0 0 0.76  0 0 0 -2.2 1.35" result="streak" />
+        <feComposite in="streak" in2="SourceGraphic" operator="in" result="s2" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="s2" />
+        </feMerge>
+      </filter>
+      <filter id="soft-light" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="18" />
+      </filter>
+    </defs>
+  );
+};
+
+/** 筆でこすったような白い紙（題の紙）。ふちはかすれて、少し傾く */
+export const BrushPaper: React.FC<{ x: number; y: number; w: number; h: number; rot?: number; children?: React.ReactNode }> = ({ x, y, w, h, rot = -1.2, children }) => (
+  <g transform={`rotate(${rot} ${x + w / 2} ${y + h / 2})`}>
+    <g filter="url(#wobble-strong)">
+      <rect x={x} y={y} width={w} height={h} fill="#fffdf4" filter="url(#brush-paper)" />
+    </g>
+    {children}
+  </g>
+);
+
+/** 手書きの文字の字体（題・めでたし） */
+export const FONT_HAND = "Segoe Print, Comic Sans MS, cursive";

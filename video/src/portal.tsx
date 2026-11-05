@@ -14,9 +14,9 @@ export interface PortalProps { [key: string]: unknown; /** 印の SVG（data URL
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const sec = (s: number) => s * FPS;
 /** 一般的な印の色（えんじ）と、ポータルの光（同じ色を少し明るく） */
-const MARK = "#9b2335";
-const GLOW = "#e0607a";
-const GLOW_LIGHT = "#ffc4cf";
+export const MARK = "#9b2335";
+export const GLOW = "#e0607a";
+export const GLOW_LIGHT = "#ffc4cf";
 const GROUND = 620;
 const PX = 900; // ポータルの中心
 const PY = 400;
@@ -24,14 +24,14 @@ const RX = 140;
 const RY = 190;
 
 /** 一般的な印: 円の中に稲妻 */
-const GenericMark: React.FC<{ r: number }> = ({ r }) => (
+export const GenericMark: React.FC<{ r: number }> = ({ r }) => (
   <g>
     <circle r={r} fill="#fff" stroke={MARK} strokeWidth={r * 0.14} />
     <path d={`M${r * 0.12} ${-r * 0.72}L${-r * 0.42} ${r * 0.08}H${-r * 0.02}L${-r * 0.16} ${r * 0.72}L${r * 0.44} ${-r * 0.12}H${r * 0.04}Z`} fill={MARK} />
   </g>
 );
 
-const Mark: React.FC<{ src?: string; r: number }> = ({ src, r }) =>
+export const Mark: React.FC<{ src?: string; r: number }> = ({ src, r }) =>
   src ? (
     <g>
       <circle r={r * 1.08} fill="#fff" opacity={0.92} />

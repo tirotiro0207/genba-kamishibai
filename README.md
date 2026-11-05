@@ -228,5 +228,6 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 - Code: **GNU Affero General Public License v3.0 (AGPL-3.0)**. Full text: [LICENSE](LICENSE).
 - Documents in `docs/`, and pictures exported from the pictogram parts list (PNG / SVG): **Creative Commons Attribution 4.0 (CC BY 4.0)** — https://creativecommons.org/licenses/by/4.0/
 - The name "genba-kamishibai" and its logo are not covered by either license.
+- The Claude character in the demo video is drawn as an unofficial fan work. / Claude のキャラクターは、非公式のファン作品として描いています。
 
 Why: this is a tool that touches safety on site. If someone improves it and runs it as a service, AGPL makes those improvements public too, so they come back to everyone. The parts and the documents are CC BY so that people in other industries can reuse them freely.

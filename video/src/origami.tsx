@@ -233,7 +233,7 @@ export const StepsSheet: React.FC = () => {
   );
 };
 
-/** 2 枚の紙の面の絵（ぼかした文字の貼り紙）。体の紙だけに赤い見出し。正方形 200 の左上が (-100,-100) */
+/** 2 枚の紙の面の絵（ぼかした文字の貼り紙）。どちらも赤い見出し「守る注意事項」と箇条書き（11/5 夜）。正方形 200 の左上が (-100,-100) */
 export const SheetPatterns: React.FC = () => (
   <defs>
     {/* 体の紙の表のうち、胴の前の面にだけ薄い文字（体の紙の座標と、組んだあとの紙の人の座標） */}
@@ -247,15 +247,21 @@ export const SheetPatterns: React.FC = () => (
       <pattern key={k} id={`sheet-${k}`} patternUnits="userSpaceOnUse" x={-100} y={-100} width={200} height={200}>
         <rect width={200} height={200} fill={PAPER} />
         <g filter="url(#sheet-blur)" opacity={0.85}>
-          {k === "body" && <rect x={14} y={14} width={172} height={26} rx={3} fill="#c94a3a" opacity={0.75} />}
-          {Array.from({ length: k === "body" ? 5 : 6 }, (_, i) => (
+          <rect x={14} y={14} width={172} height={26} rx={3} fill="#c94a3a" opacity={0.75} />
+          {Array.from({ length: 5 }, (_, i) => (
             <g key={i}>
-              <circle cx={22} cy={(k === "body" ? 62 : 26) + i * 28} r={3.5} fill="#666" />
-              <rect x={32} y={(k === "body" ? 58 : 22) + i * 28} width={i % 3 === 2 ? 100 : 145} height={6} rx={3} fill="#888" />
-              <rect x={32} y={(k === "body" ? 68 : 32) + i * 28} width={i % 2 ? 84 : 120} height={4} rx={2} fill="#b3b3b3" />
+              <circle cx={22} cy={62 + i * 28} r={3.5} fill="#666" />
+              <rect x={32} y={58 + i * 28} width={i % 3 === 2 ? 100 : 145} height={6} rx={3} fill="#888" />
+              <rect x={32} y={68 + i * 28} width={i % 2 ? 84 : 120} height={4} rx={2} fill="#b3b3b3" />
             </g>
           ))}
         </g>
+        {/* 見出しの文字は読めるように、ぼかさずに刷る（11/5 夜の指示: 見出しは「守る注意事項」） */}
+        {(
+          <text x={100} y={33} textAnchor="middle" fontSize={17} fontWeight={700} fill="#fff" fontFamily="BIZ UDPGothic, Yu Gothic, sans-serif">
+            守る注意事項
+          </text>
+        )}
       </pattern>
     ))}
   </defs>
