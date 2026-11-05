@@ -48,10 +48,13 @@ const TABS: Tab[] = (
   ] as Tab[]
 ).map((t) => (t.size && !OPTS[t.size] ? { ...t, size: undefined } : t));
 
-/** 全身（背の高さ 434 で描き、足もとまで入る正方形より縦長の枠） */
-const BODY_VIEW = "-120 -20 240 470";
-/** 部品の一覧の小さな絵（胸から上） */
-const HEAD_VIEW = "-80 -30 160 140";
+/**
+ * 全身の枠（背の高さ 434 で描く）。髪 19 × 輪郭 4 × 大きさ 3 の全部を測った外接の箱（x −95〜96・y −45〜434。scratch/body-bbox.ts）に、
+ * 線の太さの分の余白を足した。初めは上を −20 にしていて、くせ毛・ソフトモヒカン・おだんごの頭が切れた（11/5 作者）
+ */
+const BODY_VIEW = "-110 -58 220 506";
+/** 部品の一覧の小さな絵（胸から上）。上は全身と同じく一番高い髪まで入れる */
+const HEAD_VIEW = "-82 -54 164 164";
 
 const draw = (a: Avatar) =>
   characterSvg({ angles: STANDING, x: 0, groundY: 434, height: 434, facing: "right", view: "front", role: "new", headwear: "none", hair: a.hair, face: a.face });
