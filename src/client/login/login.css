@@ -1,11 +1,35 @@
-/* 入口の画面（11/5 作者）。@ のあとに名前を入れて進むか、ゲストで始めるかの 2 択 */
-.login { max-width: 420px; margin: 48px auto 0; display: flex; flex-direction: column; gap: 16px; }
-.login h1 { font-size: 26px; margin: 0 0 8px; }
+/* 入口の画面（11/5 作者）。@ のあとに名前を入れて進むか、ゲストで始めるかの 2 択。
+   後ろに顔のカードが流れ、薄い黒の幕の上にフォームを置く。幕の上なので、明るい画面の設定でも文字は白にそろえる */
+.login { position: relative; z-index: 1; max-width: 420px; margin: 12vh auto 0; display: flex; flex-direction: column; gap: 16px; color: #fff; }
+.login h1 { font-size: 30px; margin: 0 0 8px; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
 .login-form { display: flex; flex-direction: column; gap: 10px; }
-.login-form label { font-size: 16px; }
-.login-handle { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.login-form label { font-size: 16px; color: rgba(255, 255, 255, 0.85); }
+.login-handle { display: flex; align-items: center; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; background: rgba(0, 0, 0, 0.55); }
 .login-handle:focus-within { border-color: var(--accent); }
-.login-handle span { padding: 0 4px 0 12px; font-size: 24px; color: var(--muted); }
-.login-handle input { flex: 1; min-width: 0; border: 0; outline: none; font-size: 24px; padding: 8px 12px 8px 0; background: transparent; }
-.login-or { margin: 4px 0; text-align: center; color: var(--muted); font-size: 14px; }
-.login-guest { display: block; text-align: center; text-decoration: none; background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.login-handle span { padding: 0 4px 0 12px; font-size: 24px; color: rgba(255, 255, 255, 0.7); }
+.login-handle input { flex: 1; min-width: 0; border: 0; outline: none; font-size: 24px; padding: 8px 12px 8px 0; background: transparent; color: #fff; }
+.login-or { margin: 4px 0; text-align: center; color: rgba(255, 255, 255, 0.75); font-size: 14px; }
+.login-guest { display: block; text-align: center; text-decoration: none; background: rgba(0, 0, 0, 0.45); color: #fff; border: 1px solid rgba(255, 255, 255, 0.45); }
+.login .err { color: #ff8a8a; }
+/* 押せないときの「進む」は透かすと後ろのカードが透けて見えるので、透かさずに暗い緑にする */
+.login .big.go:disabled { opacity: 1; background: #1d4a3a; color: rgba(255, 255, 255, 0.45); }
+
+/* 背景のカード。1 行の高さ = 画面の高さ / 行の数 */
+.bd { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #111; --size: calc(100dvh / var(--rows)); }
+.bd-row { display: flex; width: max-content; height: var(--size); animation: bd-left linear infinite; will-change: transform; }
+.bd-row.right { animation-name: bd-right; }
+@keyframes bd-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes bd-right { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.bd-card { width: var(--size); height: var(--size); padding: 3px; box-sizing: border-box; perspective: 600px; flex: none; }
+.bd-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 700ms cubic-bezier(0.4, 0.1, 0.2, 1); }
+.bd-inner.flip { transform: rotateY(180deg); }
+/* カードは白い地。線の色はカードごと（11/5 作者「黒い部分だけに色、あとは白抜き」）。縁も同じ色 */
+.bd-side { position: absolute; inset: 0; border-radius: 12%; overflow: hidden; backface-visibility: hidden; background: #fff; border: 2px solid; box-sizing: border-box; }
+.bd-side.back { transform: rotateY(180deg); }
+.bd-side img { width: 100%; height: 100%; display: block; }
+/* 薄い黒の幕（作者「トランスペアレントの薄い黒で明度を落とす」） */
+.bd-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.58); }
+@media (prefers-reduced-motion: reduce) {
+  .bd-row { animation: none; }
+  .bd-inner { transition: none; }
+}
