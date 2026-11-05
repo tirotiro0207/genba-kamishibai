@@ -447,13 +447,15 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         ring(cx, cy - h * 0.28, h * 0.07, LIGHT, 0.6) +
         line(cx - h * 0.32, cy - h * 0.02, cx + h * 0.32, cy + h * 0.56, INK, (mark * 0.8) / W) + line(cx + h * 0.32, cy - h * 0.02, cx - h * 0.32, cy + h * 0.56, INK, (mark * 0.8) / W);
     case "clock":
-      // 時計: 太い縁と 12 時・3 時・6 時・9 時の目盛りと 2 本の針（短い針は 3 時、長い針は 12 時）
+      // 時計: 太い縁と 12 の目盛り（12 時・3 時・6 時・9 時は長く太い）。針は描かない「時計の記号」（11/6 作者）。
+      // 理由: 針を決め打ちで描くと、どのカードでも同じ時刻（前は 3 時）に読まれ、9 時・12 時・17 時が伝わらなかった。10 時 10 分の形も時刻に読まれる。
+      // 時刻はカードの文で伝える。針を時刻に向けるのは、小物に時刻の欄を足してから（docs/decisions.md）
       return ring(cx, cy, h - W, PAPER, 1.6) +
-        [0, 1, 2, 3].map((k) => {
-          const a = (k * Math.PI) / 2;
-          return line(cx + Math.sin(a) * h * 0.6, cy - Math.cos(a) * h * 0.6, cx + Math.sin(a) * h * 0.74, cy - Math.cos(a) * h * 0.74, INK, 0.9);
-        }).join("") +
-        line(cx, cy, cx, cy - h * 0.55, INK, 1) + line(cx, cy, cx + h * 0.38, cy, INK, 1.3) + dot(cx, cy, W * 1.1);
+        Array.from({ length: 12 }, (_, k) => {
+          const a = (k * Math.PI) / 6, main = k % 3 === 0;
+          const r0 = h * (main ? 0.5 : 0.62);
+          return line(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0, cx + Math.sin(a) * h * 0.74, cy - Math.cos(a) * h * 0.74, INK, main ? 1 : 0.6);
+        }).join("");
     case "checklist": {
       // 手元のチェックリスト: 濃い板に紙と上の留め具、3 行の欄。上の 2 行に ✓、下の 1 行は空の四角
       const x0 = cx - h * 0.72;
