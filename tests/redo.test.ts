@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { routeOf } from "../src/shared/card";
-import { keyIndexAt, mergeRedo, partsInBox } from "../src/shared/redo";
+import { keyIndexAt, mergeRedo, partsInBox, redoParams } from "../src/shared/redo";
 import { POSES } from "../src/shared/picto/poses";
 import { sampleCard } from "./fixtures/card";
 
@@ -42,5 +42,18 @@ describe("枠に入った部品を選び、その部品だけを取り込む", (
     const prop = mergeRedo(m, 2, got, { figures: [], props: [0, 1], parts: ["p2", "p3"] }).keyframes[2].props;
     expect(prop[0]).toMatchObject({ kind: "tester", figure: 0, dx: 0.3 });
     expect(prop[1]).toMatchObject({ x: 0.7, size: 0.25 });
+  });
+
+  it("向き（facing）も取り込む。選んだ人だけで、left・right 以外の値は元のまま（11/6）", () => {
+    const old = m.keyframes[2].figures[0].facing;
+    const flip = old === "left" ? "right" : "left";
+    const got = structuredClone(m.keyframes[2]);
+    got.figures[0] = { ...got.figures[0], facing: flip };
+    expect(mergeRedo(m, 2, got, { figures: [0], props: [], parts: ["p1"] }).keyframes[2].figures[0].facing).toBe(flip);
+    expect(mergeRedo(m, 2, got, { figures: [], props: [1], parts: ["p3"] }).keyframes[2].figures[0].facing).toBe(old);
+    const bad = structuredClone(m.keyframes[2]);
+    bad.figures[0] = { ...bad.figures[0], facing: "up" as never };
+    expect(mergeRedo(m, 2, bad, { figures: [0], props: [], parts: ["p1"] }).keyframes[2].figures[0].facing).toBe(old);
+    expect(String(redoParams(m.keyframes[2], { figures: [0], props: [], parts: ["p1"] }, "親方の方を向いて").system)).toMatch(/向き（facing/);
   });
 });

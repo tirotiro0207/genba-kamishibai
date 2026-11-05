@@ -1,6 +1,6 @@
 // 枠 → 部品 → その 1 枚だけ作り直す（044b・工程 7）。
 // 監修者が枠で囲んだ部分に入る絵の部品（人・小物）を選び、そのコマのキーフレームだけを作り直す。
-// 変えてよいのは選んだ部品だけ（人は関節の角度、小物は位置と大きさ）。人数・役・小物の並び・持ち手は変えないので、
+// 変えてよいのは選んだ部品だけ（人は関節の角度と向き、小物は位置と大きさ。向きは 11/6 から）。人数・役・小物の並び・持ち手は変えないので、
 // 部品 → 文 → 元の文の経路はそのまま残る。1 枚につき 5 回まで。
 import type Anthropic from "@anthropic-ai/sdk";
 import { partBoxes } from "./boxes";
@@ -42,11 +42,11 @@ export function keyIndexAt(m: MotionJson, t: number): number {
 
 const SYSTEM = `あなたは安全の絵カードの直し係です。絵は人形と小物を JSON で描いています。
 監修者が絵の一部を枠で囲み、「ここをこうしたい」と頼みました。頼みに合うように、1 枚の絵の JSON を直して返してください。
-変えてよいのは、「直してよい部品」に挙げた人の関節の角度と、挙げた小物の位置（dx・dy・x・y）と大きさ（size）だけです。
+変えてよいのは、「直してよい部品」に挙げた人の関節の角度と向き（facing の left・right。「〜の方を向いて」と頼まれたら向きを変える）と、挙げた小物の位置（dx・dy・x・y）と大きさ（size）だけです。
 ほかの人・小物・役・人数・小物の並び・持ち手（figure・joint）・吹き出しの中身は、受け取ったままの値で返してください。`;
 
 export function redoParams(key: FrameJson, targets: Targets, text: string): Anthropic.MessageCreateParamsNonStreaming {
-  const list = [...targets.figures.map((i) => `figures[${i}]（${key.figures[i].role}）の関節の角度`), ...targets.props.map((i) => `props[${i}]（${key.props[i].kind}）の位置と大きさ`)].join("\n");
+  const list = [...targets.figures.map((i) => `figures[${i}]（${key.figures[i].role}）の関節の角度と向き`), ...targets.props.map((i) => `props[${i}]（${key.props[i].kind}）の位置と大きさ`)].join("\n");
   return {
     model: MAKER_MODEL,
     max_tokens: 8000,
@@ -62,7 +62,12 @@ export function mergeRedo(m: MotionJson, keyIndex: number, got: FrameJson, targe
   const old = m.keyframes[keyIndex];
   const key = {
     ...old,
-    figures: old.figures.map((f, j) => (targets.figures.includes(j) && got.figures?.[j]?.angles ? { ...f, angles: { ...f.angles, ...got.figures[j].angles } } : f)),
+    figures: old.figures.map((f, j) => {
+      const g = got.figures?.[j];
+      if (!targets.figures.includes(j) || !g) return f;
+      const facing = g.facing === "left" || g.facing === "right" ? g.facing : f.facing;
+      return { ...f, facing, angles: g.angles ? { ...f.angles, ...g.angles } : f.angles };
+    }),
     props: old.props.map((p, j) => {
       const g = got.props?.[j];
       return targets.props.includes(j) && g ? { ...p, dx: g.dx, dy: g.dy, x: g.x, y: g.y, size: g.size } : p;
