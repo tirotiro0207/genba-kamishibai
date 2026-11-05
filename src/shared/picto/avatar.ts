@@ -5,7 +5,8 @@
 import type { View } from "./character";
 
 export type FaceShape = "standard" | "round" | "slim" | "square";
-export type EyeShape = "oval" | "round" | "slit" | "up" | "down";
+/** white（白目に大きな黒目）は動画だけの特別な目。キャラクターを作る画面の選択肢（FACE_OPTIONS）には入れない */
+export type EyeShape = "oval" | "round" | "slit" | "up" | "down" | "white";
 export type EyeSize = "s" | "m" | "l";
 /** 輪郭の大きさ（11/5 作者。キャラクターを作る画面の「小 ━━ 大」のつまみ）。m は今までの絵と 1 文字も変わらない */
 export type PartSize = "s" | "m" | "l";
@@ -23,7 +24,8 @@ export const VOWELS: readonly Vowel[] = ["a", "i", "u", "e", "o"];
 export interface Mood { expression?: Expression; speak?: Vowel }
 export type Glasses = "none" | "round" | "square";
 export type Skin = "white" | "light";
-export type Beard = "none" | "mustache";
+/** stubble（口の周りからあごまでの薄い灰の面）は動画だけの特別なひげ。キャラクターを作る画面の選択肢には入れない */
+export type Beard = "none" | "mustache" | "stubble";
 
 /** 顔の部品の選び方。髪は CharacterSpec.hair（または avatar.hair）で選ぶ */
 export interface FaceParts {
@@ -131,6 +133,12 @@ const eyeSvg = (e: Landmarks["eyes"][number], p: FaceParts, view: View, ex: Expr
     const half = ((2 * rx + 2) / 2) * (view === "side" ? 1.3 : 1);
     body = line(`M${n(e.x - half)} ${EYE_Y}H${n(e.x + half)}`);
     if (view === "side") body = `<g transform="rotate(-8 ${cx} ${EYE_Y})">${body}</g>`;
+  } else if (p.eyeShape === "white") {
+    // 白目は横に 2.3 倍の幅（見本の目は顔の幅の 4 分の 1 ほど）。黒目は顔の向く側へ少し寄せる（正面は真ん中）。斜めの奥の目は細く
+    const wx = rx * 2.3 * (e.far ? 0.8 : 1), px = e.x + (view === "front" ? 0 : (view === "side" ? 3 : 2) * (e.far ? 0.6 : 1));
+    body = `<ellipse cx="${cx}" cy="${EYE_Y}" rx="${n(wx)}" ry="${ry}" fill="#fff" stroke="#000" stroke-width="2.5"/>` +
+      `<circle cx="${n(px)}" cy="${EYE_Y}" r="${n(ry * 0.75)}"/>`;
+    return body + lashSvg(e, wx, ry, p.lashes);
   } else body = `<ellipse cx="${cx}" cy="${EYE_Y}" rx="${rx}" ry="${ry}"/>`;
   const lashes = lashSvg(e, rx, ry, p.lashes);
   // 目尻は out の側。SVG の回転は時計回りが正で、正の回転は画面の左の端を持ち上げる。つり目は目尻を上げる
@@ -223,7 +231,7 @@ const mouthSvg = (lm: Landmarks, mood: Mood = {}) => {
 };
 const beardSvg = (lm: Landmarks, kind: Beard) => {
   const hw = lm.mouth.hw;
-  return kind === "none" ? "" : line(`M${n(lm.mouth.cx - hw - 2 * lm.k)} -19Q${n(lm.mouth.cx)} -21 ${n(lm.mouth.cx + hw + 2 * lm.k)} -19`, 3.5);
+  return kind === "none" || kind === "stubble" ? "" : line(`M${n(lm.mouth.cx - hw - 2 * lm.k)} -19Q${n(lm.mouth.cx)} -21 ${n(lm.mouth.cx + hw + 2 * lm.k)} -19`, 3.5);
 };
 
 /**
@@ -246,6 +254,24 @@ export const earsSvg = (view: View, p: FaceParts) => {
     ink(`M${n(cx + 2.5)} -37Q${n(cx - 2.5)} -37 ${n(cx - 2)} -31Q${n(cx - 1.5)} -27 ${n(cx + 2)} -26`);
 };
 
+/**
+ * 薄いひげ（stubble）。鼻の下（y −22）からあごまでを薄い灰（#ccc）で塗り、口の両わきのほおだけを肌の色に抜く（口の周りの逆 U と、顔の縁の細い帯が残る）。
+ * ほおの下の縁は 2 つのふくらみ。顔の輪郭で切り抜き、輪郭の線を上から引き直す。口は灰の上に描く。線は描かない
+ */
+const stubbleSvg = (p: FaceParts, lm: Landmarks) => {
+  const outline = faceOutline(p.face, p.faceSize), id = `stubble-${p.face}-${p.faceSize}`;
+  const cx = lm.mouth.cx, k = lm.k;
+  const cheeks = [-1, 1].map((sd) => {
+    const i = cx + sd * 14 * k, o = sd * (lm.w - 7 * k);
+    if (sd * (o - i) < 5) return "";
+    const a = (i + o) / 2;
+    return `M${n(i)} -23V-16C${n(i)} -11 ${n(a)} -11 ${n(a)} -14C${n(a)} -11 ${n(o)} -11 ${n(o)} -16V-23Z`;
+  }).join("");
+  return `<defs><clipPath id="${id}"><path d="${outline}"/></clipPath></defs><g clip-path="url(#${id})">` +
+    `<rect x="-60" y="-22" width="120" height="30" fill="#ccc"/>` + (cheeks ? `<path d="${cheeks}" fill="${SKIN_TONE[p.skin]}"/>` : "") + `</g>` +
+    `<path d="${outline}" fill="none" stroke="#000" stroke-width="5" stroke-linejoin="round"/>`;
+};
+
 /** 正面でうつむく・見上げるときに、顔の部品を上下にずらす（輪郭はそのまま）。0 のときは何も足さない */
 const shiftY = (svg: string, dy: number) => (dy && svg ? `<g transform="translate(0 ${dy})">${svg}</g>` : svg);
 /**
@@ -257,6 +283,7 @@ export const faceSvg = (view: View, p: FaceParts, tilt = 0, mood: Mood = {}) => 
   const lm = landmarks(p.face, view, p.faceSize);
   const [nx, ny, nr] = lm.nose;
   return `<path d="${faceOutline(p.face, p.faceSize)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
+    (p.beard === "stubble" ? stubbleSvg(p, lm) : "") +
     shiftY(lm.eyes.map((e) => eyeSvg(e, p, view, ex)).join("") + browSvg(lm, p.brows, view, ex) +
     `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, mood) + beardSvg(lm, p.beard), tilt);
 };

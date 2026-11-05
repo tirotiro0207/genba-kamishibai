@@ -66,6 +66,11 @@ export interface Outfit {
   bootsHigh?: boolean;
   /** リストバンド（手前の腕の手首） */
   wristband?: boolean;
+  /**
+   * 短い杖（指し棒）を持つ腕（near＝手前・far＝奥）と、杖の先を向ける横の向き（1＝顔の向く側・−1＝その反対）。
+   * 杖はいつも斜め上 45° へ向ける。動画だけの持ち物で、キャラクターを作る画面には出さない
+   */
+  wand?: { arm: "near" | "far"; toward: 1 | -1 };
 }
 
 const n = (v: number) => String(Math.round(v * 10) / 10);
@@ -390,6 +395,28 @@ export const gloveCuffSvg = (la: number, tone: string) =>
   part("glove_cuff", `<rect x="-22" y="${Math.round(la * 0.08)}" width="44" height="${n(la * 0.92 - 6)}" rx="6" fill="${tone}" ${S(5)}/><path d="M-20 ${Math.round(la * 0.08) + 9}H20" stroke="#999" stroke-width="4"/>`);
 export const gloveTipSvg = (la: number) => part("glove_tip", `<path d="M-12.5 ${la}A12.5 12.5 0 0 0 12.5 ${la}Z" fill="#333"/>`);
 export const wristbandSvg = (la: number) => part("wristband", `<rect x="-19" y="${la - 31}" width="38" height="13" rx="3" fill="#555" ${S(4)}/>`);
+
+/**
+ * 短い杖（動画だけ。11/5 作者）。手の丸の中心が原点で、腕の回りを打ち消した向き（up は画面の上）で描く。手の丸はこの上に描く。
+ * 長さは手の中心から先まで 87（身長 434 のおよそ 5 分の 1）。手元が太く（幅 8）先が細い（幅 4）白い棒に黒い線、
+ * 手元から 3 割の所に細い黒の帯（持ち手の境）。先に短い光の線 3 本を扇に開く。toward は先を向ける横の向き
+ */
+export const wandSvg = (toward: 1 | -1) => {
+  const len = 87, a = Math.PI / 4;
+  const ux = toward * Math.cos(a), uy = -Math.sin(a), vx = -uy, vy = ux;
+  const at = (t: number, w: number) => [t * ux + w * vx, t * uy + w * vy];
+  const pt = ([x, y]: number[]) => `${n(x)} ${n(y)}`;
+  const body = `M${pt(at(0, -4))}L${pt(at(len, -2))}Q${pt(at(len + 2.5, 0))} ${pt(at(len, 2))}L${pt(at(0, 4))}Z`;
+  const band = `M${pt(at(len * 0.3, -3.6))}L${pt(at(len * 0.3, 3.6))}`;
+  const rays = [-35, 0, 35].map((deg) => {
+    const r = (deg * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r);
+    const dx = ux * c - uy * sn * toward, dy = uy * c + ux * sn * toward;
+    const tx = len * ux, ty = len * uy;
+    return `M${n(tx + dx * 8)} ${n(ty + dy * 8)}L${n(tx + dx * 17)} ${n(ty + dy * 17)}`;
+  }).join("");
+  return part("wand", `<path d="${body}" fill="#fff" ${S(3.5)}/><path d="${band}" stroke="#000" stroke-width="3"/>` +
+    `<path d="${rays}" stroke="#000" stroke-width="3" stroke-linecap="round"/>`);
+};
 
 /** 安全靴のつま先の芯の線（11/5。靴の座標。character.ts の shoe と同じく ankle で回す）。正面はつま先の上の弧 */
 export const toeCapSvg = (view: View, i: number, ankle: number) => {

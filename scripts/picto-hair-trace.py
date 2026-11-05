@@ -19,6 +19,9 @@ ONLY = sys.argv[5:]
 K = 4  # 描き戻しと髪の PNG の倍率
 NEW = ["short", "bun", "long", "ponytail", "buzz", "sidePart", "curly", "twoBlock", "mash", "centerPart", "slickBack", "shortBob", "braids",
        "twinTails", "skinhead", "softMohawk", "wolf", "halfUp"]
+# 特別な髪（動画だけの案内人など。キャラを作る画面の選択肢には出さない）: 名前 → 大きさ・位置合わせ・直しを借りる髪。
+# 絵は髪の置き場の <名前>/front・oblique・side.png。借りる髪と同じ大きさ・同じ位置で描いてあるので、置く位置も借りる髪の絵から求める
+SPECIAL = {"guideMash": "mash"}
 VIEWS = {"front": "front", "quarter": "oblique", "side": "side"}
 # 見本（一覧）: 1 枚に 5 段、1 段 170 画素。右半分に、正面・斜め・真横の順で顔に載せた髪が並ぶ
 SHEET_ROWS, SHEET_ROW_H = 5, 170
@@ -310,21 +313,23 @@ def apply_fix(fix, hair, gray, dark, sv, ox, oy):
     return hair, gray, dark
 
 result = json.load(open(OUT, encoding="utf-8")) if ONLY and os.path.exists(OUT) else {}
-for no, name in enumerate(NEW, 2):
+JOBS = [(no, name, name, f"{no:02d}_{name}") for no, name in enumerate(NEW, 2)] + [(NEW.index(b) + 2, name, b, name) for name, b in SPECIAL.items()]
+for no, name, base, folder in JOBS:
     if ONLY and name not in ONLY:
         continue
     result[name] = {}
     sheet = np.array(Image.open(os.path.join(HAIR, f"一覧_{(no - 2) // SHEET_ROWS + 1}.png")).convert("RGB")).astype(int)
     s_front = None
     for view, fn in VIEWS.items():
-        sv, ox, oy = head_frame(np.array(Image.open(os.path.join(SRC, f"{no:02d}_{name}", f"{fn}.png")).convert("RGB")).astype(int), s_front)
+        sv, ox, oy = head_frame(np.array(Image.open(os.path.join(SRC, f"{no:02d}_{base}", f"{fn}.png")).convert("RGB")).astype(int), s_front)
         s_front = s_front or sv
-        rgba = np.array(Image.open(os.path.join(HAIR, f"{no:02d}_{name}", f"{fn}.png")).convert("RGBA")).astype(int)
+        rgba = np.array(Image.open(os.path.join(HAIR, folder, f"{fn}.png")).convert("RGBA")).astype(int)
         alpha = rgba[..., 3] > 127
         if not alpha.any():  # スキンヘッドは髪が無い
             result[name][view] = {"black": "", "gray": "", "behind": "", "top": None}
             continue
-        sx, sy = place(sheet, no, name, fn, alpha.astype(float))
+        ref_alpha = alpha if base == name else np.array(Image.open(os.path.join(HAIR, f"{no:02d}_{base}", f"{fn}.png")).convert("RGBA"))[..., 3] > 127
+        sx, sy = place(sheet, no, base, fn, ref_alpha.astype(float))
         ox, oy = ox - sx, oy - sy
         u = 1 / sv
         H, W = alpha.shape
@@ -333,7 +338,7 @@ for no, name in enumerate(NEW, 2):
         gray = alpha & (np.abs(rgba[..., 0] - 0x77) < 20)
         dark = smooth(alpha & (np.abs(rgba[..., 0] - 0x44) < 20), 0.4 * u)  # 坊主の地肌の透ける所。黒い縁の内側
         hair = smooth(alpha, 0.5 * u)
-        fix = FIX.get((name, view), {})
+        fix = FIX.get((base, view), {})
         if fix:
             hair, gray, dark = apply_fix(fix, hair, gray, dark, sv, ox, oy)
         skin = np.zeros_like(hair)
@@ -487,11 +492,13 @@ if TS:
         'import type { View } from "./character";',
         "",
         "export const TRACED_HAIRS = " + json.dumps(NEW) + " as const;",
-        "export type TracedHair = (typeof TRACED_HAIRS)[number];",
+        "/** 動画だけで使う特別な髪。キャラを作る画面の選択肢（TRACED_HAIRS）には入れない */",
+        "export const SPECIAL_HAIRS = " + json.dumps(list(SPECIAL)) + " as const;",
+        "export type TracedHair = (typeof TRACED_HAIRS)[number] | (typeof SPECIAL_HAIRS)[number];",
         "export const TRACED: Record<TracedHair, Record<View, { front: string; behind?: string; back?: string; hat?: string }>> = {",
     ]
     tops = {}
-    for name in NEW:
+    for name in NEW + list(SPECIAL):
         lines.append(f"  {name}: {{")
         for view in VIEWS:
             d = result[name][view]

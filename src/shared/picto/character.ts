@@ -2,7 +2,7 @@
 // 長さと太さは新しい絵柄のまま（胴 142・もも 85・すね 77・上腕 70・前腕 52、単位は背の高さ 434 の中の値）、
 // 角度の決まり（真下が 0、前へ正。腕は胴に対して、足は腰に対して）は posePoints と同じ。
 // 関節ごとに g を入れ子にして回すので、どんな角度でも手足と靴が体から外れない。
-import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, gloveCuffSvg, gloveTipSvg, gogglesSvg, headMarks, hem, maskSvg, type Outfit, outfitTorso, respiratorSvg, toeCapSvg, visorSvg, wristbandSvg } from "./outfit";
+import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, gloveCuffSvg, gloveTipSvg, gogglesSvg, headMarks, hem, maskSvg, type Outfit, outfitTorso, respiratorSvg, toeCapSvg, visorSvg, wandSvg, wristbandSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, landmarks, type Mood, SKIN_TONE, type Vowel } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
 import { type Angles, type Lengths, type LegShade, legShade, type Seg, torsoScale } from "./poses";
@@ -621,12 +621,17 @@ export function characterSvg(c: CharacterSpec): string {
   };
   // 手袋の明るさ。形（glove）だけ決めたときは、絶縁は #555、切創防止は #999（11/5）
   const glove = o.gloves ?? (o.glove === "insulated" ? "#555" : o.glove === "cut" ? "#999" : undefined);
+  // 短い杖（動画だけ）。杖は腕の回りを打ち消して、いつも斜め上 45° へ向ける。
+  // 斜め・真横で奥の手に持つと、奥の腕は胴の後ろなので杖が隠れる。そのときは杖と奥の手だけを胴と頭のあとに描き直す
+  const wandSpot = o.wand?.arm === "near" ? 1 : o.wand?.arm === "far" ? 0 : -1;
+  const wandOver = wandSpot === 0 && view !== "front";
+  const wandAt = (la: number, g: { upper: number; lower: number }) => `<g transform="translate(0 ${la}) rotate(${n(-(r.torso + g.upper + g.lower))})">${wandSvg(o.wand?.toward ?? 1)}</g>`;
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const [ua, la] = [sl(`arm_${g.s}_upper`, L.upperArm), sl(`arm_${g.s}_lower`, L.lowerArm)].map((v) => +n(v));
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve, o.armband === "cross") : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" && spot === 1 && o.wristband ? wristbandSvg(la) : ""}${pass === "fill" && o.glove === "insulated" ? gloveCuffSvg(la, glove ?? "#555") : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}${pass === "fill" && o.glove === "cut" ? gloveTipSvg(la) : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve, o.armband === "cross") : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" && spot === 1 && o.wristband ? wristbandSvg(la) : ""}${pass === "fill" && o.glove === "insulated" ? gloveCuffSvg(la, glove ?? "#555") : ""}${pass === "fill" && wandSpot === spot && !wandOver ? wandAt(la, g) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}${pass === "fill" && o.glove === "cut" ? gloveTipSvg(la) : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const hm = headMat(view, look, r.neck, kT);
@@ -645,7 +650,13 @@ export function characterSvg(c: CharacterSpec): string {
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;
   const front = view === "front";
-  const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
+  const wandHand = () => {
+    const g = r.arms[0];
+    const [ua, la] = [sl(`arm_${g.s}_upper`, L.upperArm), sl(`arm_${g.s}_lower`, L.lowerArm)].map((v) => +n(v));
+    return `<g transform="translate(${SPOT[view].arm[0]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}"><g transform="translate(0 ${ua})${rot(g.lower)}">${wandAt(la, g)}` +
+      `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/></g></g>`;
+  };
+  const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${wandOver ? wandHand() : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }
