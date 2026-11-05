@@ -59,6 +59,13 @@ export interface CharacterSpec {
   len?: Lengths;
   /** 奥にある足の影の濃さ（poseAngles が返す）。無ければ向きから決める（正面 0・斜め 0.35・真横 0.75） */
   shade?: LegShade;
+  /**
+   * 感電の絵（11/6 現場のヒアリングから）。体の線と中身を全部黒く塗り、その上に白い骸骨を関節の位置に合わせて重ねる。
+   * どの姿勢にも重ねられる。髪・服・かぶり物も黒の中に入れる（体の形だけを見せ、骨を目立たせる）
+   */
+  shock?: boolean;
+  /** 手前の手の人差し指を 1 本、真上へ立てる（口の前で「シー」・口外禁止の姿勢 shush に使う。11/6 現場のヒアリングから） */
+  finger?: boolean;
 }
 
 const UNIT = 434;
@@ -642,12 +649,15 @@ export function characterSvg(c: CharacterSpec): string {
   const wandSpot = o.wand?.arm === "near" ? 1 : o.wand?.arm === "far" ? 0 : -1;
   const wandOver = wandSpot === 0 && view !== "front";
   const wandAt = (la: number, g: { upper: number; lower: number }) => `<g transform="translate(0 ${la}) rotate(${n(-(r.torso + g.upper + g.lower))})">${wandSvg(o.wand?.toward ?? 1)}</g>`;
+  // 立てた人差し指: 手の中心から真上へ（胴と腕の回りを打ち消す）。手の丸の下に描いて、付け根を手に隠す
+  const fingerAt = (la: number, g: { upper: number; lower: number }, fill: string) =>
+    `<g transform="translate(0 ${la}) rotate(${n(-(r.torso + g.upper + g.lower))})"><rect x="-6" y="-34" width="12" height="30" rx="6" fill="${fill}" stroke="#000" stroke-width="4.5"/></g>`;
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
     const g = r.arms[spot];
     const [ua, la] = [sl(`arm_${g.s}_upper`, L.upperArm), sl(`arm_${g.s}_lower`, L.lowerArm)].map((v) => +n(v));
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve, o.armband === "cross") : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" && spot === 1 && o.wristband ? wristbandSvg(la) : ""}${pass === "fill" && o.glove === "insulated" ? gloveCuffSvg(la, glove ?? "#555") : ""}${pass === "fill" && wandSpot === spot && !wandOver ? wandAt(la, g) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}${pass === "fill" && o.glove === "cut" ? gloveTipSvg(la) : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve, o.armband === "cross") : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" && spot === 1 && o.wristband ? wristbandSvg(la) : ""}${pass === "fill" && o.glove === "insulated" ? gloveCuffSvg(la, glove ?? "#555") : ""}${pass === "fill" && wandSpot === spot && !wandOver ? wandAt(la, g) : ""}${pass === "fill" && spot === 1 && c.finger ? fingerAt(la, g, glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${glove ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}${pass === "fill" && o.glove === "cut" ? gloveTipSvg(la) : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const hm = headMat(view, look, r.neck, kT);
@@ -674,7 +684,69 @@ export function characterSvg(c: CharacterSpec): string {
   };
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${wandOver ? wandHand() : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
-  return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
+  const drawn = c.shock ? blacken(body) + shockBones(c, low) : body;
+  return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${drawn}</g>`;
+}
+
+/** 感電: 塗りと線の色を全部黒にする（塗らない所 none はそのまま） */
+const blacken = (svg: string) => svg.replace(/(fill|stroke)="(?!none)[^"]*"/g, '$1="#000"');
+
+/**
+ * 感電の骸骨（人の中の座標。characterSvg の拡大の前）。関節の位置は characterJoints と同じ置き方で求め、白い骨を黒い体の内に収める。
+ * 骨: 頭蓋（目の穴 2 つと歯の線）・背骨・肋骨 3 本・骨盤・二の腕・前腕・もも・すね。骨の端は丸いこぶ
+ */
+function shockBones(c: CharacterSpec, low: number): string {
+  const view = c.view ?? "quarter";
+  const r = rig(c.angles, view);
+  const look = c.look ?? "b";
+  const sl = segLen(c.len);
+  const kT = view === "front" ? torsoScale(c.angles.torso) : 1;
+  void low;
+  const p = (m: M, x = 0, y = 0): [number, number] => [m[0] * x + m[2] * y + m[4], at(m, x, y)];
+  const torsoM = R(r.torso);
+  const W = 11, KNOB = 7.5;
+  const bone = (a: [number, number], b: [number, number], w = W) =>
+    `<path d="M${n(a[0])} ${n(a[1])}L${n(b[0])} ${n(b[1])}" stroke="#fff" stroke-width="${w}" stroke-linecap="round"/>` +
+    [a, b].map(([x, y]) => `<circle cx="${n(x)}" cy="${n(y)}" r="${KNOB}" fill="#fff"/>`).join("");
+  let out = "";
+  // 手足（奥 → 手前の順。正面は両方とも同じ並び）
+  r.legs.forEach((g, i) => {
+    const hip = p(T(SPOT[view].leg[i], 0));
+    const kneeM = mul(mul(T(SPOT[view].leg[i], 0), R(g.thigh)), T(0, sl(`leg_${g.s}_upper`, L.thigh)));
+    out += bone(hip, p(kneeM)) + bone(p(kneeM), p(mul(kneeM, R(g.shin)), 0, sl(`leg_${g.s}_lower`, L.shin) - 10));
+  });
+  // 背骨・肋骨・骨盤（胴の向きに合わせる）
+  const top = -TORSO_TOP * kT;
+  const spineTop = p(mul(torsoM, T(NECK_X[view], top + 14)));
+  const pelvis = p(mul(torsoM, T(NECK_X[view] * 0.5, -14)));
+  out += bone(pelvis, spineTop, 8);
+  const half = view === "front" ? 30 : view === "quarter" ? 24 : 16;
+  for (const t of [0.22, 0.4, 0.58]) {
+    const y = top + (-14 - top) * t;
+    const cx = NECK_X[view] * (1 - t * 0.5);
+    out += `<path d="M${n(p(mul(torsoM, T(cx - half, y + 4)))[0])} ${n(p(mul(torsoM, T(cx - half, y + 4)))[1])}Q${n(p(mul(torsoM, T(cx, y - 6)))[0])} ${n(p(mul(torsoM, T(cx, y - 6)))[1])} ${n(p(mul(torsoM, T(cx + half, y + 4)))[0])} ${n(p(mul(torsoM, T(cx + half, y + 4)))[1])}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>`;
+  }
+  const [px, py] = pelvis;
+  out += `<ellipse cx="${n(px)}" cy="${n(py)}" rx="${view === "side" ? 13 : 22}" ry="11" fill="#fff" transform="rotate(${n(r.torso)} ${n(px)} ${n(py)})"/>`;
+  // 腕
+  r.arms.forEach((g) => {
+    const i = r.arms.indexOf(g);
+    const sh = mul(mul(torsoM, T(SPOT[view].arm[i], top + L.shoulderDrop)), R(g.upper));
+    const elbow = mul(mul(sh, T(0, sl(`arm_${g.s}_upper`, L.upperArm))), R(g.lower));
+    out += bone(p(sh), p(elbow), 9) + bone(p(elbow), p(elbow, 0, sl(`arm_${g.s}_lower`, L.lowerArm) - 8), 9);
+  });
+  // 頭蓋（顔のまん中 y −35 に、目の穴と歯）
+  const hm = mul(torsoM, headMat(view, look, r.neck, kT));
+  const [hx, hy] = p(hm, 0, -35);
+  const ex = view === "front" ? [-14, 14] : view === "quarter" ? [0, 22] : [20];
+  const eye = ex.map((x) => { const [a, b] = p(hm, x, -38); return `<circle cx="${n(a)}" cy="${n(b)}" r="7" fill="#000"/>`; }).join("");
+  const nose = p(hm, view === "front" ? 0 : view === "quarter" ? 12 : 30, -26);
+  const jaw = p(hm, view === "front" ? 0 : view === "quarter" ? 8 : 16, -12);
+  out += bone(spineTop, p(hm, 0, -6), 8) + `<circle cx="${n(hx)}" cy="${n(hy)}" r="34" fill="#fff"/>` +
+    `<rect x="${n(jaw[0] - 18)}" y="${n(jaw[1] - 8)}" width="36" height="16" rx="5" fill="#fff" transform="rotate(${n(r.torso + r.neck)} ${n(jaw[0])} ${n(jaw[1])})"/>` +
+    eye + `<circle cx="${n(nose[0])}" cy="${n(nose[1])}" r="3.5" fill="#000"/>` +
+    [-8, 0, 8].map((dx) => { const [a, b] = p(hm, (view === "front" ? 0 : view === "quarter" ? 8 : 16) + dx, -12); return `<path d="M${n(a)} ${n(b - 6)}V${n(b + 6)}" stroke="#000" stroke-width="2"/>`; }).join("");
+  return `<g data-part="shock">${out}</g>`;
 }
 
 /**

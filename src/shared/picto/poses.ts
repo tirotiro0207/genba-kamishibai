@@ -61,6 +61,11 @@ export const POSES = {
   trip: pose({ torso: 30, neck: -10, arm_near_upper: 110, arm_near_lower: 10, arm_far_upper: 95, arm_far_lower: 20, leg_near_upper: 25, leg_near_lower: -15, leg_far_upper: -35, leg_far_lower: -40 }),
   /** 走る（体を前へ倒し、ひじを曲げて腕を前後に大きく振る） */
   run: pose({ torso: 14, neck: -4, arm_near_upper: -30, arm_near_lower: 85, arm_far_upper: 60, arm_far_lower: 75, leg_near_upper: 55, leg_near_lower: -70, leg_far_upper: -30, leg_far_lower: -65 }),
+  // 11/6 現場のヒアリングから足した 2 つ
+  /** 倒れて横になる（床にうつぶせに横たわる。胴を前へ 90 度倒し、足を後ろへまっすぐ伸ばし、腕は体に沿わせる） */
+  lie_down: pose({ torso: 90, neck: -10, arm_near_upper: 0, arm_near_lower: 0, arm_far_upper: -5, arm_far_lower: 0, leg_near_upper: -90, leg_near_lower: 0, leg_far_upper: -88, leg_far_lower: 0 }),
+  /** 口の前に人差し指を立てる「シー」（口外禁止）。指は characterSvg の finger で立てる。手は向きごとに口の前へ置く（PLACED・BY_VIEW） */
+  shush: pose({ arm_near_upper: 40, arm_near_lower: 130, arm_far_upper: -10, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
 } satisfies Record<string, Angles>;
 
 export type PoseName = keyof typeof POSES;
@@ -124,7 +129,7 @@ export function derivedFrom(a: Angles): Derivation {
  * 動きの大きい姿勢。正面では前後の動きが縮んで読めないので、斜めか真横で描く。
  * 正面は、立つ・待つ・向き合って話す・手を挙げるなど、その場で止まっている場面に使う（11/5 作者）
  */
-export const MOVING_POSES: ReadonlySet<PoseName> = new Set<PoseName>(["walk", "run", "fall", "trip", "push", "pull", "lift", "carry", "climb", "squat", "kneel", "sit", "bow"]);
+export const MOVING_POSES: ReadonlySet<PoseName> = new Set<PoseName>(["walk", "run", "fall", "trip", "push", "pull", "lift", "carry", "climb", "squat", "kneel", "sit", "bow", "lie_down"]);
 
 /** 姿勢を描く向きを選ぶ。動きの大きい姿勢で正面を頼まれたら斜めにする */
 export const viewFor = (name: PoseName, wanted: View = "quarter"): View => (wanted === "front" && MOVING_POSES.has(name) ? "quarter" : wanted);
@@ -280,6 +285,8 @@ function place(view: Exclude<View, "front">, elbow: [number, number], hand: [num
  * （顔の内側に置くと、手が頬や目の上に来て、目をこすっているように見えた）
  */
 const EAR_AT: Record<View, [number, number]> = { front: [54, -190], quarter: [-29, -190], side: [1, -190] };
+/** 口の位置（胴の座標。立ち姿・首を傾けないとき）。頭の原点（y −158）から口の y −14、横は口のまん中に首の横の位置を足した所 */
+const MOUTH_AT: Record<View, [number, number]> = { front: [0, -172], quarter: [26, -172], side: [38.5, -172] };
 
 /**
  * 向きごとに手で決めた形（3 次元から写すだけでは不自然になるもの）。
@@ -290,6 +297,8 @@ const EAR_AT: Record<View, [number, number]> = { front: [54, -190], quarter: [-2
 const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>> = {
   stop: { quarter: { arm_near_upper: 12, arm_near_lower: 8, arm_far_upper: 72, arm_far_lower: 50 } },
   phone: { front: reach("front", "near", EAR_AT.front) },
+  // シー: 手を口の少し下に置き、立てた指が唇の前を通る
+  shush: { front: reach("front", "near", [MOUTH_AT.front[0], MOUTH_AT.front[1] + 16]) },
   raise_hand: { quarter: { arm_near_upper: 184, arm_near_lower: 0 } },
   // 頭の上の作業は、斜めと真横で手前の腕を真上より少し後ろへ立てて、顔を隠さない
   reach_up: { quarter: { arm_near_upper: 184, arm_near_lower: 0 }, side: { arm_near_upper: 194, arm_near_lower: 0 } },
@@ -302,6 +311,10 @@ const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>>
  * ひじを後ろへ張ると、腕を頭の後ろへ回したように見えた（11/5 作者）。ひじがカメラの方へ出る分、上腕は短く見える
  */
 const PLACED: Partial<Record<PoseName, Partial<Record<Exclude<View, "front">, { angles: Partial<Angles>; len: Lengths }>>>> = {
+  shush: {
+    quarter: place("quarter", [-2, -118], [MOUTH_AT.quarter[0] + 4, MOUTH_AT.quarter[1] + 16]),
+    side: place("side", [26, -120], [MOUTH_AT.side[0] + 8, MOUTH_AT.side[1] + 16]),
+  },
   phone: {
     quarter: place("quarter", [-6, -140], [EAR_AT.quarter[0], EAR_AT.quarter[1] + 4]),
     side: place("side", [30, -142], [EAR_AT.side[0], EAR_AT.side[1] + 6]),

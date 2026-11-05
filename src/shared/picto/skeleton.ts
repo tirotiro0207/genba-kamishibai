@@ -17,9 +17,10 @@ export const BONE_RANGE: Record<Bone, [number, number]> = {
   arm_near_lower: [0, 150],
   arm_far_upper: [-60, 200],
   arm_far_lower: [0, 150],
-  leg_near_upper: [-45, 120],
+  // ももを後ろへ 95 度まで（横になる姿勢 lie_down で、足を後ろへまっすぐ伸ばす。11/6）
+  leg_near_upper: [-95, 120],
   leg_near_lower: [-150, 0],
-  leg_far_upper: [-45, 120],
+  leg_far_upper: [-95, 120],
   leg_far_lower: [-150, 0],
 };
 
