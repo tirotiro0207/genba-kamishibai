@@ -1,0 +1,3 @@
+# 書き出したもの（動画・静止画）は git の外の private/material/ に置く
+out/
+node_modules/
