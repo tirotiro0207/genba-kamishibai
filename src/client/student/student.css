@@ -3,4 +3,4 @@
 .student-id { font-size: 32px; font-weight: 700; letter-spacing: 0.02em; }
 .student-actions { display: flex; flex-direction: column; gap: 14px; }
 .student-actions .big { display: block; width: 100%; text-align: center; text-decoration: none; box-sizing: border-box; }
-.student-leave { align-self: center; background: none; border: 0; color: inherit; opacity: 0.7; text-decoration: underline; font-size: 16px; padding: 8px; cursor: pointer; }
+.student-leave { align-self: stretch; cursor: pointer; }

@@ -80,12 +80,11 @@ function Inside({ tenant }: { tenant: string }) {
             えの テスト（{open.pictures} まい）
           </button>
         )}
-        <a className="big" href={go(tenant, "read")} data-testid="student-read">
-          カードを みる
-        </a>
+        {/* 「カードを みる」は外した（11/6 朝 作者: 押しても何も出ない。テストの前に見ると答えが分かってしまう） */}
       </div>
-      <button className="student-leave" onClick={leave} data-testid="student-leave">
-        ほかの ひとに かわる
+      {/* 終わったら押して、次の人に渡す（11/6 朝 作者「よくわからない」から言葉を替えた） */}
+      <button className="big student-leave" onClick={leave} data-testid="student-leave">
+        おわり（つぎの ひとに わたす）
       </button>
     </div>
   );

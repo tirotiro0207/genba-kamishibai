@@ -93,11 +93,8 @@ test("新入社員は ID と PIN で入り、その場で回に加わって ① 
   await pg.getByTestId("self-back").click();
   await expect(pg.getByTestId("student-id")).toHaveText("student_C_3");
 
-  // カードを見る → 帯の「← じぶんの がめん」で戻る
-  await pg.getByTestId("student-read").click();
-  await expect(pg.getByTestId("back-home")).toHaveText("← じぶんの がめん");
-  await pg.getByTestId("back-home").click();
-  await expect(pg.getByTestId("student-id")).toBeVisible();
+  // 「カードを みる」は置かない（11/6 朝 作者。テストの前に答えが分かってしまう）
+  await expect(pg.getByTestId("student-read")).toHaveCount(0);
 
   // 加わった記録は、その回の参加者に組つきで出る（カンボジア・組 1 か 2）
   const tr = await as("trainer");
@@ -107,7 +104,7 @@ test("新入社員は ID と PIN で入り、その場で回に加わって ① 
   const rows = (await (await request.get(`${api}/trials/${trial.id}/responses`, { headers: tr })).json()) as { responses: { participant: string }[] };
   expect(rows.responses.map((r) => r.participant)).toEqual(["student_C_3", "student_C_3"]);
 
-  // 「ほかの ひとに かわる」で、次の人が ID を入れ直す段に戻る
+  // 「おわり（つぎの ひとに わたす）」で、次の人が ID を入れ直す段に戻る
   await pg.getByTestId("student-leave").click();
   await expect(pg.getByTestId("tenant-pin")).toHaveAttribute("data-step", "student");
   await ctx.close();
