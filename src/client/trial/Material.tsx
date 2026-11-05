@@ -37,8 +37,9 @@ export function Material({ shown, item, tenant, content, src: given, onShown }: 
   if (content?.shown === "card" && content.card)
     return (
       <div className="material card filled" data-testid="material" data-shown="card">
-        <Frames motion={content.card.motion} />
+        {/* やさしい日本語を上に、絵は横 1 列の 4 コマで下に（11/6 作者「4 コマ漫画として」） */}
         {content.card.words && <p className="read-words">{content.card.words.ja}</p>}
+        <Frames motion={content.card.motion} />
       </div>
     );
   if (page)

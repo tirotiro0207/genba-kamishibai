@@ -65,6 +65,11 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .self-fit .stage { flex: 1; min-height: 0; }
 .self-fit .material.filled { width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .self-fit .material.card .read-frames { flex: 1; min-height: 0; width: auto; max-width: 100%; aspect-ratio: 1; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+/* ① のカードは横 1 列（11/6 作者）。コマの数（3 か 4）だけ横に並べ、文を上に置く */
+.material.card .read-frames { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.self-fit .material.card .read-frames { flex: none; width: 100%; aspect-ratio: auto; grid-template-rows: none; }
+.self-fit .material.card .read-frame { aspect-ratio: 1; }
+.material.card .read-words { font-size: 22px; margin: 4px 0; text-align: center; }
 .self-fit .material.card .read-frame { min-height: 0; display: grid; place-items: center; }
 .self-fit .material.card .read-frame > div, .self-fit .material.card .read-frame svg { width: 100%; height: 100%; display: block; }
 .self-fit .read-words { margin: 0; }

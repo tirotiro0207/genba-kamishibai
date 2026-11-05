@@ -105,7 +105,11 @@ for (const vp of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }, { 
       if (shown === "card") {
         const b = (await page.getByTestId("material").boundingBox())!;
         expect(b.y + b.height).toBeLessThanOrEqual(vp.height);
-        expect((await page.locator(".read-frames").boundingBox())!.height).toBeGreaterThan(vp.height * 0.5);
+        // 絵は横 1 列の 4 コマで、文の下（11/6 作者「4 コマ漫画として」）。1 コマは 180 px より大きい
+        const fr = (await page.locator(".read-frames").boundingBox())!;
+        expect(fr.width).toBeGreaterThan(fr.height * 2);
+        expect(fr.height).toBeGreaterThan(180);
+        expect((await page.locator(".material .read-words").boundingBox())!.y).toBeLessThan(fr.y);
       } else {
         // ページは見せるものの幅いっぱい（縮めて 1 画面にしない）
         const m = (await page.getByTestId("material").boundingBox())!;
