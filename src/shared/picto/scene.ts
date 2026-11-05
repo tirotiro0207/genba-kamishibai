@@ -213,8 +213,10 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
   const chars = figs.map((f, i) => sceneCharacter(f, props.filter((_, k) => worn[k] === i), size, g));
   const posed: Posed[] = chars.map((c) => ({ joints: characterJoints(c), h: c.height, d: c.facing === "right" ? 1 : -1 }));
   const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
-  const onCanvas = props.filter((p) => !("figure" in p.at) && !BUBBLES.has(p.kind));
-  const onFigure = props.filter((p, k) => "figure" in p.at && !BUBBLES.has(p.kind) && worn[k] === undefined);
+  // 人の腰に付けた椅子（11/6）は、人より先に描く（座った人が椅子の前に来る）
+  const behind = (p: PropSpec) => !("figure" in p.at) || p.kind === "chair";
+  const onCanvas = props.filter((p) => behind(p) && !BUBBLES.has(p.kind));
+  const onFigure = props.filter((p, k) => !behind(p) && !BUBBLES.has(p.kind) && worn[k] === undefined);
   const bubbles = props.filter((p) => BUBBLES.has(p.kind));
   const body = [backdrop(size, g)];
   if (onCanvas.length) body.push(propsSvg(onCanvas, posed, size));

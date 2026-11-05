@@ -106,6 +106,7 @@ export const PROP_JA: Record<PropKind, string> = {
   wire_broken: "切れた電線",
   height_2m: "高さの札（2m）",
   fever: "熱がある顔",
+  chair: "椅子（休憩所の背もたれのある椅子）",
 };
 
 const HEADGEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead"]);

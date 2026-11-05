@@ -34,6 +34,8 @@ export const PROP_KINDS = [
   "bulb_flicker", "bulb_steady", "danger_zone", "partition", "wire_broken", "height_2m",
   // 熱がある顔（体温計をくわえ、ほおに斜線、頭の上に湯気）。ふつうは吹き出しの中に入れて「体調が悪い」と伝える
   "fever",
+  // 座る椅子（11/6。作者の指示）。今まで座るのに使っていた踏み台の代わり。背もたれのある、金属の脚の休憩所の椅子
+  "chair",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -165,6 +167,7 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   wire_broken: null,
   height_2m: null,
   fever: null,
+  chair: "hip",
 };
 
 /**
@@ -173,11 +176,22 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
  */
 export const STAND_TOP: Partial<Record<PropKind, number>> = { work_platform: 0.59, rolling_scaffold: 0.695, aerial_platform: 0.78, step_stool: 0.48 };
 
+/**
+ * 椅子の座面の上の面の高さ（椅子の size に対する割合。11/6）。座る人（sit）のお尻の下は、床から背の高さ × 0.2。
+ * キャンバスに置くときは、size を人の背の高さ × 0.44、at を { x: 人の x − 背の高さ × 0.03, y: 0.88 } にすると、座面がお尻に合う。
+ * キャンバスに置いた椅子はいつも右向き（背もたれが左）なので、左を向いて座る人には腰に付ける。
+ * 人の腰（hip）に付けると、大きさと横の位置は座面がお尻に合うように決まり、size は使わない（こちらが手軽）
+ */
+export const SEAT_TOP: Partial<Record<PropKind, number>> = { chair: 0.46 };
+
+/** 床の線の高さ（scene.ts の GROUND と同じ。人の腰に付けた椅子の脚が床まで届く） */
+const FLOOR_Y = 0.88;
+
 /** c が部品の下の真ん中（床に置く）の部品。吹き出しの中では真ん中へずらして描く */
 const ON_FLOOR = new Set<PropKind>([
   "toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder",
   "cubicle", "work_platform", "rolling_scaffold", "safety_shoes", "step_stool", "crane", "insulated_boots", "aerial_platform",
-  "partition", "height_2m",
+  "partition", "height_2m", "chair",
 ]);
 
 /** クレーンのブームの先（ワイヤーの出る所）。c は車体の下の真ん中、d は向き。吊り荷を先の真下に置くとワイヤーがつながる */
@@ -1257,6 +1271,18 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
       }
       return out;
     }
+    case "chair": {
+      // 椅子（11/6。横から、休憩所の金属の脚の椅子）: 後ろ（向きと逆の側）の脚から立ち上がる背もたれの柱と板、前の脚、脚の間の横の棒、
+      // 明るい座面とつや。座る人の脚が前へ出るので、背もたれは向きと逆の側。c は下の真ん中
+      const seat = cy - s * (SEAT_TOP.chair ?? 0.46);
+      const bx = X(-s * 0.22);
+      const fx = X(s * 0.22);
+      return cord(`M${n(X(-s * 0.25))} ${n(cy - W)}L${n(bx)} ${n(seat + s * 0.06)}L${n(X(-s * 0.26))} ${n(cy - s * 0.96)}`, W * 2.6, STEEL) +
+        cord(`M${n(X(s * 0.25))} ${n(cy - W)}L${n(fx)} ${n(seat + s * 0.06)}`, W * 2.6, STEEL) +
+        line(X(-s * 0.235), cy - s * 0.16, X(s * 0.235), cy - s * 0.16, INK, 0.8) +
+        box(X(-s * 0.31), cy - s * 0.94, X(-s * 0.2), cy - s * 0.66, DARK, s * 0.03) +
+        box(X(-s * 0.27), seat, X(s * 0.29), seat + s * 0.08, LIGHT, s * 0.03) + shine(X(-s * 0.18), seat + s * 0.035, X(s * 0.05), seat + s * 0.035, LIGHT);
+    }
   }
 }
 
@@ -1443,6 +1469,14 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
         : onHand ? posed[(p.at as { figure: number }).figure].h * PROPORTION.hand * 3.6
         : p.size * size;
       if (p.kind === "anchor_line") return `<g data-part="prop">${anchorLine(c, s, d, size, W)}</g>`;
+      // 人の腰に付けた椅子（11/6）: 床に置き、座面の上の面がお尻の下（腰の関節から背の高さ × 0.03 下）に合う大きさにする。
+      // 背もたれが背中のすぐ後ろ（腰から背の高さ × 0.13 後ろ）に立ち、体に隠れずに見えるよう、椅子を後ろへずらす
+      if (p.kind === "chair" && "figure" in p.at) {
+        const f = posed[p.at.figure];
+        const seatY = c[1] + f.h * 0.03;
+        const sc = Math.max(f.h * 0.1, (FLOOR_Y * size - seatY) / (SEAT_TOP.chair ?? 0.46));
+        return `<g data-part="prop">${shape("chair", [c[0] - d * (f.h * 0.13 - sc * 0.22), FLOOR_Y * size], sc, d, { W })}</g>`;
+      }
       // 人に付けた安全帯は、腰のベルトに加えて肩のベルトともものベルトを体に沿って描く（058）
       const onBody = "figure" in p.at;
       const straps = p.kind === "harness" && onBody ? harnessStraps(posed[(p.at as { figure: number }).figure], W) : "";

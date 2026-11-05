@@ -1,8 +1,8 @@
-// 8 枚の口の直し（11/6）で足した絵の部品: 表情・疲れの線・高い所に立つ・熱の顔・2 つ入る吹き出し・電球・点線の範囲・仕切り・切れた電線・高さの札
+// 8 枚の口の直し（11/6）で足した絵の部品: 表情・疲れの線・高い所に立つ・熱の顔・2 つ入る吹き出し・電球・点線の範囲・仕切り・切れた電線・高さの札・座る椅子
 import { describe, expect, it } from "vitest";
 import { cutFrames, MOTION_JSON_SCHEMA, type MotionJson, validateMotion } from "../src/shared/picto/motion";
 import { POSES } from "../src/shared/picto/poses";
-import { INNER_KINDS, PROP_KINDS, type PropKind, STAND_TOP } from "../src/shared/picto/props";
+import { INNER_KINDS, PROP_KINDS, type PropKind, SEAT_TOP, STAND_TOP } from "../src/shared/picto/props";
 import { renderFrame, validateFrame } from "../src/shared/picto/scene";
 import { checkStyle } from "../src/shared/picto/style";
 
@@ -98,5 +98,47 @@ describe("人の表情・疲れの線・高い所", () => {
     expect(Object.keys(fp.figures.items.properties)).toEqual(expect.arrayContaining(["expression", "tired", "lift"]));
     expect(Object.keys(fp.props.items.properties)).toEqual(expect.arrayContaining(["inner2", "inner_marks"]));
     expect(fp.figures.items.required).not.toContain("lift"); // 古いカードの JSON はそのまま通る
+  });
+});
+
+describe("座る椅子（chair）", () => {
+  const S = (extra: object = {}) => F({ angles: POSES.sit, ...extra });
+  const seated = (extra: object = {}) => renderFrame({ figures: [S(extra)], props: [{ kind: "chair", at: { figure: 0, joint: "hip" }, size: 0.2 }] });
+  /** 椅子の絵の中の座面の上の面の y（色 #ccc の四角の上の辺） */
+  const seatTop = (svg: string) => Number(svg.match(/<path d="M[\d.]+ ([\d.]+)H[^"]*" fill="#ccc"/)?.[1]);
+
+  it("小物にあり、吹き出しには入れない。置いても腰に付けても絵柄の検査が通る", () => {
+    expect(PROP_KINDS).toContain("chair");
+    expect(INNER_KINDS as readonly string[]).not.toContain("chair");
+    expect(SEAT_TOP.chair).toBeGreaterThan(0);
+    expect(checkStyle(renderFrame({ figures: [], props: [{ kind: "chair", at: { x: 0.5, y: 0.88 }, size: 0.22 }] }).svg)).toEqual([]);
+    expect(checkStyle(seated().svg)).toEqual([]);
+  });
+
+  it("座る人の腰に付けると、人より先に描き（人が椅子の前に来る）、向きで背もたれが入れ替わる", () => {
+    const right = seated().svg;
+    expect(right.indexOf('data-part="prop"')).toBeGreaterThan(0);
+    expect(right.indexOf('data-part="prop"')).toBeLessThan(right.indexOf('data-part="figure"'));
+    expect(seated({ facing: "left" }).svg).not.toBe(right);
+  });
+
+  it("腰に付けた椅子の座面は、人の背の高さが変わってもお尻の下に合い、脚は床（0.88）に届く", () => {
+    for (const height of [0.4, 0.5, 0.6]) {
+      const r = seated({ height });
+      const h = r.posed[0].h;
+      const gap = seatTop(r.svg) - r.posed[0].joints.hip[1];
+      expect(gap, `height ${height}`).toBeGreaterThan(h * 0.01);
+      expect(gap, `height ${height}`).toBeLessThan(h * 0.06);
+      const chair = r.svg.match(/<g data-part="prop">(.*?)<\/g>/)?.[1] ?? "";
+      const feet = [...chair.matchAll(/<path d="M[\d.]+ ([\d.]+)L/g)].map((m) => Number(m[1]));
+      expect(Math.max(...feet), `height ${height}`).toBeGreaterThan(0.88 * 768 - 10);
+    }
+  });
+
+  it("キャンバスに置くときの目安（size = 背の高さ × 0.44）でも、座面はお尻の下に来る", () => {
+    const height = 0.5;
+    const r = renderFrame({ figures: [S({ height })], props: [{ kind: "chair", at: { x: 0.5, y: 0.88 }, size: height * 0.44 }] });
+    const gap = seatTop(r.svg) - r.posed[0].joints.hip[1];
+    expect(Math.abs(gap - r.posed[0].h * 0.03)).toBeLessThan(r.posed[0].h * 0.02);
   });
 });
