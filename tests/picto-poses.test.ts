@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { characterSvg } from "../src/shared/picto/character";
-import { POSE_NAMES, POSES, poseAngles, stickJoints, stickSvg } from "../src/shared/picto/poses";
+import { derivedFrom, POSE_NAMES, POSES, poseAngles, stickJoints, stickSvg, vary, viewFor } from "../src/shared/picto/poses";
 import { renderFrame } from "../src/shared/picto/scene";
 import { posePoints, validateFigure } from "../src/shared/picto/skeleton";
 import { checkStyle } from "../src/shared/picto/style";
@@ -95,5 +95,22 @@ describe("向きごとの角度（poseAngles）と棒人間", () => {
     expect(poseAngles("stand", "side").shade).toEqual({ far: 0.75 });
     // 正面でも足が前後に開く姿勢は、後ろへ振った足に影を付ける
     expect(poseAngles("run", "front").shade).toEqual({ far: 0.35 });
+  });
+});
+
+describe("動きの決まり（名前の付いた姿勢から 7 対 3 で派生させる）", () => {
+  it("名前の付いた姿勢は、それ自身が土台になる", () => {
+    for (const name of POSE_NAMES) expect(derivedFrom(POSES[name]).base, name).toBe(name);
+  });
+  it("3 つまでの関節を ±30 度まで変えた形は派生として通り、4 つ変えたり 30 度を超えたりすると通らない", () => {
+    const ok = vary("walk", { arm_near_lower: 20, neck: -15, torso: 8 });
+    expect(derivedFrom(ok)).toMatchObject({ base: "walk", worst: 20 });
+    expect(derivedFrom(vary("walk", { arm_near_lower: 20, neck: -15, torso: 8, leg_far_lower: 12 })).base).toBeUndefined();
+    expect(derivedFrom(vary("walk", { arm_near_upper: 45 })).base).toBeUndefined();
+  });
+  it("動きの大きい姿勢は正面で描かない（斜めにする）。止まっている姿勢は正面のまま", () => {
+    expect(viewFor("run", "front")).toBe("quarter");
+    expect(viewFor("run", "side")).toBe("side");
+    expect(viewFor("stand", "front")).toBe("front");
   });
 });

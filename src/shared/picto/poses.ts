@@ -78,11 +78,56 @@ export const A_POSE: Record<View, Angles> = {
   side: pose({ arm_near_upper: 3, arm_far_upper: -3, leg_near_upper: 2, leg_far_upper: -2 }),
 };
 
-/** 元の姿勢から少しだけ変える（角度を足す）。動きのキーフレームを、名前の付いた姿勢から作るときに使う */
+/**
+ * 元の姿勢から少しだけ変える（角度を足す）。動きのキーフレームを、名前の付いた姿勢から作るときに使う。
+ * 変える関節は 3 つまで、1 つ ±30 度まで（動きの決まり。derivedFrom で確かめられる）
+ */
 export const vary = (src: PoseName | Angles, delta: Partial<Angles>): Angles => {
   const a = typeof src === "string" ? POSES[src] : src;
   return Object.fromEntries(Object.entries(a).map(([k, v]) => [k, v + (delta[k as Bone] ?? 0)])) as Angles;
 };
+
+// ---- 動きの決まり（11/5 作者）: 名前の付いた姿勢を土台にし、少しだけ派生させる ----
+
+/** 土台から動かさない関節の数（10 のうち 7）。残りの 3 つまでを動かしてよい（7 対 3） */
+export const FIXED_MIN = 7;
+/** 動かす関節の 1 つあたりの幅（度） */
+export const FREE_MAX = 30;
+/** 土台と同じとみなすずれ（度） */
+const SAME = 1;
+
+/** どの姿勢を土台に、どの関節をどれだけ動かしたか。土台にできる姿勢が無ければ base は undefined */
+export interface Derivation { base?: PoseName; moved: Partial<Angles>; worst: number }
+
+/**
+ * 角度が、名前の付いた姿勢のどれかから派生した形かを調べる（動きの決まり）。
+ * 決まり: 土台の姿勢の関節のうち 7 つ以上はそのまま、動かす関節は 3 つまで、それぞれ ±30 度まで。
+ * 当てはまる姿勢が複数あれば、動かした量の合計がいちばん小さいものを返す
+ */
+export function derivedFrom(a: Angles): Derivation {
+  let best: Derivation & { sum: number } = { moved: {}, worst: Infinity, sum: Infinity };
+  for (const name of POSE_NAMES) {
+    const base = POSES[name];
+    const moved: Partial<Angles> = {};
+    let worst = 0, sum = 0;
+    for (const b of Object.keys(base) as Bone[]) {
+      const d = a[b] - base[b];
+      if (Math.abs(d) > SAME) { moved[b] = d; worst = Math.max(worst, Math.abs(d)); sum += Math.abs(d); }
+    }
+    if (Object.keys(moved).length > 10 - FIXED_MIN || worst > FREE_MAX) continue;
+    if (sum < best.sum) best = { base: name, moved, worst, sum };
+  }
+  return { base: best.base, moved: best.moved, worst: best.base ? best.worst : Infinity };
+}
+
+/**
+ * 動きの大きい姿勢。正面では前後の動きが縮んで読めないので、斜めか真横で描く。
+ * 正面は、立つ・待つ・向き合って話す・手を挙げるなど、その場で止まっている場面に使う（11/5 作者）
+ */
+export const MOVING_POSES: ReadonlySet<PoseName> = new Set<PoseName>(["walk", "run", "fall", "trip", "push", "pull", "lift", "carry", "climb", "squat", "kneel", "sit", "bow"]);
+
+/** 姿勢を描く向きを選ぶ。動きの大きい姿勢で正面を頼まれたら斜めにする */
+export const viewFor = (name: PoseName, wanted: View = "quarter"): View => (wanted === "front" && MOVING_POSES.has(name) ? "quarter" : wanted);
 
 // ---- 向きごとの角度（正面は 3 次元の向きから写す） ----
 

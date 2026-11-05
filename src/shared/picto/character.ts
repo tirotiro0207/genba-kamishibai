@@ -536,6 +536,15 @@ const NECK_PIVOT = 30;
 export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="5"/>`;
 const neckB = (skin: string) => (skin === "#fff" ? NECK_B : NECK_B.replace('fill="#fff"', `fill="${skin}"`));
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
+/**
+ * 頭の置き場所（胴の g の中の変換）。首を傾けないときは今までと同じ。
+ * 傾けるときは、首の付け根（胴の上の端）で首を半分だけ傾け、首の上の端で頭を残りの半分だけ傾ける。
+ * 頭だけを回すと、首がもげそうに見えた（11/5 作者）。首の下の端は胴の中へ押し込んで、襟の下に隠す
+ */
+const headMat = (view: View, look: Look, neck: number, kT: number): M =>
+  neck === 0
+    ? mul(mul(T(NECK_X[view] + neckShift(neck), -TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT), R(neck)), T(0, NECK_PIVOT))
+    : mul(mul(mul(T(NECK_X[view], -TORSO_TOP * kT), R(neck / 2)), T(0, -L.headUp - NECK_LEN[look])), R(neck / 2));
 
 /** 手足の見かけの長さ（len の倍率を掛けた長さ） */
 const segLen = (len: Lengths | undefined) => (s: Seg, full: number) => full * (len?.[s] ?? 1);
@@ -563,7 +572,7 @@ function lowest(a: Angles, view: View, look: Look, top: number, len?: Lengths): 
     const hand = mul(mul(mul(sh, T(0, sl(`arm_${g.s}_upper`, L.upperArm))), R(g.lower)), T(0, sl(`arm_${g.s}_lower`, L.lowerArm)));
     ys.push(at(hand, 0, 15));
   });
-  const head = mul(mul(mul(torso, T(NECK_X[view] + neckShift(r.neck), -TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
+  const head = mul(torso, headMat(view, look, r.neck, kT));
   ys.push(at(head, 0, 0), at(head, 0, top));
   return Math.max(...ys);
 }
@@ -616,17 +625,15 @@ export function characterSvg(c: CharacterSpec): string {
       `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${o.gloves ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
-  const headAt = (inner: string) =>
-    `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
+  const hm = headMat(view, look, r.neck, kT);
+  const headAt = (inner: string) => r.neck === 0
+    ? `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`
+    : `<g transform="matrix(${hm.map((v) => n(v)).join(" ")})">${inner}</g>`;
   const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak }));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）。
-  // 首を傾けるときは、上の端だけ頭と一緒に回し、下の端は胴に残して間を結ぶ（首ごと回すと、下の端が襟から外れて首が抜けて見えた）
-  const neck = look !== "b" ? "" : r.neck === 0 ? headAt(neckB(skin)) : (() => {
-    const hm = mul(mul(T(NECK_X[view] + neckShift(r.neck), -TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT), R(r.neck)), T(0, NECK_PIVOT));
-    const p = (x: number, y: number) => `${n(hm[0] * x + hm[2] * y + hm[4])} ${n(at(hm, x, y))}`;
-    const by = n(-TORSO_TOP * kT + 6), bx = NECK_X[view];
-    return `<path d="M${p(-11, -6)}L${p(11, -6)}L${n(bx + 11)} ${by}L${n(bx - 11)} ${by}Z" fill="${skin}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>`;
-  })();
+  // 首を傾けるときは、付け根で首ごと半分傾ける（headMat）。下の端は胴の中まで伸ばし、傾けても襟から抜けて見えないようにする
+  const neck = look !== "b" ? "" : r.neck === 0 ? headAt(neckB(skin)) :
+    `<g transform="translate(${n(NECK_X[view])} ${n(-TORSO_TOP * kT)}) rotate(${n(r.neck / 2)})"><rect x="-11" y="${-L.headUp - NECK_LEN[look] - 6}" width="22" height="${L.headUp + NECK_LEN[look] + 26}" fill="${skin}" stroke="#000" stroke-width="5"/></g>`;
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
   // 前の層と同じ横の倍率で描く（倍率を外すと、細い顔で毛先だけ外へずれて段や平らな切れ目が出る）
   const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize)).behind : "";

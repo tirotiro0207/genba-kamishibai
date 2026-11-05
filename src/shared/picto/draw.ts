@@ -3,7 +3,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import { cutFrames, FRAME_JSON_SCHEMA, type FrameJson, keyToFrame, MARKS_MAX, MARKS_MIN, MAX_DURATION, MOTION_JSON_SCHEMA, type MotionJson, validateFrameJson, validateMotion } from "./motion";
-import { POSES } from "./poses";
+import { FIXED_MIN, FREE_MAX, POSES } from "./poses";
 import { DEFAULT_JOINT, PROP_KINDS } from "./props";
 import { type Frame, GROUND, WALL } from "./scene";
 import { BONE_RANGE, BONES } from "./skeleton";
@@ -23,6 +23,8 @@ x は腰の横の位置（0〜1）、height は背の高さ（基本は 0.48〜0
 角度の範囲: ${ranges}
 姿勢の手本（角度）:
 ${poses}
+人物の角度は、必ず手本のどれか 1 つを土台にする。土台の 10 の関節のうち ${FIXED_MIN} つ以上は手本の数のまま変えず、動かしてよいのは ${10 - FIXED_MIN} つまで、1 つ ±${FREE_MAX} 度まで（ひじだけ少し曲げる、首だけ少し上げる、など）。
+手本に無い動きも、いちばん近い手本から少しだけ変えて作る。キーフレームの間の動きも、手本と手本の間をつなぐ形にする。
 小物 kind: ${props}
 小物の置き場: figure に人物の番号（0 から）と joint と、背の高さに対するずれ dx・dy（-1〜1。dx は向いている側が正）。
 キャンバスに置くときは figure を -1 にし、x・y（0〜1、左上が 0,0）を使う。使わない値は 0。size はキャンバスの幅に対する大きさ（0.04〜0.5）。
