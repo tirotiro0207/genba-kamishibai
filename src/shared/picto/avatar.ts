@@ -10,7 +10,8 @@ export type EyeShape = "oval" | "round" | "slit" | "up" | "down" | "white";
 export type EyeSize = "s" | "m" | "l";
 /** 輪郭の大きさ（11/5 作者。キャラクターを作る画面の「小 ━━ 大」のつまみ）。m は今までの絵と 1 文字も変わらない */
 export type PartSize = "s" | "m" | "l";
-export type Lashes = "none" | "flick" | "three";
+/** threeCenter は案内人（動画だけのキャラ）のための形。キャラクターを作る画面の選択肢には出さない */
+export type Lashes = "none" | "flick" | "three" | "threeCenter";
 export type Brows = "none" | "flat" | "arch" | "angled";
 /**
  * 表情（場面ごとに描く側が選ぶ。キャラクターを作る画面では選ばない）。口はキャラクターの部品にせず、表情と話す口で決める。
@@ -112,6 +113,7 @@ export const landmarks = (face: FaceShape, view: View, size: PartSize = "m"): La
 
 const EYE_SIZE: Record<EyeSize, [number, number]> = { s: [3.8, 4.8], m: [4.6, 5.8], l: [5.5, 7] };
 const EYE_Y = -37;
+const WHITE_DROP = 3;
 const line = (d: string, w = 3.5) => `<path d="${d}" stroke="#000" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
 
 /** 目 1 つ（まつげを含む）。つり目・たれ目は目尻の側を上げ下げする向きに 12° 回す */
@@ -136,9 +138,11 @@ const eyeSvg = (e: Landmarks["eyes"][number], p: FaceParts, view: View, ex: Expr
   } else if (p.eyeShape === "white") {
     // 白目は横に 2.3 倍の幅（見本の目は顔の幅の 4 分の 1 ほど）。黒目は顔の向く側へ少し寄せる（正面は真ん中）。斜めの奥の目は細く
     const wx = rx * 2.3 * (e.far ? 0.8 : 1), px = e.x + (view === "front" ? 0 : (view === "side" ? 3 : 2) * (e.far ? 0.6 : 1));
-    body = `<ellipse cx="${cx}" cy="${EYE_Y}" rx="${n(wx)}" ry="${ry}" fill="#fff" stroke="#000" stroke-width="2.5"/>` +
-      `<circle cx="${n(px)}" cy="${EYE_Y}" r="${n(ry * 0.75)}"/>`;
-    return body + lashSvg(e, wx, ry, p.lashes);
+    // 白目は 3 下げる（前髪の下の縁と白目の間を空け、まん中のまつげが前髪に隠れないようにする。白目は案内人だけの形）
+    const ey = EYE_Y + WHITE_DROP;
+    body = `<ellipse cx="${cx}" cy="${ey}" rx="${n(wx)}" ry="${ry}" fill="#fff" stroke="#000" stroke-width="2.5"/>` +
+      `<circle cx="${n(px)}" cy="${ey}" r="${n(ry * 0.75)}"/>`;
+    return body + lashSvg(e, wx, ry, p.lashes, ey);
   } else body = `<ellipse cx="${cx}" cy="${EYE_Y}" rx="${rx}" ry="${ry}"/>`;
   const lashes = lashSvg(e, rx, ry, p.lashes);
   // 目尻は out の側。SVG の回転は時計回りが正で、正の回転は画面の左の端を持ち上げる。つり目は目尻を上げる
@@ -146,11 +150,20 @@ const eyeSvg = (e: Landmarks["eyes"][number], p: FaceParts, view: View, ex: Expr
   return tilt ? `<g transform="rotate(${tilt} ${cx} ${EYE_Y})">${body}${lashes}</g>` : body + lashes;
 };
 /** まつげ。目尻の上の縁から外上へ。斜めの奥の目は回り込んで見えにくいので、短く・本数を減らす */
-const lashSvg = (e: Landmarks["eyes"][number], rx: number, ry: number, kind: Lashes) => {
+const lashSvg = (e: Landmarks["eyes"][number], rx: number, ry: number, kind: Lashes, ey = EYE_Y) => {
   if (kind === "none") return "";
+  // 目の上のまん中に 3 本、扇のように上へ（案内人の見本の顔。three の形は変えない）。斜めの奥の目は短く
+  if (kind === "threeCenter") {
+    const len = ry * 0.75 * (e.far ? 0.6 : 1);
+    return [-1, 0, 1].map((i) => {
+      const x0 = e.x + i * rx * 0.32, y0 = ey - ry * Math.sqrt(1 - (i * 0.32) ** 2);
+      const r = ((90 - i * 25) * Math.PI) / 180;
+      return line(`M${n(x0)} ${n(y0)}L${n(x0 + len * Math.cos(r))} ${n(y0 - len * Math.sin(r))}`, 2.5);
+    }).join("");
+  }
   const angles = kind === "flick" ? [35] : e.far ? [45, 70] : [20, 45, 70];
   const len = ry * (kind === "flick" ? 1.3 : 0.9) * (e.far ? 0.6 : 1);
-  const bx = e.x + e.out * rx * Math.cos(Math.PI / 6), by = EYE_Y - ry * Math.sin(Math.PI / 6);
+  const bx = e.x + e.out * rx * Math.cos(Math.PI / 6), by = ey - ry * Math.sin(Math.PI / 6);
   return angles.map((a) => {
     const r = (a * Math.PI) / 180;
     return line(`M${n(bx)} ${n(by)}L${n(bx + e.out * len * Math.cos(r))} ${n(by - len * Math.sin(r))}`, kind === "flick" ? 3 : 2.5);

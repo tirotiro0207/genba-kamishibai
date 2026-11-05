@@ -2,7 +2,7 @@
 // 絵を 1 枚描き直さず、ほかのキャラと同じ部品（CharacterSpec）で組む。関節・姿勢・正面／斜め／横の向きがそのまま使えるため。
 // 髪（guideMash）・目（white）・ひげ（stubble）・短い杖（outfit.wand）は、この案内人のために足した選択肢。どれも既定値は変えていない
 import type { CharacterSpec, View } from "./character";
-import type { Angles } from "./poses";
+import { poseAngles, vary, type Angles, type ViewPose } from "./poses";
 
 /** スーツの上着・袖・ズボンの濃いグレー */
 export const GUIDE_TONE = "#4a4a4a";
@@ -12,7 +12,7 @@ export const GUIDE: Pick<CharacterSpec, "look" | "hair" | "headwear" | "face" | 
   look: "b",
   hair: "guideMash",
   headwear: "none",
-  face: { face: "square", eyeShape: "white", lashes: "three", beard: "stubble" },
+  face: { face: "square", eyeShape: "white", lashes: "threeCenter", beard: "stubble" },
   outfit: { wear: [{ kind: "suit", tone: GUIDE_TONE }], sleeve: GUIDE_TONE, pants: GUIDE_TONE, neck: "tie" },
 };
 
@@ -26,12 +26,24 @@ export const GUIDE_HOLD: Record<View, { wand: { arm: "near" | "far"; toward: 1 |
   quarter: { wand: { arm: "near", toward: 1 }, arm: { arm_near_upper: 25 } },
   side: { wand: { arm: "near", toward: 1 }, arm: { arm_near_upper: 25 } },
 };
-/** 手を振る（杖を持たない方の腕を挙げる） */
+/**
+ * 手を振る（杖を持たない方の腕を挙げる）。腕を体の外へ上げ、頭から離れた所で手を振る（見本 r9 の形）。
+ * 11/6 作者: 前の 135°・40° は、正面で手が頭の横に来て、頭をかいている・照れている仕草に読まれた。動画では「ようこそ」と迎えるあいさつに見せたい。
+ * 数は向きに写したあとの角度（正面へ写すと腕が頭の上へ寄るので、写したあとで直に決める）。真横は手が顔の前に重ならないよう、少し前へ下げる
+ */
 export const GUIDE_WAVE: Record<View, Partial<Angles>> = {
-  front: { arm_near_upper: 135, arm_near_lower: 40 },
-  quarter: { arm_far_upper: 135, arm_far_lower: 40 },
-  side: { arm_far_upper: 135, arm_far_lower: 40 },
+  front: { arm_near_upper: 115, arm_near_lower: 45 },
+  quarter: { arm_far_upper: 115, arm_far_lower: 45 },
+  side: { arm_far_upper: 95, arm_far_lower: 45 },
 };
+/** 案内人の姿勢（立つ姿に杖の持ち方を足し、wave なら手を振る腕を GUIDE_WAVE に置き換える） */
+export function guidePose(view: View, wave = false): ViewPose {
+  const p = poseAngles(vary("stand", GUIDE_HOLD[view].arm), view);
+  if (!wave) return p;
+  const len = { ...p.len };
+  for (const k of Object.keys(GUIDE_WAVE[view])) delete len[k as keyof typeof len];
+  return { ...p, angles: { ...p.angles, ...GUIDE_WAVE[view] }, len };
+}
 /** 案内人の CharacterSpec の見た目と、その向きの杖の持ち方 */
 export const guideLook = (view: View): Pick<CharacterSpec, "look" | "hair" | "headwear" | "face" | "outfit"> => ({
   ...GUIDE, outfit: { ...GUIDE.outfit, wand: GUIDE_HOLD[view].wand },
