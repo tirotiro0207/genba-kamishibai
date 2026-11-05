@@ -9,7 +9,7 @@
 //   6 画像の中の文字列 … svg は文字、png・jpg・webp はメタデータの文字列の欄（tEXt・iTXt・zTXt・EXIF・XMP・コメント）だけ。
 //     画像のバイト列そのものは読まない（バイト列の偶然の一致で禁句に当たるのを避ける）
 //   7 leak-check … eval/prompts/ のプロンプトに当てて、重なりの件数だけを取る（HOLDOUT_FILE は渡さない）
-// eval/holdout/ は調べない。
+// 最後の確認用の 10 項目の置き場は調べない。
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
