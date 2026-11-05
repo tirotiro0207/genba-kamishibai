@@ -99,6 +99,13 @@ export const PROP_JA: Record<PropKind, string> = {
   dust_mask: "防塵マスク",
   power_drill: "電動ドリル",
   aerial_platform: "高所作業車",
+  bulb_flicker: "ちらつく電球",
+  bulb_steady: "安定した電球",
+  danger_zone: "床の点線の範囲（立ち入らない所）",
+  partition: "低い仕切り",
+  wire_broken: "切れた電線",
+  height_2m: "高さの札（2m）",
+  fever: "熱がある顔",
 };
 
 const HEADGEAR = new Set<PropKind>(["helmet", "helmet_new", "cap_lead"]);

@@ -1,7 +1,8 @@
 // 動きを再生してコマを切り出す部品（079a）。
 // AI が書くのはキーフレームの JSON（時刻ごとの関節・小物の値と、意味の変わる時刻の印）だけ。
 // 間は描く側が線形に補って動かし、印の付いた 3〜4 か所をコマとして切り出す。同じ JSON なら同じコマになる。
-import { INNER_KINDS, type InnerKind, type PropKind, PROP_KINDS, type PropSpec } from "./props";
+import { EXPRESSIONS, type Expression } from "./avatar";
+import { INNER_KINDS, INNER_MARKS, type InnerKind, type InnerMark, type PropKind, PROP_KINDS, type PropSpec } from "./props";
 import { type Frame, type FrameFigure, renderFrame, type Role, ROLES, validateFrame } from "./scene";
 import { BONES, type Bone, type Joint, validateFigure } from "./skeleton";
 
@@ -15,9 +16,16 @@ export interface MotionJson {
   keyframes: {
     t: number;
     mark: boolean;
-    figures: { role: Role; x: number; height: number; facing: "left" | "right"; angles: Record<Bone, number> }[];
-    /** inner は吹き出しの中の道具（無ければ "none"）。show が false のコマでは描かない（吹き出しを出し入れする） */
-    props: { kind: PropKind; show: boolean; figure: number; joint: Joint; dx: number; dy: number; x: number; y: number; size: number; inner: InnerKind | "none" }[];
+    /**
+     * expression は顔の表情、tired は疲れの線、lift は足の下の高さ（11/6。どれも無くてよい。無ければ今までの絵と同じ）。
+     * 表情と疲れの線は補わず前のキーフレームのまま、lift は位置と同じく線形に補う
+     */
+    figures: { role: Role; x: number; height: number; facing: "left" | "right"; angles: Record<Bone, number>; expression?: Expression; tired?: boolean; lift?: number }[];
+    /**
+     * inner は吹き出しの中の道具（無ければ "none"）。show が false のコマでは描かない（吹き出しを出し入れする）。
+     * inner2 は吹き出しの中の 2 つ目の道具、inner_marks はその 2 つに付ける印（11/6。無くてよい）
+     */
+    props: { kind: PropKind; show: boolean; figure: number; joint: Joint; dx: number; dy: number; x: number; y: number; size: number; inner: InnerKind | "none"; inner2?: InnerKind | "none"; inner_marks?: [InnerMark, InnerMark] }[];
   }[];
 }
 
@@ -48,6 +56,9 @@ export const MOTION_JSON_SCHEMA = {
                 x: num, height: num,
                 facing: { type: "string", enum: ["left", "right"] },
                 angles: { type: "object", additionalProperties: false, required: [...BONES], properties: Object.fromEntries(BONES.map((b) => [b, num])) },
+                expression: { type: "string", enum: [...EXPRESSIONS] },
+                tired: { type: "boolean" },
+                lift: num,
               },
             },
           },
@@ -64,6 +75,8 @@ export const MOTION_JSON_SCHEMA = {
                 joint: { type: "string", enum: JOINTS },
                 dx: num, dy: num, x: num, y: num, size: num,
                 inner: { type: "string", enum: ["none", ...INNER_KINDS] },
+                inner2: { type: "string", enum: ["none", ...INNER_KINDS] },
+                inner_marks: { type: "array", items: { type: "string", enum: [...INNER_MARKS] } },
               },
             },
           },
@@ -87,12 +100,17 @@ export const FRAME_JSON_SCHEMA = {
 
 export function keyToFrame(k: FrameJson): Frame {
   return {
-    figures: k.figures.map((f) => ({ role: f.role, x: f.x, height: f.height, facing: f.facing, angles: { ...f.angles } })),
+    figures: k.figures.map((f) => ({
+      role: f.role, x: f.x, height: f.height, facing: f.facing, angles: { ...f.angles },
+      ...(f.expression ? { expression: f.expression } : {}), ...(f.tired ? { tired: true } : {}), ...(f.lift ? { lift: f.lift } : {}),
+    })),
     props: k.props.filter((p) => p.show !== false).map((p): PropSpec => ({
       kind: p.kind,
       size: p.size,
       at: p.figure < 0 ? { x: p.x, y: p.y } : { figure: p.figure, joint: p.joint, dx: p.dx, dy: p.dy },
       ...(p.inner && p.inner !== "none" ? { inner: p.inner } : {}),
+      ...(p.inner2 && p.inner2 !== "none" ? { inner2: p.inner2 } : {}),
+      ...(p.inner_marks ? { inner_marks: p.inner_marks } : {}),
     })),
   };
 }
@@ -145,6 +163,9 @@ export function frameAt(m: MotionJson, t: number): Frame {
       height: lerp(f.height, g.height, u),
       facing: f.facing,
       angles: Object.fromEntries(BONES.map((bn) => [bn, lerp(f.angles[bn], g.angles[bn], u)])) as Record<Bone, number>,
+      ...(f.expression ? { expression: f.expression } : {}),
+      ...(f.tired ? { tired: true } : {}),
+      ...(f.lift || g.lift ? { lift: lerp(f.lift ?? 0, g.lift ?? 0, u) } : {}),
     };
   });
   const props = a.props.map((p, j) => {

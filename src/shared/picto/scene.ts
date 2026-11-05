@@ -2,11 +2,12 @@
 // 人は最新のキャラクター（character.ts の characterSvg。髪・顔・服・かぶり物・着る物）で描く。姿勢の数（skeleton.ts の角度）はそのまま使う（11/5 作者）。
 // 強調は線の太さ・大きさ・明暗・枠だけで出す（色を変えない）。役はかぶり物と服で見分ける（新人は白いヘルメット、上の人は黒い帽子、ほかの作業の人はグレーのヘルメット）。
 // 重ねる順: 壁と床 → 壁や床に置く小物 → 人（かぶり物と着る物を含む） → 人に付ける小物 → 吹き出し。
+import { EXPRESSIONS, type Expression } from "./avatar";
 import { type CharacterRole, characterJoints, characterSvg, type CharacterSpec, type HeadwearKind } from "./character";
 import type { Outfit } from "./outfit";
 import { poseAngles } from "./poses";
 import { BUBBLES, type PropKind, type PropSpec, propsSvg, validateProps } from "./props";
-import type { FigureSpec, Joint, Posed, Pt } from "./skeleton";
+import { type FigureSpec, type Joint, type Posed, PROPORTION, type Pt } from "./skeleton";
 import { validateFigure } from "./skeleton";
 
 export const SIZE = 768;
@@ -68,9 +69,11 @@ export function sceneCharacter(f: FrameFigure, worn: PropSpec[], size: number, g
   for (const p of worn) WORN[p.kind]!.put(outfit, w);
   const view = "quarter";
   const vp = poseAngles(f.angles, view);
+  // 高い所に立つ人は、足の下の高さ（lift）だけ地面を上げる
   return {
-    angles: vp.angles, len: vp.len, shade: vp.shade, view, x: f.x * size, groundY, height: f.height * size, facing: f.facing,
+    angles: vp.angles, len: vp.len, shade: vp.shade, view, x: f.x * size, groundY: groundY - (f.lift ?? 0) * size, height: f.height * size, facing: f.facing,
     role: w.role ?? f.role ?? "new", headwear: w.headwear ?? base.headwear, outfit,
+    ...(f.expression ? { expression: f.expression } : {}),
   };
 }
 /** 強調の「太く」: 人の線を 1.3 倍の太さにする */
@@ -91,7 +94,15 @@ export interface FrameFigure extends FigureSpec {
   gaze?: Gaze;
   /** この人を目立たせる。thick: 棒を太く / large: 大きく / dark: ほかの人を薄いグレーに / frame: 枠で囲む */
   emphasis?: Emphasis[];
+  /** 顔の表情（11/6。avatar.ts の表情。sad はへの字の口と下がった眉）。無ければふつうの顔 */
+  expression?: Expression;
+  /** 疲れの線（11/6）: 顔の、向いている側と反対の目の横に、短い・中くらい・長い縦の線 3 本（漫画の「どよーん」）。体調が悪そうに見せる */
+  tired?: boolean;
+  /** 足の下の高さ（11/6。キャンバスの高さに対する割合 0〜0.5）。作業台などの上に立たせる。台の上の面の高さは props.ts の STAND_TOP */
+  lift?: number;
 }
+
+export const LIFT_MAX = 0.5;
 
 export interface Frame {
   figures: FrameFigure[];
@@ -126,6 +137,9 @@ export function validateFrame(f: Frame): string[] {
     if (fig.gaze && (Math.abs(fig.gaze.angle) > 90 || fig.gaze.length < 0.1 || fig.gaze.length > 1.5)) errs.push(`figures[${i}].gaze が範囲の外`);
     if (fig.role !== undefined && !ROLES.includes(fig.role)) errs.push(`figures[${i}].role: ${fig.role}`);
     for (const e of fig.emphasis ?? []) if (!["thick", "large", "dark", "frame"].includes(e)) errs.push(`figures[${i}].emphasis: ${e}`);
+    if (fig.expression !== undefined && !EXPRESSIONS.includes(fig.expression)) errs.push(`figures[${i}].expression: ${fig.expression}`);
+    if (fig.tired !== undefined && typeof fig.tired !== "boolean") errs.push(`figures[${i}].tired は true か false`);
+    if (fig.lift !== undefined && !(typeof fig.lift === "number" && fig.lift >= 0 && fig.lift <= LIFT_MAX)) errs.push(`figures[${i}].lift が範囲の外（0〜${LIFT_MAX}）: ${fig.lift}`);
   });
   errs.push(...validateProps(f.props ?? [], f.figures.length));
   if (f.zoom && (f.zoom.figure < 0 || f.zoom.figure >= f.figures.length || f.zoom.factor < 1 || f.zoom.factor > 5)) errs.push("zoom が範囲の外");
@@ -139,6 +153,24 @@ function gazeSvg(p: Posed, g: Gaze): string {
   const to: Pt = [from[0] + p.d * Math.cos(r) * len, from[1] - Math.sin(r) * len];
   const w = Math.max(2, p.h * 0.014);
   return `<g data-part="gaze"><line x1="${n(from[0])}" y1="${n(from[1])}" x2="${n(to[0])}" y2="${n(to[1])}" stroke="#6a6a6a" stroke-width="${n(w)}" stroke-dasharray="${n(w * 3)} ${n(w * 2.5)}" stroke-linecap="round"/></g>`;
+}
+
+/**
+ * 疲れの線（11/6）: 顔の上の半分に、かぶり物のつばの下から垂れる縦の線 3 本（漫画の「どよーん」）。
+ * 奥の目の横（髪との間）に長い線、2 つの目の間に中くらいの線と短い線。どの線も目の上を通らない（目が隠れると表情が読めない）。
+ * 手前の目の外は髪にかかって見えなくなるので使わない。
+ * 顔は背の高さの 1 割ほどしかないので、線は人の縁より細くする。頭の関節（顔の真ん中）は奥の目のほぼ真下にある
+ */
+function tiredSvg(p: Posed): string {
+  const r = p.h * PROPORTION.head;
+  const [hx, hy] = p.joints.head;
+  const w = Math.max(1.2, p.h * 0.0075);
+  const top = hy - r * 0.34;
+  const lines: [number, number][] = [[0.0, 0.55], [0.37, 0.42], [0.5, 0.28]]; // [横の位置（向いている側が正）, 長さ]（頭の半径に対する割合）
+  return `<g data-part="tired">` + lines.map(([dx, len]) => {
+    const x = hx + p.d * r * dx;
+    return `<line x1="${n(x)}" y1="${n(top)}" x2="${n(x)}" y2="${n(top + r * len)}" stroke="#000" stroke-width="${n(w)}" stroke-linecap="round"/>`;
+  }).join("") + `</g>`;
 }
 
 function frameBox(p: Posed): string {
@@ -193,6 +225,7 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
     const svg = characterSvg(chars[i]);
     const one = f.emphasis?.includes("thick") ? thicken(svg) : svg;
     body.push(faded ? `<g opacity="0.35">${one}</g>` : one);
+    if (f.tired) body.push(faded ? `<g opacity="0.35">${tiredSvg(p)}</g>` : tiredSvg(p));
     if (f.gaze) body.push(gazeSvg(p, f.gaze));
     if (f.emphasis?.includes("frame")) body.push(frameBox(p));
   });

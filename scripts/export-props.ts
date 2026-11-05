@@ -13,9 +13,10 @@ const SKIP = new Set<PropKind>(["anchor_line", "edge"]);
 const FLOOR = new Set<PropKind>([
   "toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder",
   "cubicle", "work_platform", "rolling_scaffold", "safety_shoes", "step_stool", "crane", "insulated_boots", "aerial_platform",
+  "partition", "height_2m",
 ]);
 /** 背の高い物は小さめに（枠からはみ出さない） */
-const TALL = new Set<PropKind>(["crane", "rolling_scaffold", "aerial_platform", "suspended_load", "stepladder", "ladder", "work_platform", "insulated_boots", "harness", "broom", "mop"]);
+const TALL = new Set<PropKind>(["crane", "rolling_scaffold", "aerial_platform", "suspended_load", "stepladder", "ladder", "work_platform", "insulated_boots", "harness", "broom", "mop", "partition", "height_2m"]);
 
 mkdirSync(OUT, { recursive: true });
 const bad: string[] = [];

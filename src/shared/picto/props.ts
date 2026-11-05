@@ -29,6 +29,11 @@ export const PROP_KINDS = [
   // 11/5 電気の現場の道具と保護具（docs/props-2026-11-05.md）。着る物は outfit.ts にも人に着せた絵がある
   "aed", "cubicle", "wristband", "work_platform", "rolling_scaffold", "safety_shoes", "cut_gloves", "insulated_gloves",
   "voltage_detector", "cooling_vest", "step_stool", "armband", "crane", "insulated_boots", "dust_mask", "power_drill", "aerial_platform",
+  // 11/6 作者の口の直し（8 枚）で足りなかった物: ちらつく電球・安定した電球（照明の良し悪し）、床の点線の範囲（吊り荷の下の立ち入り禁止）、
+  // 低い仕切り（要る物と要らない物を分けた）、切れた電線（不具合を見つけた）、高さの札（「2m」。数字と単位だけを線で描く。たった時間の札と同じ扱い）
+  "bulb_flicker", "bulb_steady", "danger_zone", "partition", "wire_broken", "height_2m",
+  // 熱がある顔（体温計をくわえ、ほおに斜線、頭の上に湯気）。ふつうは吹き出しの中に入れて「体調が悪い」と伝える
+  "fever",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -43,7 +48,18 @@ export interface PropSpec {
   size: number;
   /** 吹き出しの中に描く道具（吹き出しだけ） */
   inner?: InnerKind;
+  /**
+   * 吹き出しの中の 2 つ目の道具（11/6）。あると inner と inner2 を左右に並べ、吹き出しの種類の印（？・✓・！）は描かず、
+   * それぞれの道具の右上に inner_marks の印を付ける（「どっち？」「こっちは○・こっちは×」を 1 つの吹き出しで見せる）
+   */
+  inner2?: InnerKind;
+  /** inner と inner2 に付ける印（左・右の順）。無ければ両方とも印なし */
+  inner_marks?: [InnerMark, InnerMark];
 }
+
+/** 吹き出しの中の道具に付ける印: ？・○・×・無し */
+export const INNER_MARKS = ["question", "circle", "cross", "none"] as const;
+export type InnerMark = (typeof INNER_MARKS)[number];
 
 /** 吹き出し。人に付けると、しっぽ（話す）か小さい丸（考える）がその人の頭へ向かう */
 export const BUBBLES = new Set<PropKind>(["bubble_question", "bubble_check", "think_question", "think_check", "bubble_say", "bubble_alert"]);
@@ -55,6 +71,8 @@ export const INNER_KINDS = [
   "fire_extinguisher", "first_aid", "gloves", "goggles", "cone", "ladder", "chemical", "knife", "gear",
   "spark",
   "aed", "voltage_detector", "insulated_gloves", "dust_mask", "power_drill", "armband",
+  // 11/6: 熱がある顔（体調が悪いと伝える）、2 つの電球、切れた電線
+  "fever", "bulb_flicker", "bulb_steady", "wire_broken",
 ] as const;
 export type InnerKind = (typeof INNER_KINDS)[number];
 
@@ -140,12 +158,26 @@ export const DEFAULT_JOINT: Record<PropKind, Joint | null> = {
   dust_mask: "head",
   power_drill: "hand_near",
   aerial_platform: null,
+  bulb_flicker: "hand_near",
+  bulb_steady: "hand_near",
+  danger_zone: null,
+  partition: null,
+  wire_broken: null,
+  height_2m: null,
+  fever: null,
 };
+
+/**
+ * 人を乗せる台の上の面の高さ（台の size に対する割合。11/6）。台を床（y 0.88）に置き、人の lift を size × この値にすると、人の足が上の面に乗る。
+ * 例: 作業台を size 0.4 で置くと、lift は 0.4 × 0.59 = 0.236
+ */
+export const STAND_TOP: Partial<Record<PropKind, number>> = { work_platform: 0.59, rolling_scaffold: 0.695, aerial_platform: 0.78, step_stool: 0.48 };
 
 /** c が部品の下の真ん中（床に置く）の部品。吹き出しの中では真ん中へずらして描く */
 const ON_FLOOR = new Set<PropKind>([
   "toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder",
   "cubicle", "work_platform", "rolling_scaffold", "safety_shoes", "step_stool", "crane", "insulated_boots", "aerial_platform",
+  "partition", "height_2m",
 ]);
 
 /** クレーンのブームの先（ワイヤーの出る所）。c は車体の下の真ん中、d は向き。吊り荷を先の真下に置くとワイヤーがつながる */
@@ -183,6 +215,9 @@ export function validateProps(props: PropSpec[], figures: number): string[] {
     if (!(PROP_KINDS as readonly string[]).includes(p.kind)) errs.push(`props[${i}].kind: ${p.kind}`);
     if (!(p.size >= 0.04 && p.size <= 0.5)) errs.push(`props[${i}].size が範囲の外: ${p.size}`);
     if (p.inner !== undefined && !(BUBBLES.has(p.kind) && (INNER_KINDS as readonly string[]).includes(p.inner))) errs.push(`props[${i}].inner は吹き出しの中の道具だけ: ${p.inner}`);
+    if (p.inner2 !== undefined && !(BUBBLES.has(p.kind) && p.inner !== undefined && (INNER_KINDS as readonly string[]).includes(p.inner2))) errs.push(`props[${i}].inner2 は inner のある吹き出しの 2 つ目の道具だけ: ${p.inner2}`);
+    if (p.inner_marks !== undefined && !(Array.isArray(p.inner_marks) && p.inner_marks.length === 2 && p.inner_marks.every((m) => (INNER_MARKS as readonly string[]).includes(m)) && p.inner2 !== undefined))
+      errs.push(`props[${i}].inner_marks は inner2 のある吹き出しに、印 2 つ（${INNER_MARKS.join("・")}）`);
     if ("figure" in p.at) {
       if (p.at.figure < 0 || p.at.figure >= figures) errs.push(`props[${i}].at.figure が人物の番号の外`);
       if (Math.abs(p.at.dx ?? 0) > 1 || Math.abs(p.at.dy ?? 0) > 1) errs.push(`props[${i}].at のずれが範囲の外`);
@@ -215,6 +250,9 @@ interface Opt {
   /** クレーンに吊り荷がつながっている（クレーンは自分のワイヤーとフックを描かない） */
   linked?: boolean;
 }
+
+/** 高さの札の文字（線で描く。たった時間の札と同じく、数字と単位だけ） */
+export const HEIGHT_LABEL: Partial<Record<PropKind, string>> = { height_2m: "2m" };
 
 /** 部品の形。c は部品の「持つところ」（手に付けるときは手の位置。床に置く部品は下の真ん中） */
 function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = false, worn = false, body = false, elbow, topY, linked = false }: Opt): string {
@@ -1090,6 +1128,135 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
         box(cx - s * 0.46, cy - s * 0.24, cx + s * 0.46, cy - s * 0.1, DARK, s * 0.03) + shine(cx - s * 0.38, cy - s * 0.2, cx - s * 0.18, cy - s * 0.2, DARK) +
         [-0.3, 0.3].map((f) => ring(cx + f * s, cy - s * 0.08, s * 0.08, COAL) + dot(cx + f * s, cy - s * 0.08, s * 0.028, MID)).join("");
     }
+    case "bulb_flicker":
+    case "bulb_steady": {
+      // 電球（11/6）: 丸いガラスと首、ねじの口金、中のフィラメント。安定した電球は、まわりに同じ長さの光の線。
+      // ちらつく電球は、ガラスを一段暗くし、横へずれたもう 1 つの輪郭（ぶれて見える）と、長さと向きのそろわないギザギザの短い線 4 本。
+      // 手に持つ・吹き出しの中ではガラスが上（c は口金の真ん中）。キャンバスに置くと天井からコードで下がり、ガラスが下（c はガラスの真ん中）
+      const flicker = kind === "bulb_flicker";
+      // 吹き出しの中では、光の線まで含めて枠に収まるよう小さめにし、全体の真ん中を c にする
+      const r = h * (icon ? 0.4 : 0.55);
+      const hang = !icon && !body;
+      const sd = hang ? -1 : 1; // 口金の向き（ガラスから見て。1 で下）
+      const gy = hang ? cy : icon ? cy - r * 0.28 : cy - r * 1.3;
+      const neck = (k: number) => gy + sd * r * k;
+      const glass = poly([[cx - r * 0.5, neck(0.82)], [cx - r * 0.4, neck(1.08)], [cx + r * 0.4, neck(1.08)], [cx + r * 0.5, neck(0.82)]]);
+      const capA = neck(1.05);
+      const capB = neck(1.55);
+      let out = "";
+      if (hang) out += cord(`M${n(cx)} ${n(topY ?? Math.max(0, gy - h * 2.2))}V${n(capB)}`, W * 2, DARK);
+      if (flicker) out += `<path d="${circ(cx + r * 0.24, gy - r * 0.1, r)}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.7)}" stroke-dasharray="${n(W * 1.6)} ${n(W * 1.3)}" stroke-linecap="round"/>`;
+      out += merge([[circ(cx, gy, r), flicker ? LIGHT : PAPER], [glass, flicker ? LIGHT : PAPER]]);
+      out += box(cx - r * 0.42, Math.min(capA, capB), cx + r * 0.42, Math.max(capA, capB), STEEL, r * 0.08, 0.8) +
+        line(cx - r * 0.36, neck(1.22), cx + r * 0.36, neck(1.22), INK, 0.5) + line(cx - r * 0.36, neck(1.38), cx + r * 0.36, neck(1.38), INK, 0.5);
+      // フィラメント: 口金から伸びる 2 本の足と、先の小さな山
+      out += `<path d="M${n(cx - r * 0.2)} ${n(neck(0.95))}L${n(cx - r * 0.2)} ${n(neck(0.15))}L${n(cx - r * 0.07)} ${n(neck(-0.05))}L${n(cx + r * 0.07)} ${n(neck(0.15))}L${n(cx + r * 0.2)} ${n(neck(-0.05))}V${n(neck(0.95))}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.6)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      if (!flicker) {
+        // 同じ長さの光の線 7 本（口金の側には出さない）
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          if (Math.abs(Math.sin(a) * sd - 1) < 0.01) continue;
+          out += line(cx + Math.cos(a) * r * 1.3, gy + Math.sin(a) * r * 1.3, cx + Math.cos(a) * r * 1.75, gy + Math.sin(a) * r * 1.75, INK, 1);
+        }
+      } else {
+        // ギザギザの短い線: 向きも長さもそろえない
+        const zig = (a: number, r0: number, r1: number) => {
+          const [ux, uy] = [Math.cos(a), Math.sin(a)];
+          const pts: Pt[] = [0, 1, 2, 3].map((k) => {
+            const t = r0 + ((r1 - r0) * k) / 3;
+            const o = (k % 2 ? 1 : -1) * r * 0.2;
+            return [cx + ux * t - uy * o, gy + uy * t + ux * o];
+          });
+          return `<polyline points="${pts.map(([x, y]) => `${n(x)},${n(y)}`).join(" ")}" fill="none" stroke="${INK}" stroke-width="${n(W)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        };
+        const up = -sd; // ガラスの側
+        out += zig(Math.atan2(up * 0.9, -0.6), r * 1.3, r * 2.1) + zig(Math.atan2(up * 0.45, 1), r * 1.35, r * 1.85) +
+          zig(Math.atan2(-up * 0.15, -1), r * 1.35, r * 1.8) + zig(Math.atan2(up * 1, 0.3), r * 1.4, r * 2.3);
+      }
+      return out;
+    }
+    case "danger_zone": {
+      // 床の上の範囲（11/6）: 床に描いた点線の楕円。吊り荷の真下などの立ち入らない所。中は紙の白で塗り、床の線を隠して「床の上の範囲」に見せる。c は真ん中、幅が size
+      const rx = h;
+      const ry = Math.max(h * 0.16, W * 3);
+      const e = `M${n(cx - rx)} ${n(cy)}A${n(rx)} ${n(ry)} 0 1 0 ${n(cx + rx)} ${n(cy)}A${n(rx)} ${n(ry)} 0 1 0 ${n(cx - rx)} ${n(cy)}Z`;
+      return `<path d="${e}" fill="${PAPER}" stroke="none"/>` +
+        `<path d="${e}" fill="none" stroke="${INK}" stroke-width="${n(W * 1.5)}" stroke-dasharray="0 ${n(W * 3)}" stroke-linecap="round"/>`;
+    }
+    case "partition": {
+      // 低い仕切り（11/6）: 床に立つ板（少し奥へ傾いた面）と、下の横長の足。c は下の真ん中、高さが size
+      const t = s * 0.07;
+      const top = cy - s;
+      const face = poly([[cx - t, cy - s * 0.06], [cx - t, top + t * 0.6], [cx + t, top], [cx + t, cy - s * 0.06 - t * 0.6]]);
+      return box(cx - s * 0.24, cy - s * 0.07, cx + s * 0.24, cy, DEEP, s * 0.02) + path(face, MID) +
+        line(cx - t * 0.4, top + s * 0.12, cx - t * 0.4, cy - s * 0.18, LIGHT, 0.7);
+    }
+    case "wire_broken": {
+      // 切れた電線（11/6）: 左右の 2 本の被覆が、真ん中で切れて少し垂れ下がる。切れ口からは明るい芯が 2 本ずつ、上下に開いて飛び出す。
+      // 火花は描かない。芯は被覆のあとに描く（被覆に隠れると矢じりに見えた）。c は切れた所の真ん中、全体の長さが size
+      const gap = s * 0.11;
+      const drop = h * 0.14;
+      let out = "";
+      for (const k of [-1, 1]) {
+        const end = cx + k * gap;
+        out += cord(`M${n(cx + k * h)} ${n(cy - drop)}C${n(cx + k * h * 0.6)} ${n(cy - drop)} ${n(end + k * s * 0.08)} ${n(cy - drop * 0.6)} ${n(end)} ${n(cy)}`, W * 3.6, DARK);
+      }
+      for (const k of [-1, 1]) {
+        const end = cx + k * gap;
+        for (const v of [-1, 1]) {
+          const tip: Pt = [end - k * s * 0.075, cy + v * h * 0.1 + h * 0.03];
+          out += cord(`M${n(end)} ${n(cy + v * W * 0.5)}L${n(tip[0])} ${n(tip[1])}`, W * 1.7, PAPER);
+        }
+      }
+      return out;
+    }
+    case "height_2m": {
+      // 高さの札（11/6）: 床から上へ向く縦の矢印（両はしに矢じりと横の線）と、まん中の右に「2m」を線で描いた札。
+      // 字は数字と単位だけ（たった時間の札と同じ扱い。作者の判断）。c は下の真ん中（床）、矢印の長さが size
+      const label = HEIGHT_LABEL[kind]!;
+      const t = cy - s;
+      const aw = Math.max(W * 2.2, s * 0.06);
+      let out = line(cx, t + aw, cx, cy - aw, INK, 1.3) +
+        path(poly([[cx, t], [cx - aw * 0.75, t + aw * 1.3], [cx + aw * 0.75, t + aw * 1.3]]), INK, 0.6) +
+        path(poly([[cx, cy], [cx - aw * 0.75, cy - aw * 1.3], [cx + aw * 0.75, cy - aw * 1.3]]), INK, 0.6) +
+        line(cx - aw * 1.4, t, cx + aw * 1.4, t, INK, 1) + line(cx - aw * 1.4, cy, cx + aw * 1.4, cy, INK, 1);
+      const gh = Math.max(W * 5, Math.min(s * 0.18, W * 10));
+      const gw = gh * 0.6;
+      const tw = glyphsWidth(label, gw);
+      const pad = gh * 0.35;
+      const x0 = cx + aw * 1.2;
+      const ym = cy - s / 2;
+      out += box(x0, ym - gh / 2 - pad, x0 + tw + pad * 2, ym + gh / 2 + pad, PAPER, pad) + glyphs(label, x0 + pad, ym - gh / 2, gw, gh, W * 1.15);
+      return out;
+    }
+    case "fever": {
+      // 熱がある顔（11/6）: 丸い顔に、つらそうに閉じた目、ほおの斜線 3 本ずつ、口にくわえた体温計（先の丸が口の中）、頭の上の湯気 3 本。c は顔の真ん中
+      // 顔と湯気を合わせた高さの真ん中が c に来るよう、顔を少し下げる
+      const r = h * 0.68;
+      const fy = cy + r * 0.4;
+      let out = ring(cx, fy, r, PAPER);
+      for (const k of [-1, 1]) {
+        // ぎゅっと閉じた目（＞ ＜）。笑った目（へ）に見えないように
+        const ex = cx + k * r * 0.36;
+        out += `<polyline points="${n(ex + k * r * 0.13)},${n(fy - r * 0.36)} ${n(ex - k * r * 0.11)},${n(fy - r * 0.24)} ${n(ex + k * r * 0.13)},${n(fy - r * 0.12)}" fill="none" stroke="${INK}" stroke-width="${n(W)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        for (let q = 0; q < 3; q++) {
+          const hx = cx + k * r * (0.34 + q * 0.13);
+          out += line(hx - r * 0.06, fy + r * 0.2, hx + r * 0.06, fy + r * 0.04, INK, 0.6);
+        }
+      }
+      // 体温計: 口から斜め下へ出る細い軸（中に濃い線）
+      const m: Pt = [cx + r * 0.05, fy + r * 0.48];
+      const e: Pt = [cx + r * 1.05, fy + r * 0.92];
+      out += cord(`M${n(m[0])} ${n(m[1])}L${n(e[0])} ${n(e[1])}`, W * 2.4, PAPER) + line(m[0] + r * 0.2, m[1] + r * 0.09, e[0] - r * 0.08, e[1] - r * 0.035, DARK, 0.6) +
+        dot(m[0], m[1], W * 1.1) + `<path d="M${n(cx - r * 0.22)} ${n(fy + r * 0.5)}Q${n(cx - r * 0.05)} ${n(fy + r * 0.42)} ${n(m[0])} ${n(m[1])}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.8)}" stroke-linecap="round"/>`;
+      // 湯気: 頭の上のゆれる線 3 本
+      for (const k of [-1, 0, 1]) {
+        const x = cx + k * r * 0.45;
+        const y0 = fy - r * 1.12;
+        out += `<path d="M${n(x)} ${n(y0)}Q${n(x - r * 0.14)} ${n(y0 - r * 0.18)} ${n(x)} ${n(y0 - r * 0.36)}Q${n(x + r * 0.14)} ${n(y0 - r * 0.54)} ${n(x)} ${n(y0 - r * 0.72)}" fill="none" stroke="${INK}" stroke-width="${n(W * 0.9)}" stroke-linecap="round"/>`;
+      }
+      return out;
+    }
   }
 }
 
@@ -1100,6 +1267,8 @@ function shape(kind: PropKind, [cx, cy]: Pt, s: number, d: number, { W, icon = f
 const GLYPH: Record<string, { w: number; d: string[]; dots?: [number, number][] }> = {
   "0": { w: 1, d: ["M0 0H1V1H0Z"] },
   "1": { w: 0.6, d: ["M0.1 0.2L0.4 0V1"] },
+  // 高さの札の「2m」（11/6）
+  "2": { w: 1, d: ["M0 0H1V0.5H0V1H1"] },
   "3": { w: 1, d: ["M0 0H1V1H0", "M0.25 0.5H1"] },
   "5": { w: 1, d: ["M1 0H0V0.48H1V1H0"] },
   m: { w: 1.2, d: ["M0 1V0.4H1.2V1", "M0.6 0.4V1"] },
@@ -1144,10 +1313,28 @@ const HANDWEAR = new Set<PropKind>(["gloves", "cut_gloves", "insulated_gloves", 
  * 話す: 実線の箱としっぽ / 考える: 点線の箱と、頭へ向かって小さくなる丸 2 つ。
  * 中は、道具があれば左に道具・右に「？」か「✓」、無ければ「？」か「✓」だけ。白は data-part="bubble" の中だけ
  */
-function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inner: InnerKind | undefined, size: number): string {
+/** 吹き出しの中の印 1 つ（？・○・×）。(mx, my) が真ん中、ms が大きさ */
+function innerMarkSvg(m: InnerMark, mx: number, my: number, ms: number): string {
+  const q = ms * 0.5;
+  if (m === "question") {
+    const qy = my - q * 0.35;
+    return `<path d="M${n(mx - q * 0.42)} ${n(qy - q * 0.2)}A${n(q * 0.42)} ${n(q * 0.42)} 0 1 1 ${n(mx + q * 0.1)} ${n(qy + q * 0.22)}Q${n(mx)} ${n(qy + q * 0.32)} ${n(mx)} ${n(qy + q * 0.62)}" fill="none" stroke="${INK}" stroke-width="${n(q * 0.24)}" stroke-linecap="round"/>` +
+      `<circle cx="${n(mx)}" cy="${n(qy + q * 1.02)}" r="${n(q * 0.15)}" fill="${INK}"/>`;
+  }
+  if (m === "circle") return `<circle cx="${n(mx)}" cy="${n(my)}" r="${n(q * 0.72)}" fill="none" stroke="${INK}" stroke-width="${n(q * 0.26)}"/>`;
+  if (m === "cross") {
+    const a = q * 0.62;
+    return `<path d="M${n(mx - a)} ${n(my - a)}L${n(mx + a)} ${n(my + a)}M${n(mx + a)} ${n(my - a)}L${n(mx - a)} ${n(my + a)}" fill="none" stroke="${INK}" stroke-width="${n(q * 0.26)}" stroke-linecap="round"/>`;
+  }
+  return "";
+}
+
+function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inner: InnerKind | undefined, size: number, inner2?: InnerKind, marks?: [InnerMark, InnerMark]): string {
   const think = kind.startsWith("think");
   const check = kind.endsWith("check");
-  const bw = s;
+  // 道具が 2 つのときは横に 1.25 倍の幅にする（道具 2 つと印 2 つが入る）
+  const two = inner !== undefined && inner2 !== undefined;
+  const bw = two ? s * 1.25 : s;
   const bh = s * 0.6;
   // 縁は人や小物と同じ太さ（大きさでは変えない）
   const w = lineWidth(size);
@@ -1207,7 +1394,19 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
   }
   // 中の道具は細い縁で描き、床に置く道具は箱の真ん中に来るよう下へずらす
   const is = bh * 0.62;
-  const icon = inner ? shape(inner, [say ? cx : cx - bw * 0.18, cy + (ON_FLOOR.has(inner) ? is * 0.45 : 0)], is, 1, { W: w * 0.7, icon: true }) : "";
+  const iconAt = (k: InnerKind, x: number, sz: number) => shape(k, [x, cy + (ON_FLOOR.has(k) ? sz * 0.45 : 0)], sz, 1, { W: w * 0.7, icon: true });
+  if (two) {
+    // 2 つの道具: 左右の半分の真ん中より少し左に道具、右上に印。吹き出しの種類の印は描かない
+    const sz = bh * 0.56;
+    const [m1, m2] = marks ?? ["none", "none"];
+    const half = (k: InnerKind, m: InnerMark, xc: number) => {
+      const hasMark = m !== "none";
+      const x = hasMark ? xc - bw * 0.05 : xc;
+      return iconAt(k, x, sz) + (hasMark ? innerMarkSvg(m, xc + bw * 0.11, cy - bh * 0.2, bh * 0.36) : "");
+    };
+    return `<g data-part="bubble">${tail}${box}${half(inner!, m1, cx - bw * 0.25)}${half(inner2!, m2, cx + bw * 0.25)}</g>`;
+  }
+  const icon = inner ? iconAt(inner, say ? cx : cx - bw * 0.18, is) : "";
   return `<g data-part="bubble">${tail}${box}${icon}${mark}</g>`;
 }
 
@@ -1236,7 +1435,7 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
           const f = posed[p.at.figure];
           to = [f.joints.head[0], f.joints.head[1] - f.h * PROPORTION.head * 0.6];
         }
-        return `<g data-part="prop">${bubbleSvg(p.kind, c, p.size * size, to, p.inner, size)}</g>`;
+        return `<g data-part="prop">${bubbleSvg(p.kind, c, p.size * size, to, p.inner, size, p.inner2, p.inner_marks)}</g>`;
       }
       const onHead = HEADWEAR.has(p.kind) && "figure" in p.at && p.at.joint === "head";
       const onHand = HANDWEAR.has(p.kind) && "figure" in p.at && p.at.joint.startsWith("hand");
@@ -1248,7 +1447,9 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
       const onBody = "figure" in p.at;
       const straps = p.kind === "harness" && onBody ? harnessStraps(posed[(p.at as { figure: number }).figure], W) : "";
       const elbow = onHand ? posed[(p.at as { figure: number }).figure].joints[(p.at as { joint: Joint }).joint.replace("hand", "elbow") as Joint] : undefined;
-      const opt: Opt = { W, worn: onHead || onHand, body: onBody, elbow, linked: linkedCranes.has(i), topY: j === undefined ? undefined : tips[j]![1] };
+      // キャンバスに置いた電球は天井の線から吊る
+      const hung = (p.kind === "bulb_flicker" || p.kind === "bulb_steady") && !onBody ? CEIL * size : undefined;
+      const opt: Opt = { W, worn: onHead || onHand, body: onBody, elbow, linked: linkedCranes.has(i), topY: j === undefined ? hung : tips[j]![1] };
       return `<g data-part="prop">${straps}${shape(p.kind, c, s, d, opt)}</g>`;
     })
     .join("");
