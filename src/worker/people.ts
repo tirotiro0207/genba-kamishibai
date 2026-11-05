@@ -18,15 +18,20 @@ export interface Person {
 /** 新入社員の ID の形（11/6 作者）: student_<国の頭文字>_<番号>。V ベトナム・M ミャンマー・J 日本・C カンボジア */
 export const STUDENT_GROUP: Record<string, string> = { V: "ベトナム", M: "ミャンマー", J: "日本", C: "カンボジア" };
 const STUDENT_RE = /^student_([a-z])_(\d{1,3})$/i;
+/** 試しのための ID（11/6 作者「student_test01 とか 05 あたりまで」）。国籍は「テスト」で、数えるときに外す */
+const TEST_RE = /^student_test(\d{2})$/i;
+export const TEST_GROUP = "テスト";
 /** 打った ID を揃える（大文字小文字・前後の空白）。形が違えば null */
 export function normalizeStudent(x: unknown): string | null {
+  const tm = typeof x === "string" ? x.trim().match(TEST_RE) : null;
+  if (tm) return Number(tm[1]) >= 1 ? `student_test${tm[1]}` : null;
   const m = typeof x === "string" ? x.trim().match(STUDENT_RE) : null;
   if (!m) return null;
   const g = m[1].toUpperCase();
   return g in STUDENT_GROUP && Number(m[2]) >= 1 ? `student_${g}_${Number(m[2])}` : null;
 }
 /** ID から国籍（試しの回の組分けに使う） */
-export const studentGroup = (id: string) => STUDENT_GROUP[id.split("_")[1]] ?? "その他";
+export const studentGroup = (id: string) => (TEST_RE.test(id) ? TEST_GROUP : (STUDENT_GROUP[id.split("_")[1]] ?? "その他"));
 export type PeopleVars = TenantVars & { person: Person | null };
 
 const enc = new TextEncoder();

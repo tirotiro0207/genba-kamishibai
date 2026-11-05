@@ -107,3 +107,13 @@ describe("データを戻すと、その場で加わった人も消える（11/6
     expect((await call(`/api/t/practice/trials/${id}`, req("GET", undefined, staff))).status).toBe(404);
   });
 });
+
+describe("試しのための ID（11/6 作者）", () => {
+  it("student_test01〜99 を受け付け、国籍はテストになる。形の違うものは断る", () => {
+    expect(normalizeStudent("student_test01")).toBe("student_test01");
+    expect(normalizeStudent(" STUDENT_TEST05 ")).toBe("student_test05");
+    expect(studentGroup("student_test03")).toBe("テスト");
+    for (const x of ["student_test00", "student_test1", "student_test001", "student_testx1"]) expect(normalizeStudent(x)).toBeNull();
+    expect(normalizeStudent("student_V_1")).toBe("student_V_1");
+  });
+});
