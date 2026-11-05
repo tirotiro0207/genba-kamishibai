@@ -73,6 +73,8 @@ describe.skipIf(!existsSync(FILE))("現場の確認の日の段取り表（042�
     const t = rows(sec.get("supervisor")!).map(([a, b, what]) => ({ a, b, what }));
     const min = (x: string) => Number(x.split(":")[0]) * 60 + Number(x.split(":")[1]);
     for (let i = 0; i < t.length; i++) {
+      // 最後の段だけは終わりを決めない（「—」。15:00 からの職人の撮影は、終わりの時刻が決まっていない）
+      if (i === t.length - 1 && t[i].b === "—") continue;
       expect(min(t[i].b), t[i].a).toBeGreaterThan(min(t[i].a));
       if (i) expect(t[i].a).toBe(t[i - 1].b);
     }

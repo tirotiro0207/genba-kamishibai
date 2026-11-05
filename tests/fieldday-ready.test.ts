@@ -45,9 +45,9 @@ describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("当日の準備の�
   });
 
   it("端末の台数と時間の割り振りの ①・② は、段取り表と同じ", () => {
-    // 11/5 作者: 端末は会社が用意する iPad を 1 人 1 台（台数は確定待ち）
-    expect(run).toMatch(/iPad/);
-    expect(sec.get("devices")).toMatch(/iPad（会社が用意）/);
+    // 11/5 作者: 端末は iPad からノートパソコン（作者のものと会社のもの）に替えた。1 人 1 台（台数は当日の朝に数える）
+    expect(run).toMatch(/1 人 1 台のノートパソコン/);
+    expect(sec.get("devices")).toMatch(/ノートパソコン（作者のものと会社のもの）/);
     expect(run).toMatch(/① 分かるまでの時間/);
     expect(run).toMatch(/② 絵だけ/);
     expect(sec.get("app")).toMatch(/① 分かるまでの時間/);
