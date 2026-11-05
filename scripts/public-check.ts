@@ -116,7 +116,7 @@ const TEXT = /\.(md|ts|tsx|js|mjs|cjs|json|css|html|yml|yaml|txt|toml|py|sh|ps1|
 const LOCK = /(^|\/)package-lock\.json$/;
 const git = (...a: string[]) => execFileSync("git", a, { cwd: ROOT, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
 
-function loadSecrets(): Secrets {
+export function loadSecrets(): Secrets {
   const rulesPath = process.env.BANNED_RULES;
   if (!rulesPath) throw new Error("BANNED_RULES に約束のファイルの場所を入れて流す");
   const tenants = privatePath("tenants");
