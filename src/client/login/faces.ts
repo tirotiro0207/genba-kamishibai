@@ -30,7 +30,8 @@ const urls = new Map<string, string>();
 function person(): string {
   if (people.length < POOL) {
     const g = characterSvg({ angles: STANDING, x: 0, groundY: 434, height: 434, facing: Math.random() < 0.5 ? "left" : "right", view: "front", ...avatarParts() });
-    people.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEW}">${g}</svg>`);
+    // 塗りの色を書いていない部品（目など）は黒で塗られて線の色に変わらなかったので、外側の g で黒を渡して線の色に置き換える（11/5 作者）
+    people.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEW}"><g fill="#000">${g}</g></svg>`);
     return people[people.length - 1];
   }
   return pick(people);
