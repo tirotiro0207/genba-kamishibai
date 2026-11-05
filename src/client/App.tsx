@@ -6,6 +6,8 @@ import { DemoScreen } from "./demo/DemoScreen";
 import { TryScreen } from "./demo/TryScreen";
 import { FixScreen } from "./fix/FixScreen";
 import { FoldScreen } from "./fold/FoldScreen";
+import { NewCardChat } from "./chat/NewCardChat";
+import { HomeScreen } from "./home/HomeScreen";
 import { IssueScreen } from "./issue/IssueScreen";
 import { LoginScreen } from "./login/LoginScreen";
 import { MakeScreen } from "./make/MakeScreen";
@@ -80,6 +82,10 @@ export function App() {
   if (r[0] === "t" && r[2] === "read") body = <ReadScreen tenant={r[1]} />;
   // #/t/<テナント>/issue ・ 発行の画面（監修者・教育担当。署名済みの一覧・止める・見た人・回収の知らせ・週の抜き取り）
   if (r[0] === "t" && r[2] === "issue") body = <IssueScreen tenant={r[1]} />;
+  // #/t/<テナント>/home ・ ホーム（11/5。作る側が入って最初に来る。カードの管理とキャラクターの管理）
+  if (r[0] === "t" && r[2] === "home") body = <HomeScreen tenant={r[1]} />;
+  // #/t/<テナント>/new(/<チャット>) ・ 新しいカードを作るチャット（資料の添付と言葉の指示）
+  if (r[0] === "t" && r[2] === "new") body = <NewCardChat tenant={r[1]} chatId={r[3]} />;
   // #/t/<テナント>/make ・ 入れる（032）→ 抜き出し（033）
   if (r[0] === "t" && r[2] === "make") body = <MakeScreen tenant={r[1]} />;
   // #/t/<テナント>/queue ・ 確認待ちの列（赤から先）と仕分けの一覧の入れ替え（061）

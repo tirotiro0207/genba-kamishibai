@@ -43,24 +43,38 @@ export function whereIs(source: InputSource, n: number): { page: number | null; 
   return { page: null, line: n };
 }
 
-extract.post("/", async (c) => {
-  const b = await c.req.json<{ text?: unknown; focus?: unknown; source?: unknown }>().catch(() => ({}) as Record<string, unknown>);
-  const text = typeof b.text === "string" ? b.text.replaceAll("\r\n", "\n").trim() : "";
-  if (!text || text.length > MAX_INPUT_CHARS) return c.json({ error: `文は 1〜${MAX_INPUT_CHARS} 字` }, 400);
-  const source = (b.source ?? { kind: "speech" }) as InputSource;
-  if (!validSource(source, text.split("\n").length)) return c.json({ error: "source が文の行の数と合わない" }, 400);
-  const focus = typeof b.focus === "string" && b.focus.trim() ? b.focus.trim().slice(0, 300) : undefined;
-  const client = claudeClient(c.env);
-  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
-  const msg = await guardedCall({ client, log: new D1CallLog(c.env.DB) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
+/** 取り出しを 1 回流して残す（画面の「入れる」とチャットの両方から使う）。失敗は ExtractError */
+export class ExtractError extends Error {
+  constructor(message: string, readonly status: 400 | 503) {
+    super(message);
+  }
+}
+export async function runExtraction(env: Env, tenantId: string, raw: string, source: InputSource, focus?: string) {
+  const text = raw.replaceAll("\r\n", "\n").trim();
+  if (!text || text.length > MAX_INPUT_CHARS) throw new ExtractError(`文は 1〜${MAX_INPUT_CHARS} 字`, 400);
+  if (!validSource(source, text.split("\n").length)) throw new ExtractError("source が文の行の数と合わない", 400);
+  const client = claudeClient(env);
+  if (!client) throw new ExtractError("Claude の鍵が無い", 503);
+  const msg = await guardedCall({ client, log: new D1CallLog(env.DB) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
   const rules = parseRules(msg, text).map((r) => ({
     ...r,
     where: whereIs(source, r.from.line),
     reasons: r.reasons.map((x) => ({ ...x, where: whereIs(source, x.from.line) })),
   }));
   const id = crypto.randomUUID();
-  await c.env.DB.prepare("INSERT INTO extractions (id, tenant_id, input, rules) VALUES (?, ?, ?, ?)").bind(id, c.var.tenant.id, JSON.stringify({ text, focus: focus ?? null, source }), JSON.stringify(rules)).run();
-  return c.json({ id, rules }, 201);
+  await env.DB.prepare("INSERT INTO extractions (id, tenant_id, input, rules) VALUES (?, ?, ?, ?)").bind(id, tenantId, JSON.stringify({ text, focus: focus ?? null, source }), JSON.stringify(rules)).run();
+  return { id, rules };
+}
+
+extract.post("/", async (c) => {
+  const b = await c.req.json<{ text?: unknown; focus?: unknown; source?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const focus = typeof b.focus === "string" && b.focus.trim() ? b.focus.trim().slice(0, 300) : undefined;
+  try {
+    return c.json(await runExtraction(c.env, c.var.tenant.id, typeof b.text === "string" ? b.text : "", (b.source ?? { kind: "speech" }) as InputSource, focus), 201);
+  } catch (e) {
+    if (e instanceof ExtractError) return c.json({ error: e.message }, e.status);
+    throw e;
+  }
 });
 
 async function getExtraction(db: D1Database, tenantId: string, id: string) {

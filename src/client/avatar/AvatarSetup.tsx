@@ -62,9 +62,14 @@ function Figure({ a, view, className }: { a: Avatar; view: string; className?: s
   return <svg className={className} viewBox={view} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-export function AvatarSetup({ tenant, role, onDone }: { tenant: string; role: string; onDone: (a: Avatar) => void }) {
-  const [mode, setMode] = useState<"default" | "custom">("default");
-  const [custom, setCustom] = useState<Avatar>(DEFAULT_AVATAR);
+/**
+ * edit はホームの「キャラクターの管理」から開くとき。今のキャラクターから始め、決めるボタンは「保存する」。
+ * 今のキャラクターがデフォルトと同じならデフォルト、違えばカスタムの側で開く
+ */
+export function AvatarSetup({ tenant, role, onDone, initial, edit = false }: { tenant: string; role: string; onDone: (a: Avatar) => void; initial?: Avatar; edit?: boolean }) {
+  const same = !initial || JSON.stringify(initial) === JSON.stringify(DEFAULT_AVATAR);
+  const [mode, setMode] = useState<"default" | "custom">(same ? "default" : "custom");
+  const [custom, setCustom] = useState<Avatar>(initial ?? DEFAULT_AVATAR);
   const [tab, setTab] = useState<Tab>(TABS[0]);
   const shown = mode === "default" ? DEFAULT_AVATAR : custom;
 
@@ -83,7 +88,7 @@ export function AvatarSetup({ tenant, role, onDone }: { tenant: string; role: st
 
   return (
     <div className="av" data-testid="avatar-setup">
-      <h1>あなたのキャラクター</h1>
+      {!edit && <h1>あなたのキャラクター</h1>}
       <div className="av-card">
         <div className="av-seg" role="tablist" aria-label="キャラクターの作り方">
           {(["default", "custom"] as const).map((m) => (
@@ -136,7 +141,7 @@ export function AvatarSetup({ tenant, role, onDone }: { tenant: string; role: st
           )}
         </div>
         <button className="big go av-go" onClick={go} data-testid="avatar-go">
-          {mode === "default" ? "デフォルトのキャラクターで進める" : "このキャラクターで進める"}
+          {edit ? "保存する" : mode === "default" ? "デフォルトのキャラクターで進める" : "このキャラクターで進める"}
         </button>
       </div>
     </div>

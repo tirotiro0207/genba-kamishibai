@@ -7,7 +7,7 @@ import { Backdrop } from "./Backdrop";
 import "./login.css";
 
 /** 名前から入ったあとに開く画面（発信する側の最初の画面） */
-export const AFTER_LOGIN = "issue";
+export const AFTER_LOGIN = "home";
 
 export function LoginScreen() {
   const [handle, setHandle] = useState("");

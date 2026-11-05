@@ -77,7 +77,8 @@ export function rulesParams(text: string, focus?: string): Anthropic.MessageCrea
     thinking: { type: "adaptive" },
     // 深さは high（11/5。目隠しの合わせ込みで決めた。指示は eval/prompts/extract_v2.txt と同じ。docs/numbers.md）
     output_config: { effort: "high", format: { type: "json_schema", schema: SCHEMA } },
-    messages: [{ role: "user", content: `元の文:\n${numberLines(text)}` }],
+    // focus はチャットで作る人が書いた指示（11/5）。無いときは今までと 1 文字も同じ
+    messages: [{ role: "user", content: `元の文:\n${numberLines(text)}${focus ? `\n\n作る人の指示（元の文に無いことは足さない。どの決まりを取り出すか・まとめ方だけに使う）:\n${focus}` : ""}` }],
   } as Anthropic.MessageCreateParamsNonStreaming;
 }
 

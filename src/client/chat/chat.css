@@ -1,0 +1,40 @@
+/* 新しいカードを作るチャット（11/5 作者）。上にやりとり、下に添付と指示の欄 */
+.chat { display: flex; flex-direction: column; gap: 12px; max-width: 820px; margin: 0 auto; min-height: calc(100dvh - 32px); }
+.chat-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.chat-head h1 { font-size: 22px; margin: 0; flex: 1; }
+.chat-back { color: var(--muted); text-decoration: none; font-size: 15px; }
+.chat-files-count { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+
+.chat-log { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.chat-hello { margin: auto 0; text-align: center; color: var(--fg); }
+.chat-hello p { margin: 4px 0; }
+.chat-sub { color: var(--muted); font-size: 14px; }
+.chat-msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; line-height: 1.55; }
+.chat-msg p { margin: 0; white-space: pre-wrap; }
+.chat-msg.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); border-bottom-right-radius: 4px; }
+.chat-msg.assistant { align-self: flex-start; background: color-mix(in srgb, var(--fg) 6%, var(--bg)); border-bottom-left-radius: 4px; width: 88%; box-sizing: border-box; }
+.chat-wait { color: var(--muted); }
+
+.chat-rules { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.chat-rules.old { opacity: 0.7; }
+.chat-rules ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.chat-rules li { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.chat-rules label { flex-direction: row; align-items: flex-start; gap: 8px; color: var(--fg); font-size: 16px; cursor: pointer; }
+.chat-rules input[type="checkbox"] { width: 20px; height: 20px; margin: 2px 0 0; padding: 0; accent-color: var(--accent); flex: none; }
+.chat-kind { flex: none; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--accent); margin-top: 2px; }
+.chat-kind.dont { background: var(--err); }
+.chat-where { font-size: 13px; color: var(--muted); padding-left: 28px; }
+.chat-make { font-size: 17px; padding: 12px; }
+.chat-done { margin: 0; color: var(--accent); font-weight: 700; }
+
+.chat-compose { position: sticky; bottom: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.08); }
+.chat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 8%, var(--bg)); }
+.chat-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0; line-height: 1; }
+.chat-chip.wait { color: var(--muted); }
+.chat-row { display: flex; align-items: flex-end; gap: 8px; }
+.chat-row textarea { flex: 1; resize: none; font-size: 16px; border-radius: 10px; min-height: 44px; }
+.chat-attach, .chat-send { flex: none; height: 44px; border-radius: 10px; font: inherit; cursor: pointer; }
+.chat-attach { width: 44px; font-size: 22px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.chat-send { padding: 0 18px; border: 0; background: var(--accent); color: #fff; font-weight: 700; }
+.chat-send:disabled { opacity: 0.4; cursor: default; }

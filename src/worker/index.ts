@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { audit } from "./audit";
 import { cards } from "./cards";
 import { demo, publicGate } from "./demo";
+import { chats } from "./chat";
 import { extract } from "./extract";
 import { files } from "./files";
 import { mcpApp } from "./mcp";
@@ -81,6 +82,8 @@ app.route("/api/t/:tenant/audit", audit);
 app.route("/api/t/:tenant/reset", reset);
 app.route("/api/t/:tenant/files", files);
 app.route("/api/t/:tenant/extract", extract);
+// 新しいカードを作るチャット（11/5）。添付と言葉の指示から取り出しをやり直す
+app.route("/api/t/:tenant/chats", chats);
 app.route("/api/t/:tenant/trials", trials);
 // ○× の組（093a）
 app.route("/api/t/:tenant/pairs", pairs);

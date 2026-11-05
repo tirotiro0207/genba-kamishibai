@@ -69,5 +69,7 @@ describe("経路とカードのデータの形（019）", () => {
     expect(canMove("draft", "ok")).toBe(false);
     expect(canMove("stopped", "signed")).toBe(false);
     expect(canMove("stopped", "draft")).toBe(true);
+    // 署名の前のカードもホームから止められる（11/5）
+    for (const s of ["draft", "ai_draft", "pending", "ok"] as const) expect(canMove(s, "stopped")).toBe(true);
   });
 });

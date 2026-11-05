@@ -67,13 +67,14 @@ export const STATUS_LABEL: Record<CardStatus, string> = {
 
 /**
  * 許される移り方。下書きは作り直せる（draft へ戻る）。署名済みからは停止だけ。
- * 停止したカードは直すときに下書きへ戻し、もう一度確かめて署名する
+ * 停止したカードは直すときに下書きへ戻し、もう一度確かめて署名する。
+ * 11/5（作者）: ホームのカードの管理から、署名の前のカードも止められるようにした（使わないと決めた下書きを一覧で分けるため）
  */
 export const TRANSITIONS: Record<CardStatus, readonly CardStatus[]> = {
-  draft: ["ai_draft", "pending"],
-  ai_draft: ["pending", "draft"],
-  pending: ["ok", "draft", "ai_draft"],
-  ok: ["signed", "draft"],
+  draft: ["ai_draft", "pending", "stopped"],
+  ai_draft: ["pending", "draft", "stopped"],
+  pending: ["ok", "draft", "ai_draft", "stopped"],
+  ok: ["signed", "draft", "stopped"],
   signed: ["stopped"],
   stopped: ["draft"],
 };
