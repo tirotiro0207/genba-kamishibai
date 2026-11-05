@@ -8,6 +8,7 @@ import type { Rule } from "../shared/extract/rules";
 import type { OkRule } from "../shared/make/maker";
 import { type Pick, pickHead } from "../shared/make/pick";
 import type { Term } from "../shared/make/words";
+import { passes } from "../shared/verify/drop";
 import type { Evidence } from "../shared/verify/formal";
 import { appendAudit } from "../worker/audit";
 import { addTerms, createCard, getCard } from "../worker/cards";
@@ -27,6 +28,8 @@ export interface Steps {
   render(card: CardBody): Uint8Array[];
   /** 確かめる AI（正式版・047）。絵だけを順に見せる */
   verify(card: CardBody, frames: Uint8Array[]): Promise<Evidence>;
+  /** 新人役の試しの「場を抜いた版」（11/5・verify/drop.ts）。抜けるコマが無ければ null。全部のコマで合格の目安（85 以上・危険なし）に届いたカードだけに呼ぶ */
+  dropRead?(card: CardBody, frames: Uint8Array[]): Promise<{ index: number; evidence: Evidence } | null>;
   /** ここまでに使った費用（USD）。1 枚ごとの差で、その枚の費用を出す */
   spent(): Promise<number>;
 }
@@ -68,6 +71,8 @@ export interface DraftSummary {
   usd: number;
   /** そのうち取り出しと選ぶ段の分 */
   extract_usd: number;
+  /** この回のうち、新人役の試し（全部のコマと場を抜いたコマの両方で 85 以上・危険なし）に合格した枚数。dropRead が無ければ null */
+  read_pass_now: number | null;
   /** 止めた理由（最後まで行けば null） */
   stopped: string | null;
 }
@@ -138,14 +143,22 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
   const body = JSON.parse(now.body) as CardBody;
   const frames = steps.render(body);
   const e = await steps.verify(body, frames);
+  // 場を抜いた版は、全部のコマで合格の目安に届いたときだけ読ませる（届かなければ試しは不合格と決まるので、費用をかけない）
+  const drop = steps.dropRead && passes(e) ? await steps.dropRead(body, frames) : null;
+  const read_pass = steps.dropRead ? passes(e) && (!drop || passes(drop.evidence)) : undefined;
   const png_sha256 = frames.map((f) => createHash("sha256").update(f).digest("hex"));
-  await appendAudit(db, o.tenant, { card_id: cardId, kind: "verify", actor: e.agent, payload: { version: now.version, evidence: e, png_sha256 } });
+  await appendAudit(db, o.tenant, {
+    card_id: cardId,
+    kind: "verify",
+    actor: e.agent,
+    payload: { version: now.version, evidence: e, png_sha256, ...(steps.dropRead ? { drop: drop ? { index: drop.index, evidence: drop.evidence } : null, read_pass } : {}) },
+  });
   if (now.status === "draft" || now.status === "ai_draft") {
     // 記録を先に書く。間で止まっても、状態の変化が記録の無いまま残らない（走らせ直しで記録がもう 1 行増えることはある）
     await appendAudit(db, o.tenant, { card_id: cardId, kind: "status", actor: ACTOR, payload: { version: now.version, from: now.status, to: "pending" } });
     await db.prepare("UPDATE cards SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(cardId, o.tenant, now.status).run();
   }
-  return e;
+  return { e, drop, read_pass };
 }
 
 export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
@@ -161,6 +174,7 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
     return u >= o.runMaxUsd ? `この回の費用 ${u.toFixed(2)} USD が上限 ${o.runMaxUsd} USD に届いた` : null;
   };
   let madeNow = 0;
+  let passNow = 0;
   let errors = 0;
   let inRow = 0;
   let stopped: string | null = null;
@@ -193,12 +207,14 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
         const before = await o.steps.spent();
         await set(db, o.runId, r.page, r.item, { state: r.card_id ? "made" : "running" });
         await db.prepare("UPDATE night_drafts SET attempts = attempts + 1 WHERE run_id = ? AND page = ? AND item = ?").bind(o.runId, r.page, r.item).run();
-        const e = await draftOne(o, x, r);
+        const { e, drop, read_pass } = await draftOne(o, x, r);
+        if (read_pass) passNow++;
         const usd = (await o.steps.spent()) - before;
         await set(db, o.runId, r.page, r.item, { state: "done", band: e.band, dangerous: e.dangerous ? 1 : 0, rate: e.rate, usd, ms: Date.now() - t0, error: null });
         madeNow++;
         inRow = 0;
-        log(`p${r.page}-${r.item}: ${e.dangerous ? "危険" : e.band}（${e.rate}%）・${usd.toFixed(3)} USD`);
+        const dropText = read_pass === undefined ? "" : `・場を抜いて ${drop ? `${drop.evidence.rate}%` : "なし"}・新人役の試し ${read_pass ? "合格" : "不合格"}`;
+        log(`p${r.page}-${r.item}: ${e.dangerous ? "危険" : e.band}（${e.rate}%）${dropText}・${usd.toFixed(3)} USD`);
         if (usd > o.cardMaxUsd) {
           stopped = `1 枚の費用 ${usd.toFixed(3)} USD が上限 ${o.cardMaxUsd} USD を超えた`;
           break pages;
@@ -219,5 +235,5 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
   const all = (await db.prepare("SELECT band, dangerous, usd FROM night_drafts WHERE run_id = ? AND item >= 0 AND state = 'done'").bind(o.runId).all<{ band: string; dangerous: number; usd: number }>()).results;
   const count = (b: string) => all.filter((r) => (b === "red" ? r.band === "red" || r.dangerous === 1 : r.band === b && r.dangerous !== 1)).length;
   const extractUsd = Number((await db.prepare("SELECT coalesce(sum(usd), 0) AS usd FROM night_drafts WHERE run_id = ? AND item = -1").bind(o.runId).first<{ usd: number }>())?.usd ?? 0);
-  return { run_id: o.runId, pages: o.pages.length, made_now: madeNow, cards: all.length, red: count("red"), yellow: count("yellow"), green: count("green"), errors, usd: all.reduce((s, r) => s + (r.usd ?? 0), 0) + extractUsd, extract_usd: extractUsd, stopped };
+  return { run_id: o.runId, pages: o.pages.length, made_now: madeNow, cards: all.length, red: count("red"), yellow: count("yellow"), green: count("green"), errors, usd: all.reduce((s, r) => s + (r.usd ?? 0), 0) + extractUsd, extract_usd: extractUsd, read_pass_now: o.steps.dropRead ? passNow : null, stopped };
 }

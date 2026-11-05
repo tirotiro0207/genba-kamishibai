@@ -8,6 +8,8 @@
 //   --run-max-usd は、この回の費用の合計（前の回の分と取り出しも入れる）の上限。API では既定 30 USD
 //   --pick-prompt <ファイル> は選ぶ段の指示を別の版にする（合わせ込み用）。--pages 3,8,15 はそのページだけを流す（合わせる用・取っておく用に分けたとき）
 //   --draw-extra <ファイル> は、角度と人形の指示（src/shared/picto/draw.ts）の終わりに一般の決まりを足す（合わせ込み用。決まったら draw.ts に入れる）
+//   --card-max-usd は 1 枚の費用の上限（既定 CARD_MAX_USD）。脚本の段（11/5）を足してから 1 枚が重くなったので、夜間の一括ではこれで上げる
+//   --no-drop は、新人役の試しの場を抜いた版（src/shared/verify/drop.ts）を読ませない。既定は、全部のコマで 85 以上・危険なしのカードだけ場を抜いてもう 1 回読ませる
 //   --shard i/n は「する」のページを n 組に分けた i 組目（1 から）だけを流す。サブスクで 4 本くらいを同時に流すときに使う
 import { readFileSync } from "node:fs";
 import { claudePClient } from "../src/node/claude-p-client";
@@ -24,6 +26,7 @@ import { pickRules } from "../src/shared/make/pick";
 import { makeWords } from "../src/shared/make/words";
 import { cutFrames } from "../src/shared/picto/motion";
 import { renderFrame } from "../src/shared/picto/scene";
+import { droppableFrame } from "../src/shared/verify/drop";
 import { verifyCard } from "../src/shared/verify/formal";
 
 /** 見込みの元（008 の実測と 093 の測り）: 取り出し 1 回 0.098 USD、1 枚（作成・言葉の欄・確かめる AI）0.152 USD・60 秒。本番の D1 に書く分を 1 枚 30 秒足す */
@@ -65,7 +68,7 @@ async function main() {
   console.log(
     `「する」のページ ${pages.length}・使うページ ${pagesUsed}・カード 最大 ${cardsMax} 枚（1 ページ ${perPage} 枚まで）・費用の見込み 約 ${usd.toFixed(2)} USD・時間の見込み 約 ${hours.toFixed(1)} 時間（${where === "remote" ? "本番" : "手元"}の D1）`,
   );
-  console.log(`今日の費用（手元の記録・全部の用途）${today.toFixed(2)} USD・1 日の上限 ${dayBudgetUsd()} USD（.env の API_BUDGET_USD_PER_DAY）・1 枚の上限 ${CARD_MAX_USD} USD`);
+  console.log(`今日の費用（手元の記録・全部の用途）${today.toFixed(2)} USD・1 日の上限 ${dayBudgetUsd()} USD（.env の API_BUDGET_USD_PER_DAY）・1 枚の上限 ${opt("--card-max-usd") ?? CARD_MAX_USD} USD`);
   if (args.includes("--estimate")) return;
 
   const base = sub ? claudePClient() : makeClient();
@@ -87,13 +90,24 @@ ${drawExtra}` } : p) } }
     },
     render: (card) => (card.motion.kind === "keyframes" ? cutFrames(card.motion.json).map(({ frame }) => svgToPng(renderFrame(frame).svg)) : []),
     verify: (card, frames) => verifyCard(deps, "night", card, frames.map(imageBlock)),
+    // 新人役の試しの場を抜いた版（11/5）。--no-drop で外す
+    ...(args.includes("--no-drop")
+      ? {}
+      : {
+          dropRead: async (card: Parameters<typeof verifyCard>[2], frames: Uint8Array[]) => {
+            const index = droppableFrame(card);
+            if (index === null || frames.length < 3) return null;
+            return { index, evidence: await verifyCard(deps, "night", card, frames.filter((_, i) => i !== index).map(imageBlock)) };
+          },
+        }),
     spent: () => log.sumUsd("night", since),
   };
   const t0 = Date.now();
+  const cardMax = opt("--card-max-usd") ? Number(opt("--card-max-usd")) : CARD_MAX_USD;
   const runMaxUsd = opt("--run-max-usd") ? Number(opt("--run-max-usd")) : sub ? undefined : 30;
-  const s = await runDrafts({ db, steps, runId, tenant, sortRun, doc: run.doc, pages, perPage, maxCards: max, cardMaxUsd: CARD_MAX_USD, runMaxUsd, log: (l) => console.log(l) });
+  const s = await runDrafts({ db, steps, runId, tenant, sortRun, doc: run.doc, pages, perPage, maxCards: max, cardMaxUsd: cardMax, runMaxUsd, log: (l) => console.log(l) });
   console.log(
-    `下書き ${s.run_id}: この回 ${s.made_now} 枚・全部 ${s.cards} 枚（赤 ${s.red}・黄 ${s.yellow}・緑 ${s.green}）・失敗 ${s.errors}・費用 ${s.usd.toFixed(2)} USD（うち取り出しと選ぶ段 ${s.extract_usd.toFixed(2)}）${sub ? "（API の値段に換算・払っていない）" : ""}・${((Date.now() - t0) / 60000).toFixed(1)} 分${s.stopped ? `・止めた: ${s.stopped}` : ""}`,
+    `下書き ${s.run_id}: この回 ${s.made_now} 枚・全部 ${s.cards} 枚（赤 ${s.red}・黄 ${s.yellow}・緑 ${s.green}）・失敗 ${s.errors}・費用 ${s.usd.toFixed(2)} USD（うち取り出しと選ぶ段 ${s.extract_usd.toFixed(2)}）${s.read_pass_now === null ? "" : `・新人役の試しの合格 この回 ${s.read_pass_now} 枚`}${sub ? "（API の値段に換算・払っていない）" : ""}・${((Date.now() - t0) / 60000).toFixed(1)} 分${s.stopped ? `・止めた: ${s.stopped}` : ""}`,
   );
 }
 

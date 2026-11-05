@@ -85,6 +85,27 @@ describe("夜間の下書きの走り手（062）", () => {
     expect(db.prepare("SELECT actor, items FROM extraction_oks").all()).toEqual(Array(3).fill({ actor: "night", items: "[0,1]" }));
   });
 
+  it("新人役の試し（11/5）: 全部のコマで合格の目安に届いたカードだけ場を抜いてもう 1 回読ませ、結果を確かめの記録に残す", async () => {
+    const { db, d1 } = memDb();
+    const { steps } = fakeSteps();
+    let drops = 0;
+    // 場を抜くと、1 枚目だけ 70% に下がる（ほかは 90%）
+    steps.dropRead = async (card, frames) => {
+      drops++;
+      const e = await steps.verify(card, frames.slice(1));
+      return { index: 0, evidence: drops === 1 ? { ...e, rate: 70, band: "yellow" } : e };
+    };
+    const s = await runDrafts({ db: d1, steps, ...base });
+    // 赤の 1 枚（30%）には呼ばない
+    expect(drops).toBe(5);
+    expect(s).toMatchObject({ made_now: 6, red: 1, read_pass_now: 4 });
+    const pays = (db.prepare("SELECT payload FROM audit_log WHERE kind = 'verify'").all() as { payload: string }[]).map((r) => JSON.parse(r.payload));
+    expect(pays.filter((p) => p.read_pass === true)).toHaveLength(4);
+    expect(pays.filter((p) => p.read_pass === false && p.drop === null)).toHaveLength(1);
+    expect(pays.filter((p) => p.drop?.evidence.rate === 70)).toHaveLength(1);
+    expect((await verifyTenant(d1, "practice")).ok).toBe(true);
+  });
+
   it("途中で止まって走らせ直すと、済んだカードは飛ばし、作ったが確かめていないカードは作り直さずに確かめだけをする", async () => {
     const { db, d1 } = memDb();
     const first = fakeSteps({ crashAt: 3, });
