@@ -71,6 +71,12 @@ describe("署名の記録（051a）", () => {
     expect((sign[0].payload as unknown as { mark: { kind: string; sha256: string } }).mark).toMatchObject({ kind: "finger", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     // 署名済みはもう一度は署名できない
     expect((await post(`${base}/${id}/sign`, { version: 1, mark: MARK }, sup)).status).toBe(409);
+
+    // ホームのまとめ（一覧）に、署名した人と日時が添わる。署名していないカードは null
+    const other = ((await (await post(base, { card: sampleCard() })).json()) as { id: string }).id;
+    const list = (await (await call(base)).json()) as { cards: { id: string; signed: { role: string; slot: number; name: string; at: string } | null }[] };
+    expect(list.cards.find((c) => c.id === id)!.signed).toMatchObject({ role: "supervisor", slot: 2, at: s.signed_at, name: expect.any(String) });
+    expect(list.cards.find((c) => c.id === other)!.signed).toBeNull();
   });
 
   it("監修者のほかは署名できない", async () => {

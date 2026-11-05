@@ -40,8 +40,25 @@
 .home-actions .go-pick { background: var(--accent); border-color: var(--accent); color: #fff; }
 .home-actions .danger-pick { border-color: var(--err); color: var(--err); }
 .home-actions .danger-pick:disabled { opacity: 0.4; }
-.home-stop { display: flex; flex-direction: column; gap: 8px; border-left: 4px solid var(--err); padding-left: 10px; }
 .home-saved { text-align: center; }
+
+/* 署名した人（11/5）: 状態の札の下に小さく。開いた中身では先頭に太く */
+.home-state { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.home-signer { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.home-signed { font-size: 15px; font-weight: 600; }
+
+/* 止める前の確認の窓（11/5） */
+.home-modal-back { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 0.45); }
+.home-modal { width: min(440px, 100%); box-sizing: border-box; background: var(--bg, #fff); color: var(--fg); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); border-top: 6px solid var(--err); }
+.home-modal h2 { margin: 0; font-size: 20px; color: var(--fg); font-weight: 700; }
+.home-modal p { margin: 0; }
+.home-modal-rule { font-weight: 600; }
+.home-modal-note { font-size: 14px; color: var(--muted); }
+.home-modal label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.home-modal input { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.home-modal-actions { justify-content: flex-end; }
+.home-modal .danger-fill { background: var(--err); border-color: var(--err); color: #fff; }
+.home-modal .danger-fill:disabled { opacity: 0.4; }
 
 @media (max-width: 640px) {
   .home-tabs button { min-width: 0; }

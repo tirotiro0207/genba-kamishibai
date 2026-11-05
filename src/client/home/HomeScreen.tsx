@@ -1,8 +1,9 @@
 // ホーム（11/5 作者）。#/t/<テナント>/home。入口から名前で入ったあと、作る側（作者・監修者・教育担当）が最初に来る画面。
 // 入る順: テナントの PIN → 役 → （まだ持っていなければ）キャラクターを作る画面 → ここ。
 // 上のタブは「カードの管理」と「キャラクターの管理」。カードの管理は、新しいカードを作る（チャット）と、今までのカードのまとめ（作った日・決まり・状態）。
-// まとめを押すと開いて、編集する・承認に出す・署名する・止めるが出る
-import { useCallback, useEffect, useMemo, useState } from "react";
+// まとめを押すと開いて、編集する（絵のカードの画面へ）・承認に出す・署名する・止めるが出る。止めるは画面の中の確認の窓で、もう一度確かめる。
+// 消すボタンは置かない（11/5 作者。消すと、そのカードに残したノウハウと記録が消えるため。要らないカードは止める）。署名したカードは、署名した人を状態の札の下に出す
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STATUS_LABEL, type CardStatus } from "../../shared/card";
 import { characterSvg } from "../../shared/picto/character";
 import { STANDING } from "../../shared/picto/skeleton";
@@ -20,6 +21,8 @@ interface Card {
   updated_at: string;
   ask: string | null;
   body: { rule: string; why?: string; frames: unknown[] };
+  /** 最後の署名（署名したことが無ければ null） */
+  signed: { role: string; slot: number; name: string; at: string } | null;
 }
 interface ChatSummary {
   id: string;
@@ -31,6 +34,8 @@ interface ChatSummary {
 const ROLE_NAME: Record<string, string> = { author: "作者", supervisor: "監修者", trainer: "教育担当" };
 const t = (tenant: string, path: string) => `#/t/${encodeURIComponent(tenant)}/${path}`;
 /** D1 の時刻（UTC・"YYYY-MM-DD HH:MM:SS"）を日本時間の日付にする */
+/** 署名した人。名前が無ければ「監修者 1」 */
+const signer = (s: NonNullable<Card["signed"]>) => (s.name ? `${s.name}さん` : `${ROLE_NAME[s.role] ?? s.role} ${s.slot}`);
 const day = (s: string) => new Date(s.includes("T") ? s : `${s.replace(" ", "T")}Z`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" });
 
 function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
@@ -68,10 +73,58 @@ function Face({ a }: { a: Avatar }) {
   return <svg className="home-face" viewBox="-82 -54 164 164" aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+/** 止める前の確認の窓。「止める」を押すまで、カードは止まらない */
+function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => void; onStop: (reason: string | undefined) => Promise<void> }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const signed = card.status === "signed";
+  useEffect(() => {
+    box.current?.querySelector("input")?.focus();
+    const esc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onCancel]);
+  return (
+    <div className="home-modal-back" onClick={onCancel} data-testid="home-stop-dialog">
+      <div ref={box} className="home-modal" role="alertdialog" aria-modal="true" aria-labelledby="home-stop-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="home-stop-title">本当に止めますか？</h2>
+        <p className="home-modal-rule">{card.body.rule}</p>
+        <p className="home-modal-note">
+          {signed ? "署名済みのカードです。止めると、配った先に回収の知らせが出ます。" : "止めたカードは配られません。"}
+          消えはしないので、あとで「下書きに戻して直す」から戻せます。
+        </p>
+        <label>
+          止める理由{signed ? "（必ず書く。回収の知らせに載ります）" : "（書かなくてもよい）"}
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} data-testid="home-stop-reason" />
+        </label>
+        <div className="home-actions home-modal-actions">
+          <button className="pick" onClick={onCancel} data-testid="home-stop-cancel">
+            やめる
+          </button>
+          <button
+            className="pick danger-fill"
+            disabled={busy || (signed && !reason.trim())}
+            onClick={async () => {
+              setBusy(true);
+              await onStop(reason.trim() || undefined);
+              setBusy(false);
+            }}
+            data-testid="home-stop-go"
+          >
+            {busy ? "止めています…" : "止める"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 押したカードの中身と操作 */
 function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: Card; role: string; onChanged: () => void }) {
   const [stopping, setStopping] = useState(false);
-  const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const move = async (to: CardStatus, why?: string) => {
     setErr("");
@@ -81,23 +134,30 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
       onChanged();
     } catch (e) {
       setErr((e as Error).message);
+      setStopping(false);
     }
   };
+  const cancel = useCallback(() => setStopping(false), []);
   const s = card.status;
   const canStop = s !== "stopped" && (s !== "signed" || role === "supervisor");
   return (
     <div className="home-detail" data-testid={`home-detail-${card.id}`}>
+      {card.signed && (
+        <p className="home-signed" data-testid="home-signed-by">
+          署名: {signer(card.signed)}（{day(card.signed.at)}）{s === "stopped" ? " ・ そのあと止めた" : ""}
+        </p>
+      )}
       {card.body.why && <p className="home-why">理由: {card.body.why}</p>}
       <p className="home-meta">
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
       {card.ask && <p className="home-ask">監修者に確認: {card.ask}</p>}
+      {s === "signed" && <p className="home-meta">署名済みのカードの中身を直すときは、先に止めてから「下書きに戻して直す」を押します。{role !== "supervisor" ? "署名済みのカードを止められるのは監修者だけです。" : ""}</p>}
+      {s === "stopped" && <p className="home-meta">止めたカードです。直すときは「下書きに戻して直す」を押します。</p>}
       <div className="home-actions">
-        {s !== "signed" && s !== "stopped" && (
-          <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
-            編集する
-          </a>
-        )}
+        <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
+          {s === "signed" || s === "stopped" ? "絵のカードを見る" : "編集する（絵のカード）"}
+        </a>
         {(s === "draft" || s === "ai_draft") && (
           <button className="pick go-pick" onClick={() => void move("pending")} data-testid="home-request">
             承認に出す
@@ -118,28 +178,13 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
             下書きに戻して直す
           </button>
         )}
-        {canStop && !stopping && (
+        {canStop && (
           <button className="pick danger-pick" onClick={() => setStopping(true)} data-testid="home-stop">
             止める
           </button>
         )}
       </div>
-      {stopping && (
-        <div className="home-stop">
-          <label>
-            止める理由{s === "signed" ? "（回収の知らせに載ります）" : ""}
-            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} data-testid="home-stop-reason" />
-          </label>
-          <div className="home-actions">
-            <button className="pick danger-pick" disabled={s === "signed" && !reason.trim()} onClick={() => void move("stopped", reason.trim() || undefined)} data-testid="home-stop-go">
-              止める
-            </button>
-            <button className="pick" onClick={() => setStopping(false)}>
-              やめる
-            </button>
-          </div>
-        </div>
-      )}
+      {stopping && <StopDialog card={card} onCancel={cancel} onStop={(r) => move("stopped", r)} />}
       {err && <p className="err">{err}</p>}
     </div>
   );
@@ -199,8 +244,15 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
                 <button className="home-row" onClick={() => setOpen(open === c.id ? null : c.id)} aria-expanded={open === c.id} data-testid={`home-card-${c.id}`}>
                   <span className="home-date">{day(c.created_at)}</span>
                   <span className="home-rule">{c.body.rule}</span>
-                  <span className={`home-chip st-${c.status}`} data-testid={`home-status-${c.id}`}>
-                    {STATUS_LABEL[c.status]}
+                  <span className="home-state">
+                    <span className={`home-chip st-${c.status}`} data-testid={`home-status-${c.id}`}>
+                      {STATUS_LABEL[c.status]}
+                    </span>
+                    {c.signed && (
+                      <small className="home-signer" data-testid={`home-signer-${c.id}`}>
+                        {signer(c.signed)}
+                      </small>
+                    )}
                   </span>
                 </button>
                 {open === c.id && <CardDetail tenant={tenant} card={c} role={role} onChanged={load} />}

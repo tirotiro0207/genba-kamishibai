@@ -1,7 +1,7 @@
 import { deflateRawSync } from "node:zlib";
 import { expect, test } from "@playwright/test";
 import { sampleCard } from "../tests/fixtures/card";
-import { freshTenant } from "./helpers/ok";
+import { freshTenant, login, MARK, toOk } from "./helpers/ok";
 
 // ホーム（11/5 作者）: 役で入る → キャラクターを作る（初めはデフォルト、カスタムで部品を選ぶ）→ ホームの 2 つのタブ。
 // カードの管理: 今までのカードのまとめ（作った日・決まり・状態）を押して開き、承認に出す・止める。新しいカードはチャットの画面へ。
@@ -46,6 +46,12 @@ test("ホーム: キャラクターを作ってから、カードの管理とキ
   const res = await request.post(`/api/t/${T}/cards`, { data: { card: { ...sampleCard(), rule: `ホーム ${T} の決まり` } } });
   expect(res.status()).toBe(201);
   const id = ((await res.json()) as { id: string }).id;
+  // 署名済みのカードを 1 枚（監修者 1 が署名）。まとめで、状態の札の下に署名した人が出る
+  const signedRes = await request.post(`/api/t/${T}/cards`, { data: { card: { ...sampleCard(), rule: `署名 ${T} の決まり` } } });
+  const sid = ((await signedRes.json()) as { id: string }).id;
+  await toOk(request, T, [sid]);
+  const sup1 = { "x-role": await login(request, T, "supervisor", 1) };
+  expect((await request.post(`/api/t/${T}/cards/${sid}/sign`, { headers: sup1, data: { version: 1, mark: MARK } })).status()).toBe(200);
 
   await page.setViewportSize({ width: 1000, height: 900 });
   await page.goto(`/#/t/${T}/home`);
@@ -72,13 +78,43 @@ test("ホーム: キャラクターを作ってから、カードの管理とキ
   await page.getByTestId(`home-card-${id}`).click();
   await expect(page.getByTestId(`home-detail-${id}`)).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("home-3-cards.png") });
+  await expect(page.getByTestId("home-edit")).toHaveAttribute("href", `#/t/${T}/card/${id}`);
   await page.getByTestId("home-request").click();
   await expect(page.getByTestId(`home-status-${id}`)).toHaveText("確認待ち");
-  // 止める: 開いたままの中身で、理由を書いて止める
+  // 止める: 画面の中の確認の窓が出る。「やめる」なら止まらない
+  await page.getByTestId("home-stop").click();
+  await expect(page.getByTestId("home-stop-dialog")).toContainText("本当に止めますか？");
+  await page.getByTestId("home-stop-cancel").click();
+  await expect(page.getByTestId("home-stop-dialog")).toHaveCount(0);
+  await expect(page.getByTestId(`home-status-${id}`)).toHaveText("確認待ち");
+  // もう一度押して、理由を書いて止める
   await page.getByTestId("home-stop").click();
   await page.getByTestId("home-stop-reason").fill("手順が古い");
+  await page.screenshot({ path: test.info().outputPath("home-3b-stop-dialog.png") });
   await page.getByTestId("home-stop-go").click();
   await expect(page.getByTestId(`home-status-${id}`)).toHaveText("停止");
+  await expect(page.getByTestId("home-stop-dialog")).toHaveCount(0);
+  // 止めたカードも、絵のカードは見られる
+  await expect(page.getByTestId("home-edit")).toHaveText("絵のカードを見る");
+
+  // 署名済みのカード: 札の下に署名した人。開くと署名の行と、絵のカードを見る・止める（監修者）
+  await expect(page.getByTestId(`home-status-${sid}`)).toHaveText("署名済み");
+  await expect(page.getByTestId(`home-signer-${sid}`)).not.toBeEmpty();
+  await page.getByTestId(`home-card-${sid}`).click();
+  await expect(page.getByTestId("home-signed-by")).toContainText("署名:");
+  await expect(page.getByTestId(`home-detail-${sid}`).getByTestId("home-edit")).toHaveAttribute("href", `#/t/${T}/card/${sid}`);
+  await expect(page.getByTestId(`home-detail-${sid}`).getByTestId("home-stop")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("home-3c-signed.png") });
+  // 署名済みを止めるときは、理由を書くまで「止める」を押せない。ここではやめる
+  await page.getByTestId(`home-detail-${sid}`).getByTestId("home-stop").click();
+  await expect(page.getByTestId("home-stop-go")).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("home-stop-dialog")).toHaveCount(0);
+  // 絵のカードの画面へ行けること
+  await page.getByTestId(`home-detail-${sid}`).getByTestId("home-edit").click();
+  await expect(page).toHaveURL(new RegExp(`/card/${sid}$`));
+  await page.goto(`/#/t/${T}/home`);
+  await expect(page.getByTestId("home")).toBeVisible();
 
   // 新しいカード: チャットの画面で、文字のファイルと Word を添付する
   await page.getByTestId("home-new").click();

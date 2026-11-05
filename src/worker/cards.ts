@@ -13,7 +13,7 @@ import { D1CallLog } from "./api-log";
 import { appendAudit } from "./audit";
 import { claudeClient } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
-import type { PeopleVars } from "./people";
+import { type PeopleVars, personName } from "./people";
 import { createRecall, readReason } from "./recall";
 import { cleanupCardSessions, listUsedExemplars, sessionDeleter } from "./exemplars";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
@@ -63,9 +63,29 @@ export const sourcePayload = (card: CardBody) => ({
 /** ② 作る側が何をしたか: 項目と、動き・コマ・部品 */
 export const makePayload = (card: CardBody) => ({ rule: card.rule, why: card.why, motion: card.motion, frames: card.frames, parts: card.parts });
 
+/** 署名の行の actor（"supervisor.1"）を、役割・番号・名前（環境変数。無ければ空欄）にする */
+function signerOf(env: Env, actor: string) {
+  const [role, n] = actor.split(".");
+  const slot = n === "2" ? 2 : 1;
+  return { role, slot, name: role === "supervisor" ? personName(env, { role: "supervisor", slot }) : "" };
+}
+
 cards.get("/", async (c) => {
-  const { results } = await c.env.DB.prepare(`SELECT ${COLS} FROM cards WHERE tenant_id = ? ORDER BY created_at, id`).bind(c.var.tenant.id).all<CardRow>();
-  return c.json({ cards: results.map(cardView) });
+  const db = c.env.DB;
+  const tid = c.var.tenant.id;
+  const { results } = await db.prepare(`SELECT ${COLS} FROM cards WHERE tenant_id = ? ORDER BY created_at, id`).bind(tid).all<CardRow>();
+  // ホームのまとめ（11/5）: 署名したことのあるカードは、最後の署名の人と日時を添える（止めたあとも残す）
+  const signs = await db
+    .prepare("SELECT card_id, actor, json_extract(payload, '$.signed_at') AS at FROM audit_log WHERE tenant_id = ? AND kind = 'sign' ORDER BY created_at, n")
+    .bind(tid)
+    .all<{ card_id: string; actor: string; at: string }>();
+  const last = new Map(signs.results.map((r) => [r.card_id, r]));
+  return c.json({
+    cards: results.map((r) => {
+      const s = last.get(r.id);
+      return { ...cardView(r), signed: s ? { ...signerOf(c.env, s.actor), at: s.at } : null };
+    }),
+  });
 });
 
 // いつも出しておく数字（048）: 危ない読み違いの枚数・1 枚の分・伝わる率
