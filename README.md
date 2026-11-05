@@ -65,6 +65,8 @@ Also built:
 - MCP server: other tools can ask for cards; it can only make **unapproved drafts**.
 - PNG / SVG export with version, signature date and frame number on each picture.
 
+Who owns the data: the edit and signature records belong to the company that signed up. The author's company only keeps them, and never uses them to draft cards for another company. Only how a picture was fixed ("this pose was read the wrong way") may go back into the shared drawing rules, with the company's text and all names removed, and only if the company chooses to allow it; the default is "no", and today every company is on "no" (there is no switch for it yet). If you run it yourself, all data stays with you. Details: [docs/consent.md](docs/consent.md).
+
 ## How Claude is used
 
 | Where | Model | What it does |
