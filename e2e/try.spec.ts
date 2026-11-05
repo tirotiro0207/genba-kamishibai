@@ -21,6 +21,7 @@ test("時間を計って答えると、あなたの秒が新入社員のカー�
   await expect(rank.first()).toHaveAttribute("data-who", "you");
   await expect(page.getByTestId("try-rule")).toBeVisible();
   await expect(page.getByTestId("try-fake")).toBeVisible();
+  await expect(page.getByTestId("try-fake")).toContainText("仮の数字");
   await page.waitForTimeout(1500);
   expect(sent).toEqual([]);
 });
@@ -42,6 +43,11 @@ test("絵だけで答えると、決まりの文が出て、合っていたか�
   await page.getByTestId("try-right").click();
   await expect(page.getByTestId("try-compare")).toContainText("80%");
   await expect(page.getByTestId("try-fake")).toBeVisible();
+  await expect(page.getByTestId("try-fake")).toContainText("仮の数字");
+  // 国籍ごとの数は 2 人以上のまとまりだけ（「(1 人)」は出ない）
+  const groups = await page.getByTestId("try-groups").locator("li").allTextContents();
+  expect(groups.length).toBeGreaterThan(0);
+  for (const t of groups) expect(t).not.toMatch(/（1 人）/);
   await page.waitForTimeout(1500);
   expect(sent).toEqual([]);
 });

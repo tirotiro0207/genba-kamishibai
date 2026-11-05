@@ -2,7 +2,7 @@
 // 「時間を計って答える」は絵を見せて「分かった」までの秒を計り、「絵だけで答える」は絵だけを見て意味を書く。答えると決まりの文が出て、新入社員の匿名の結果と並ぶ。
 // 見る人の答えはどこにも送らない（この端末の画面に出すだけ）。新入社員の結果は本物が入るまで作りものの数で、画面にそう出す
 import { useEffect, useRef, useState } from "react";
-import { FAKE_NEWHIRE, type NewhireResults, pictureRate, placeTime } from "../../shared/newhire-results";
+import { FAKE_PUBLIC, type PublicResults, pictureRate, placeTime } from "../../shared/public-results";
 import type { CardMotion } from "../../shared/card";
 import { Frames } from "../read/ReadScreen";
 import "./demo.css";
@@ -15,7 +15,7 @@ interface DemoCard {
 }
 
 type Mode = "time" | "picture";
-const RESULTS: NewhireResults = FAKE_NEWHIRE;
+const RESULTS: PublicResults = FAKE_PUBLIC;
 const sec = (ms: number) => `${(ms / 1000).toFixed(1)} 秒`;
 
 function useDemoCards() {
@@ -36,7 +36,7 @@ function useDemoCards() {
 function FakeNote() {
   return RESULTS.fake ? (
     <p className="try-fake" data-testid="try-fake">
-      新入社員の結果は作りものの数です（本物の結果を入れる前）
+      仮の数字です（新入社員の結果は、本物を入れる前の作りものの数）
     </p>
   ) : null;
 }
@@ -148,6 +148,15 @@ function PictureTry({ card }: { card: DemoCard }) {
             <p className="try-compare" data-testid="try-compare">
               あなた: <b>{self ? "合っていた" : "違っていた"}</b> ／ 新入社員: <b>{rate ?? "—"}%</b> が合っていた（{RESULTS.picture.n} 人）
             </p>
+          )}
+          {self !== null && (
+            <ul className="try-groups" data-testid="try-groups">
+              {RESULTS.groups.map((g) => (
+                <li key={g.group}>
+                  {g.group}: <b>{Math.round((g.correct / g.n) * 100)}%</b>（{g.n} 人）
+                </li>
+              ))}
+            </ul>
           )}
           <FakeNote />
         </>
