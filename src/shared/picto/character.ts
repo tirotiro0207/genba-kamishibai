@@ -477,8 +477,8 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
 // tilt は正面で顔の部品（目・鼻・口・眼鏡）を上下にずらす量（うつむくと下、見上げると上）
 const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts, tilt = 0) => {
-  const h = hairSvg(view, hair, headwear, hairScale(f.face), SKIN_TONE[f.skin]);
-  const k = faceHalfWidth(f.face) / 45;
+  const h = hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize), SKIN_TONE[f.skin]);
+  const k = faceHalfWidth(f.face, f.faceSize) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
   // 耳はどの髪でも髪の前の層の上に描く
@@ -605,7 +605,7 @@ export function characterSvg(c: CharacterSpec): string {
   const neck = look === "b" ? headAt(neckB(skin)) : "";
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
   // 前の層と同じ横の倍率で描く（倍率を外すと、細い顔で毛先だけ外へずれて段や平らな切れ目が出る）
-  const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face)).behind : "";
+  const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize)).behind : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
   const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;

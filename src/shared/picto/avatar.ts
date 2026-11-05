@@ -7,6 +7,8 @@ import type { View } from "./character";
 export type FaceShape = "standard" | "round" | "slim" | "square";
 export type EyeShape = "oval" | "round" | "slit" | "up" | "down";
 export type EyeSize = "s" | "m" | "l";
+/** 輪郭と口の大きさ（11/5 作者。キャラクターを作る画面の「小 ━━ 大」のつまみ）。m は今までの絵と 1 文字も変わらない */
+export type PartSize = "s" | "m" | "l";
 export type Lashes = "none" | "flick" | "three";
 export type Brows = "none" | "flat" | "arch" | "angled";
 export type Mouth = "smile" | "flat" | "open" | "small";
@@ -17,25 +19,29 @@ export type Beard = "none" | "mustache";
 /** 顔の部品の選び方。髪は CharacterSpec.hair（または avatar.hair）で選ぶ */
 export interface FaceParts {
   face: FaceShape;
+  faceSize: PartSize;
   eyeShape: EyeShape;
   eyeSize: EyeSize;
   lashes: Lashes;
   brows: Brows;
   mouth: Mouth;
+  mouthSize: PartSize;
   glasses: Glasses;
   skin: Skin;
   beard: Beard;
 }
 export const DEFAULT_FACE: FaceParts = {
-  face: "standard", eyeShape: "oval", eyeSize: "m", lashes: "none", brows: "none", mouth: "smile", glasses: "none", skin: "white", beard: "none",
+  face: "standard", faceSize: "m", eyeShape: "oval", eyeSize: "m", lashes: "none", brows: "none", mouth: "smile", mouthSize: "m", glasses: "none", skin: "white", beard: "none",
 };
 export const FACE_OPTIONS = {
   face: ["standard", "round", "slim", "square"],
+  faceSize: ["s", "m", "l"],
   eyeShape: ["oval", "round", "slit", "up", "down"],
   eyeSize: ["s", "m", "l"],
   lashes: ["none", "flick", "three"],
   brows: ["none", "flat", "arch", "angled"],
   mouth: ["smile", "flat", "open", "small"],
+  mouthSize: ["s", "m", "l"],
   glasses: ["none", "round", "square"],
   skin: ["white", "light"],
   beard: ["none", "mustache"],
@@ -52,11 +58,16 @@ const FACE_DIM: Record<FaceShape, [number, number, number]> = {
   slim: [41, 14, 4],
   square: [45, 30, 28],
 };
-export const faceHalfWidth = (face: FaceShape) => FACE_DIM[face][0];
+/** 輪郭の大きさの横の倍率（高さは変えない） */
+const FACE_SCALE: Record<PartSize, number> = { s: 0.9, m: 1, l: 1.1 };
+/** 口の大きさの倍率（横の幅と、すぼめた口の丸） */
+const MOUTH_SCALE: Record<PartSize, number> = { s: 0.75, m: 1, l: 1.3 };
+const dim = (face: FaceShape, size: PartSize = "m") => FACE_DIM[face].map((v) => v * FACE_SCALE[size]) as [number, number, number];
+export const faceHalfWidth = (face: FaceShape, size: PartSize = "m") => dim(face, size)[0];
 /** 髪の横の倍率（顔の幅に合わせて髪を横だけ伸び縮みさせる。髪の形は半幅 45 の顔で 1 回だけ描く） */
-export const hairScale = (face: FaceShape) => (faceHalfWidth(face) + 4) / 49;
-export const faceOutline = (face: FaceShape) => {
-  const [w, t, c] = FACE_DIM[face];
+export const hairScale = (face: FaceShape, size: PartSize = "m") => (faceHalfWidth(face, size) + 4) / 49;
+export const faceOutline = (face: FaceShape, size: PartSize = "m") => {
+  const [w, t, c] = dim(face, size);
   return `M${n(-t)} -70H${n(t)}Q${n(w - 1)} -70 ${n(w - 0.4)} -48L${n(w + 0.4)} -30Q${n(w)} 0 ${n(c)} 0H${n(-c)}Q${n(-w + 0.4)} 0.4 ${n(-w)} -30L${n(-w + 0.6)} -48Q${n(-w + 1)} -70 ${n(-t)} -70Z`;
 };
 
@@ -82,8 +93,8 @@ export interface Landmarks {
   mouth: { cx: number; hw: number; ctrl: number };
   ears: number[];
 }
-export const landmarks = (face: FaceShape, view: View): Landmarks => {
-  const w = faceHalfWidth(face), k = w / 45, m = MARK[view];
+export const landmarks = (face: FaceShape, view: View, size: PartSize = "m"): Landmarks => {
+  const w = faceHalfWidth(face, size), k = w / 45, m = MARK[view];
   return {
     w, k,
     eyes: m.eyes.map((x, i) => ({ x: x * k, out: m.out[i], far: view === "quarter" && i === 0 })),
@@ -139,22 +150,24 @@ const browSvg = (lm: Landmarks, kind: Brows, view: View) => {
     return line(`M${n(inner)} -46L${n(outer)} -48.5`, 4);
   }).join("");
 };
-const mouthSvg = (lm: Landmarks, kind: Mouth) => {
-  const { cx, hw, ctrl } = lm.mouth;
+const mouthSvg = (lm: Landmarks, kind: Mouth, size: PartSize = "m") => {
+  const { cx, ctrl } = lm.mouth, ms = MOUTH_SCALE[size], hw = lm.mouth.hw * ms;
   if (kind === "smile") return line(`M${n(cx - hw)} -16Q${n(cx)} ${ctrl} ${n(cx + hw)} -16`);
   if (kind === "flat") return line(`M${n(cx - hw)} -13H${n(cx + hw)}`);
   if (kind === "open") return `<path d="M${n(cx - hw)} -16A${n(hw)} ${n(hw * 0.8)} 0 0 0 ${n(cx + hw)} -16Z" fill="#000" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>`;
-  return `<circle cx="${n(cx)}" cy="-13" r="2.8" fill="#fff" stroke="#000" stroke-width="3"/>`;
+  return `<circle cx="${n(cx)}" cy="-13" r="${n(2.8 * ms)}" fill="#fff" stroke="#000" stroke-width="3"/>`;
 };
-const beardSvg = (lm: Landmarks, kind: Beard) =>
-  kind === "none" ? "" : line(`M${n(lm.mouth.cx - lm.mouth.hw - 2 * lm.k)} -19Q${n(lm.mouth.cx)} -21 ${n(lm.mouth.cx + lm.mouth.hw + 2 * lm.k)} -19`, 3.5);
+const beardSvg = (lm: Landmarks, kind: Beard, size: PartSize = "m") => {
+  const hw = lm.mouth.hw * MOUTH_SCALE[size];
+  return kind === "none" ? "" : line(`M${n(lm.mouth.cx - hw - 2 * lm.k)} -19Q${n(lm.mouth.cx)} -21 ${n(lm.mouth.cx + hw + 2 * lm.k)} -19`, 3.5);
+};
 
 /**
  * 耳（髪の前の層の上・かぶり物の下に描く。マスクの紐と眼鏡の蔓は耳の下へ入る）。
  * 正面は顔の縁から外へ出た半分だけを描く。斜めは奥へ回った見える耳 1 つ、真横は頭の真ん中の耳 1 つで、穴の向きは顔の向く側
  */
 export const earsSvg = (view: View, p: FaceParts) => {
-  const { w, k } = landmarks(p.face, view);
+  const { w, k } = landmarks(p.face, view, p.faceSize);
   const skin = SKIN_TONE[p.skin];
   const ink = (d: string) => `<path d="${d}" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>`;
   if (view === "front") return [-1, 1].map((s) => {
@@ -173,18 +186,18 @@ export const earsSvg = (view: View, p: FaceParts) => {
 const shiftY = (svg: string, dy: number) => (dy && svg ? `<g transform="translate(0 ${dy})">${svg}</g>` : svg);
 /** 顔（輪郭・目・まつげ・眉・鼻・口・ひげ）。初めの値は今までの FACE_B と同じ文字列になる。tilt は顔の部品を下へずらす量 */
 export const faceSvg = (view: View, p: FaceParts, tilt = 0) => {
-  const lm = landmarks(p.face, view);
+  const lm = landmarks(p.face, view, p.faceSize);
   const [nx, ny, nr] = lm.nose;
-  return `<path d="${faceOutline(p.face)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
+  return `<path d="${faceOutline(p.face, p.faceSize)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
     shiftY(lm.eyes.map((e) => eyeSvg(e, p, view)).join("") + browSvg(lm, p.brows, view) +
-    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, p.mouth) + beardSvg(lm, p.beard), tilt);
+    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, p.mouth, p.mouthSize) + beardSvg(lm, p.beard, p.mouthSize), tilt);
 };
 
 /** 眼鏡（マスクより上、髪の前の層より下に描く）。斜めの奥のレンズは細く、蔓は見える耳へ 1 本 */
 export const glassesSvg = (view: View, p: FaceParts, tilt = 0): string => {
   if (p.glasses === "none") return "";
   if (tilt) return shiftY(glassesSvg(view, p), tilt);
-  const lm = landmarks(p.face, view);
+  const lm = landmarks(p.face, view, p.faceSize);
   const r = EYE_SIZE[p.eyeSize][1] + 3.5;
   const lens = (x: number, sx: number) => p.glasses === "round"
     ? `<ellipse cx="${n(x)}" cy="${EYE_Y}" rx="${n(r * sx)}" ry="${n(r)}" fill="none" stroke="#000" stroke-width="3"/>`

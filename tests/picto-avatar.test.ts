@@ -29,8 +29,8 @@ const points = (at: (x: number, y: number) => boolean) => {
 const rand = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 const pick = <T,>(r: () => number, xs: readonly T[]) => xs[Math.floor(r() * xs.length)];
 const randomFace = (r: () => number): FaceParts => ({
-  face: pick(r, FACE_OPTIONS.face), eyeShape: pick(r, FACE_OPTIONS.eyeShape), eyeSize: pick(r, FACE_OPTIONS.eyeSize),
-  lashes: pick(r, FACE_OPTIONS.lashes), brows: pick(r, FACE_OPTIONS.brows), mouth: pick(r, FACE_OPTIONS.mouth),
+  face: pick(r, FACE_OPTIONS.face), faceSize: pick(r, FACE_OPTIONS.faceSize), eyeShape: pick(r, FACE_OPTIONS.eyeShape), eyeSize: pick(r, FACE_OPTIONS.eyeSize),
+  lashes: pick(r, FACE_OPTIONS.lashes), brows: pick(r, FACE_OPTIONS.brows), mouth: pick(r, FACE_OPTIONS.mouth), mouthSize: pick(r, FACE_OPTIONS.mouthSize),
   glasses: pick(r, FACE_OPTIONS.glasses), skin: pick(r, FACE_OPTIONS.skin), beard: pick(r, FACE_OPTIONS.beard),
 });
 /** 部品を 1 つずつ変えた組み合わせ（ほかは初めの値）と、乱数の 40 組 */
@@ -60,7 +60,7 @@ describe("キャラクターを作る画面の顔と髪", () => {
     for (const f of FACES)
       for (const view of VIEWS) {
         // 輪郭の線の外側の半分（線の幅 5 の半分）までは顔とみなす
-        const faceAt = paint(`<path d="${faceOutline(f.face)}" fill="#fff" stroke="#000" stroke-width="5"/>`);
+        const faceAt = paint(`<path d="${faceOutline(f.face, f.faceSize)}" fill="#fff" stroke="#000" stroke-width="5"/>`);
         const inner = faceSvg(view, f).replace(/<path d="M[^"]*Z" fill="#(fff|e6e6e6)" stroke="#000" stroke-width="5" stroke-linejoin="round"\/>/, "");
         const out = points(paint(inner)).filter(([x, y]) => !faceAt(x, y));
         if (out.length) bad.push(`${view} ${JSON.stringify(f)}: ${out.length} 点（${out[0]}）`);
@@ -115,7 +115,8 @@ describe("キャラクターを作る画面の顔と髪", () => {
       }
       for (const f of FACES.filter((g) => g.face === face)) {
         const xs = points(paint(faceSvg("side", f) + glassesSvg("side", f))).map(([x]) => x);
-        if (Math.max(...xs) > lim) bad.push(`顔 ${JSON.stringify(f)}: ${Math.max(...xs)}`);
+        // 輪郭の大きさを変えた顔は、その大きさの半幅で見る
+        if (Math.max(...xs) > faceHalfWidth(face, f.faceSize) + 6) bad.push(`顔 ${JSON.stringify(f)}: ${Math.max(...xs)}`);
       }
     }
     expect(bad).toEqual([]);
