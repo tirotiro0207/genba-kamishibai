@@ -19,3 +19,5 @@
 .sort-yes { color: var(--accent); }
 .sort-no { color: var(--muted); }
 .queue-swapped { margin-left: 6px; font-size: 12px; border: 1px solid var(--fg); border-radius: 8px; padding: 0 6px; }
+/* 夜間の一括で作ったカードの印（11/6）。帯の色と混ざらないよう、塗らずに点線の枠だけ */
+.queue-night { font-size: 13px; padding: 1px 8px; border-radius: 10px; border: 1px dashed var(--muted); color: var(--muted); }

@@ -39,6 +39,17 @@ describe("確認待ちの列と仕分けの入れ替え（061）", () => {
     expect(cards[0]).toMatchObject({ band: "red", rule: "赤のカード" });
   });
 
+  it("夜間の一括で作ったカードには夜間の印が付き、人が作ったカードには付かない（11/6）", async () => {
+    await env.DB.prepare("INSERT INTO tenants (id, kind, name) VALUES ('q063n', 'demo', 'q063n')").run();
+    const made = await card("q063n", "人が作ったカード", "red");
+    const nightCard = await card("q063n", "夜間の下書き", "red");
+    await env.DB.prepare("INSERT INTO night_drafts (run_id, tenant_id, sort_run, page, item, card_id) VALUES ('nd-test', 'q063n', 'ns-test', 3, 0, ?)").bind(nightCard).run();
+    const res = await call("/api/t/q063n/queue", json("GET", undefined, await roleHeader("q063n", "supervisor")));
+    const { cards } = (await res.json()) as { cards: { id: string; night: boolean }[] };
+    expect(cards.find((x) => x.id === nightCard)?.night).toBe(true);
+    expect(cards.find((x) => x.id === made)?.night).toBe(false);
+  });
+
   it("監修者が「する／しない」を入れ替えると保存され、最初の AI の答えと入れ替えた人が残る。監修者のほかは入れ替えられない", async () => {
     await env.DB.prepare("INSERT INTO night_runs (id, tenant_id, doc, pages) VALUES ('n061', 'practice', 'manual', 2)").run();
     await env.DB.prepare("INSERT INTO night_pages (run_id, tenant_id, page, state, card, reason) VALUES ('n061', 'practice', 1, 'done', 0, '目次'), ('n061', 'practice', 2, 'pending', NULL, NULL)").run();

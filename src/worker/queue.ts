@@ -20,10 +20,14 @@ queue.get("/queue", async (c) => {
     .prepare(`SELECT id, tenant_id, body, status, version, created_at, updated_at, ask FROM cards WHERE tenant_id = ? AND status IN (${marks})`)
     .bind(tid, ...QUEUE_STATUSES)
     .all<CardRow>();
+  // 夜間の一括（063）で作ったカードには印を付ける。監修者が、人が作ったカードと夜間の下書きを見分けられるように（11/6）
+  const night = new Set(
+    (await db.prepare("SELECT card_id FROM night_drafts WHERE tenant_id = ? AND card_id IS NOT NULL").bind(tid).all<{ card_id: string }>()).results.map((x) => x.card_id),
+  );
   const items = await Promise.all(
     results.map(async (r) => {
       const e = await currentEvidence(db, tid, r);
-      return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, rule: (JSON.parse(r.body) as CardBody).rule };
+      return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, night: night.has(r.id), rule: (JSON.parse(r.body) as CardBody).rule };
     }),
   );
   return c.json({ cards: queueOrder(items) });

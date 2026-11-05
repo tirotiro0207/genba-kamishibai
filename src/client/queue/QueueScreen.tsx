@@ -12,6 +12,8 @@ interface QueueCard {
   band: Band | null;
   dangerous: boolean;
   rate: number | null;
+  /** 夜間の一括で作ったカード（11/6） */
+  night?: boolean;
   rule: string;
 }
 
@@ -67,6 +69,11 @@ export function QueueScreen({ tenant }: { tenant: string }) {
           {cards?.map((c) => (
             <li key={c.id} data-testid="queue-item" data-band={c.band ?? "none"}>
               <span className={`queue-band band-${c.dangerous ? "red" : (c.band ?? "none")}`}>{c.dangerous ? "危険" : c.band ? BAND_LABEL[c.band] : "未"}</span>
+              {c.night && (
+                <span className="queue-night" data-testid="queue-night">
+                  夜間
+                </span>
+              )}
               <a href={`#/t/${tenant}/card/${c.id}`}>{c.rule}</a>
               <span className="queue-meta">
                 {STATUS_LABEL[c.status]}
