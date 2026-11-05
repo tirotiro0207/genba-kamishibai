@@ -5,10 +5,13 @@
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, SKIN_TONE } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
-import type { Angles } from "./poses";
+import { type Angles, type Lengths, type Seg, torsoScale } from "./poses";
+import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
+
+export { L, NECK_LEN, SPOT };
 
 /** 正面は立って向き合う場面のため。胴と首は傾けず、腕と足は横へ開く */
-export type View = "front" | "quarter" | "side";
+export type { View } from "./body";
 export type CharacterRole = "new" | "lead" | "worker";
 /** 絵柄の道。b（作者が Illustrator で描き直した髪・点の鼻の顔）が初めの値。a は 11/3 に仮に決めた丸頭とかぶり物 */
 export type Look = "a" | "b";
@@ -47,22 +50,14 @@ export interface CharacterSpec {
   outfit?: Outfit;
   /** 顔の部品（avatar.ts。キャラクターを作る画面で選ぶ）。無い部品は初めの値 */
   face?: Partial<FaceParts>;
+  /** 手足の見かけの長さの倍率（poseAngles が正面で返す。前後へ振った手足は短く見える）。無い段は 1 */
+  len?: Lengths;
 }
 
 const UNIT = 434;
-export const L = { torso: 142, shoulderDrop: 22, upperArm: 70, lowerArm: 52, thigh: 85, shin: 77, sole: 25, headUp: 2 };
 /** 役の明るさ。色を変えられるかぶり物（安全帽・つばの帽子）は、この明るさで役を見分ける */
 const ROLE_TONE: Record<CharacterRole, string> = { new: "#fff", lead: "#222", worker: "#999" };
 
-/**
- * 部位の置き場所（[奥, 手前]）。右を向くと体の右側がこちらを向くので、斜めでは手前の腕と足が画面の左（向きと逆の側）に来る。
- * 真横は前後に重ねる。正面は左右に開く
- */
-export const SPOT: Record<View, { arm: [number, number]; leg: [number, number] }> = {
-  front: { arm: [-56, 56], leg: [-20, 20] },
-  quarter: { arm: [42, -42], leg: [18, -18] },
-  side: { arm: [-6, 4], leg: [-8, 6] },
-};
 
 const n = (v: number) => {
   const r = Math.round(v * 10) / 10;
@@ -203,9 +198,12 @@ const towel = (dx: number, knot: number) =>
 /** ニット帽（折り返しの帯つき） */
 const knit = (dx: number) =>
   `<path d="M${-58 + dx} -56Q${-62 + dx} -114 ${dx} -114Q${62 + dx} -114 ${58 + dx} -56Z" FILL ${STROKE}/><path d="M${-60 + dx} -70H${60 + dx}V-50H${-60 + dx}Z" FILL ${STROKE}/>`;
-/** 看護・客室係の小さな帽子（頭の上に載せる。髪は覆わない） */
+/**
+ * 看護・客室係の小さな帽子（頭の上に載せる。髪は覆わない）。底の線は頭の丸みに沿って両端を下げる
+ * （底がまっすぐだと、両端の下で頭の丸みとの間に白いすき間が出た）
+ */
 const nurse = (dx: number) =>
-  `<path d="M${-36 + dx} -86L${-44 + dx} -108Q${dx} -118 ${44 + dx} -108L${36 + dx} -86Q${dx} -94 ${-36 + dx} -86Z" FILL ${STROKE}/>`;
+  `<path d="M${-38 + dx} -76L${-46 + dx} -108Q${dx} -120 ${46 + dx} -108L${38 + dx} -76Q${dx} -100 ${-38 + dx} -76Z" FILL ${STROKE}/>`;
 /** クリーンルームのフード・溶接の面（頭を全部包み、顔の窓だけ開ける。fill-rule で窓を抜く） */
 const hood = (view: View, win: string, dark: boolean) => {
   const outer = view === "side" ? "M-62 -4Q-70 -112 -4 -114Q54 -112 58 -60L64 -4Z" : view === "quarter" ? "M-60 -2Q-66 -112 2 -114Q64 -112 60 -2Z" : "M-58 -2Q-64 -114 0 -114Q64 -114 58 -2Z";
@@ -228,7 +226,8 @@ const WELD_X: Record<View, [number, number]> = { front: [-30, 30], quarter: [-18
 const welderUp = (dx: number, view: View) =>
   `<path d="M${-58 + dx} -58Q${-62 + dx} -122 ${dx} -122Q${62 + dx} -122 ${58 + dx} -58Z" FILL ${STROKE}/><path d="M${WELD_X[view][0] + dx} -104H${WELD_X[view][1] + dx}V-92H${WELD_X[view][0] + dx}Z" fill="#777" ${STROKE}/>`;
 /** tone: role＝役の明るさ、white＝白、ほかは灰色の明るさ（#rgb） */
-export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide"; top: number; bottom: number; draw: Record<View, string> }> = {
+/** perch: 頭の上に載せるだけの小さな帽子。髪は切らずにそのまま描き、帽子を上に載せる（お団子やくせ毛は帽子の上にも見える） */
+export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide"; perch?: true; top: number; bottom: number; draw: Record<View, string> }> = {
   peaked: {
     tone: "#333", hair: "show", top: -114, bottom: -52,
     draw: { front: peaked(0, "front"), quarter: peaked(-2, "quarter"), side: peaked(-6, "side") },
@@ -250,7 +249,7 @@ export const HEADWEAR: Record<HeadwearKind, { tone: string; hair: "show" | "hide
     draw: { front: knit(0), quarter: knit(-2), side: knit(-4) },
   },
   nurse: {
-    tone: "white", hair: "show", top: -116, bottom: -98,
+    tone: "white", hair: "show", perch: true, top: -116, bottom: -88,
     draw: { front: nurse(0), quarter: nurse(-2), side: nurse(-6) },
   },
   hood: {
@@ -332,6 +331,108 @@ function pinch(svg: string, b: number) {
     return ` d="${out.replace(/\s+/g, " ").trim()}"`;
   });
 }
+/** かぶり物の塗りの形（path と ellipse。線だけの path は除く）を折れ線にして、x の列ごとのいちばん下の高さを求める */
+function hatColumns(svg: string) {
+  const dx = Number(/translate\((-?[\d.]+) 0\)/.exec(svg)?.[1] ?? 0);
+  const lines: [number, number][][] = [];
+  for (const [el, tag, attr] of svg.matchAll(/<(path|ellipse)\b([^>]*)\/>/g)) {
+    if (/fill="none"/.test(el)) continue;
+    const num = (k: string) => Number(new RegExp(` ${k}="(-?[\\d.]+)"`).exec(attr)![1]);
+    if (tag === "ellipse") {
+      lines.push(Array.from({ length: 65 }, (_, i) => [num("cx") + num("rx") * Math.cos((i / 32) * Math.PI), num("cy") + num("ry") * Math.sin((i / 32) * Math.PI)]));
+      continue;
+    }
+    const tok = / d="([^"]+)"/.exec(attr)![1].match(/[A-Z]|-?\d*\.?\d+/g)!;
+    let pts: [number, number][] = [], cmd = "", i = 0, x = 0, y = 0, cx = 0, cy = 0;
+    const take = () => Number(tok[i++]);
+    const curve = (p: [number, number][]) => {
+      for (let s = 1; s <= 16; s++) {
+        const t = s / 16, u = 1 - t;
+        const w = p.length === 3 ? [u * u, 2 * u * t, t * t] : [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+        pts.push([w.reduce((a, c, j) => a + c * p[j][0], 0), w.reduce((a, c, j) => a + c * p[j][1], 0)]);
+      }
+    };
+    while (i < tok.length) {
+      if (/[A-Z]/.test(tok[i])) cmd = tok[i++];
+      if (cmd === "Z") { if (pts.length) lines.push([...pts, pts[0]]); pts = []; continue; }
+      if (cmd === "M") { if (pts.length) lines.push(pts); x = take(); y = take(); pts = [[x, y]]; cmd = "L"; continue; }
+      const p0: [number, number] = [x, y];
+      if (cmd === "L") { x = take(); y = take(); pts.push([x, y]); }
+      else if (cmd === "H") { x = take(); pts.push([x, y]); }
+      else if (cmd === "V") { y = take(); pts.push([x, y]); }
+      else if (cmd === "Q") { cx = take(); cy = take(); x = take(); y = take(); curve([p0, [cx, cy], [x, y]]); }
+      else if (cmd === "C" || cmd === "S") {
+        const c1: [number, number] = cmd === "C" ? [take(), take()] : [2 * x - cx, 2 * y - cy];
+        cx = take(); cy = take(); x = take(); y = take();
+        curve([p0, c1, [cx, cy], [x, y]]);
+      }
+    }
+    if (pts.length) lines.push(pts);
+  }
+  const low = new Map<number, number>();
+  for (const l of lines)
+    for (let j = 1; j < l.length; j++) {
+      const [[ax, ay], [bx, by]] = [l[j - 1], l[j]];
+      for (let c = Math.ceil(Math.min(ax, bx) + dx); c <= Math.floor(Math.max(ax, bx) + dx); c++) {
+        const yy = ax === bx ? Math.max(ay, by) : ay + ((by - ay) * (c - dx - ax)) / (bx - ax);
+        low.set(c, Math.max(low.get(c) ?? -Infinity, yy));
+      }
+    }
+  return [...low].sort((p, q) => p[0] - q[0]);
+}
+/**
+ * 髪を残す範囲の clipPath。縁（bottom）で水平に切ると、縁が上がっている所（つばの両端・手ぬぐいの後ろなど）で
+ * 縁と髪の間に白いすき間が出るので、x の列ごとに、その列のかぶり物のいちばん下の線で切る。
+ * 縁の列の外（上が広がったかぶり物の張り出しの下・かぶり物の外）は、縁の端の切り口から外へ行くほど下げる
+ * （SHOULDER。平らに切るとつばの横に髪の平らな肩が出て、張り出しの線まで残すと髪が四角い壁に見えた）。
+ * fill は髪を上へ伸ばしてすき間を埋める分を残す範囲で、縁の列だけ（外の列まで伸ばすと、くせ毛の房などの丸い形が直線の多角形になった）
+ */
+const SHOULDER = 2.4;
+const EDGE = 3;
+const RIM = 14;
+const SPREAD = 14;
+const HAT_CLIP = new Map<string, { id: string; fillId: string; def: string }>();
+function hatClip(kind: HeadwearKind, view: View) {
+  const id = `hcut-${kind}-${view}`;
+  if (!HAT_CLIP.has(id)) {
+    const b = HEADWEAR[kind].bottom;
+    const all = hatColumns(HEADWEAR[kind].draw[view]);
+    // 縁の列: いちばん下の線が、かぶり物のいちばん下から RIM 以内にある列。そこから外（張り出しの下・かぶり物の外）は斜めに下げる
+    const low = Math.max(...all.map(([, u]) => u));
+    const rim = all.filter(([, u]) => u >= low - RIM);
+    const from = rim[0][0], to = rim[rim.length - 1][0];
+    const cols = all.filter(([x]) => x >= from && x <= to).map(([x, u]) => [x, +Math.min(b, u).toFixed(1)] as const);
+    const [x0, y0] = cols[0], [x1, y1] = cols[cols.length - 1];
+    const edge = cols.map(([x, y]) => `L${x} ${y}`).join("");
+    // かぶり物の縁取りの線の太さの半分（EDGE）だけ外の列までは、縁の高さのまま（線の外側の列にすき間が残った）
+    const out = (x: number, from: number, y: number) => +(y + Math.max(0, Math.abs(x - from) - EDGE) * SHOULDER).toFixed(1);
+    // 縁の外の斜めの列でも、かぶり物の飾り（結び目など）が下へ張り出している列は、その下の線まで伸ばす（結び目の下に白い切れ目が残った）
+    const under = new Map(all.map(([x, u]) => [x, u]));
+    const side = (a: number, z: number, from: number, y: number) => {
+      const pts: string[] = [];
+      for (let x = a; a < z ? x <= z : x >= z; x += a < z ? 1 : -1) {
+        const u = under.get(x);
+        pts.push(`L${x} ${u === undefined ? out(x, from, y) : Math.min(out(x, from, y), +Math.min(b, u).toFixed(1))}`);
+      }
+      return pts.join("");
+    };
+    HAT_CLIP.set(id, {
+      id, fillId: `${id}-fill`,
+      def: `<clipPath id="${id}"><path d="M-200 ${out(-200, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}L200 ${out(200, x1, y1)}V400H-200Z"/></clipPath>` +
+        // 伸ばす範囲は縁の列と、その両端から SPREAD だけ外へ斜めに下がる分（縁の端で髪が垂直な壁にならず、斜めにつながる）
+        `<clipPath id="${id}-fill"><path d="M${x0 - EDGE - SPREAD} ${out(x0 - EDGE - SPREAD, x0, y0)}${side(x0 - EDGE - SPREAD + 1, x0 - EDGE - 1, x0, y0)}L${x0 - EDGE} ${y0}${edge}L${x1 + EDGE} ${y1}${side(x1 + EDGE + 1, x1 + EDGE + SPREAD - 1, x1, y1)}L${x1 + EDGE + SPREAD} ${out(x1 + EDGE + SPREAD, x1, y1)}V400H${x0 - EDGE - SPREAD}Z"/></clipPath>`,
+    });
+  }
+  return HAT_CLIP.get(id)!;
+}
+/** すき間を埋めるために髪を上へ伸ばす最大の長さと刻み（同じ髪を少しずつ上へずらして重ねる） */
+const LIFT_MAX = 72, LIFT_STEP = 1.5;
+/** 文字列の短い指紋（use で同じ髪を指す id に使う。同じ中身なら同じ id になるので、1 枚に何人いても食い違わない） */
+const tag = (s: string) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+};
 /** b の頭: 髪の後ろ → 顔 → 髪の前 → かぶり物。髪をしまうかぶり物のときは髪を描かない */
 /** 髪の SVG。かぶり物をかぶると、つやの線は描かない */
 // behind（後ろ髪・ポニーテールの尾）は胴より後ろに描くので、頭とは別に返す。縁より下に垂れる髪なので、髪を見せるかぶり物では残す。
@@ -347,22 +448,42 @@ export const hairSvg = (view: View, hair: Hair, headwear: HeadwearKind | "none",
   const src = (hair === "bob" ? HAIR_B.bob : TRACED[hair])[view];
   // 手で塗り直した髪は絵に縁まで入っているので、縁取りを足さない（足すと前の層との切れ目に線が出る）
   const behind = !src.behind ? "" : hair === "bob" ? `<path d="${src.behind}" fill="${fill}" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>` : `<path d="${src.behind}" fill="${fill}"/>`;
-  // かぶり物の下も同じ髪を使い、かぶり物のいちばん下（bottom）より上の髪だけを切り落とす（下はそのまま。かぶり物は髪の上に描く）
-  const cut = bare ? "" : `<clipPath id="hcut${-HEADWEAR[headwear].bottom}"><rect x="-200" y="${HEADWEAR[headwear].bottom}" width="400" height="400"/></clipPath>`;
-  const clip = (s: string) => (bare || !s ? s : `${cut}<g clip-path="url(#hcut${-HEADWEAR[headwear].bottom})">${s}</g>`);
+  // かぶり物の下も同じ髪を使い、列ごとにかぶり物より上へ出る髪だけを切り落とす（hatClip。かぶり物は髪の上に描く）。
+  // 切る線はかぶり物と同じ座標で決めるので、顔の幅に合わせた横の倍率（fit）の外で切る
+  const cut = bare ? undefined : hatClip(headwear, view);
+  const perch = !bare && HEADWEAR[headwear].perch;
+  const clip = (s: string) => (!cut || !s ? s : `${cut.def}<g clip-path="url(#${cut.id})">${s}</g>`);
   const fit = (s: string) => (sx === 1 || !s ? s : `<g transform="scale(${sx} 1)">${s}</g>`);
   const sq = (s: string) => (bare || !PINCH.has(hair) || HEADWEAR[headwear].bottom < -70 ? s : pinch(s, HEADWEAR[headwear].bottom));
-  return { back: fit(clip(sq((h.back ?? "").replaceAll("HAIRFILL", fill)))), front: fit(clip(sq(body + gloss))), behind: fit(sq(behind)) };
+  const back = fit(sq((h.back ?? "").replaceAll("HAIRFILL", fill))), front = fit(sq(body + gloss)), tail = fit(sq(behind));
+  if (!cut || perch) return { back, front, behind: tail };
+  // かぶり物の縁と髪の間のすき間は、髪を上へ伸ばして埋める: 同じ髪を LIFT_STEP ずつ上へずらして、顔より後ろ（後ろの層）に重ねる。
+  // 伸ばした分はかぶり物のある列の、切り口より下だけに残す（上は帽子の中に隠れる）。顔の上には出ない（顔が前に描かれる）
+  // 後ろ髪（behind）は胴より後ろに描く層なので、同じように伸ばした分もその層に置く
+  const lift = (parts: string[]) => {
+    const ids = parts.filter(Boolean).map((s) => [`hl${tag(s)}`, s] as const);
+    if (!ids.length) return "";
+    const uses = Array.from({ length: LIFT_MAX / LIFT_STEP }, (_, i) => ids.map(([id]) => `<use href="#${id}" y="${-(i + 1) * LIFT_STEP}"/>`).join("")).join("");
+    return `<defs>${ids.map(([id, s]) => `<g id="${id}">${s}</g>`).join("")}</defs><g clip-path="url(#${cut.fillId})">${uses}</g>`;
+  };
+  // 頭の上に載せる帽子は髪を切らない（帽子の底を頭の丸みに沿わせてあるので、すき間は出ない）
+
+  return {
+    back: cut.def + lift([back, front]) + (back && `<g clip-path="url(#${cut.id})">${back}</g>`),
+    front: clip(front),
+    behind: tail && cut.def + lift([tail]) + tail,
+  };
 };
 // 顔の部品と、顔に付く部品（マスク・耳当て・顔の覆い）は、顔の幅の倍率 k で横の位置を合わせる。描く順: 髪の後ろ → 顔 → マスク → 眼鏡 → 髪の前 → かぶり物
-const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts) => {
+// tilt は正面で顔の部品（目・鼻・口・眼鏡）を上下にずらす量（うつむくと下、見上げると上）
+const headB = (view: View, hair: Hair, headwear: HeadwearKind | "none", role: CharacterRole, o: Outfit, f: FaceParts, tilt = 0) => {
   const h = hairSvg(view, hair, headwear, hairScale(f.face), SKIN_TONE[f.skin]);
   const k = faceHalfWidth(f.face) / 45;
   const hat = headwear === "none" ? "" : headwearSvg(headwear, view, role) +
     headMarks(headwear, view, o, headwearTone(headwear, role));
   // 耳はどの髪でも髪の前の層の上に描く
   const ears = earsSvg(view, f);
-  return `${h.back}${faceSvg(view, f)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
+  return `${h.back}${faceSvg(view, f, tilt)}${o.mask ? maskSvg(view, k) : ""}${glassesSvg(view, f, tilt)}${h.front}${ears}${hat}${o.ears ? earSvg(view, o.ears, k) : ""}${o.visor ? visorSvg(view, o.visor, k) : ""}`;
 };
 
 const ANKLE_MAX = 25;
@@ -398,37 +519,37 @@ function rig(a: Angles, view: View) {
 
 /** 首は頭の下の方（首の付け根から 30 上）を軸に回し、うつむくほど少し前へ出す。胴の上の端で回すと頭が胴の前へずれる */
 const NECK_PIVOT = 30;
-/** b は頭を少し持ち上げて、あごと胴の間に短い首を見せる（a は首なし） */
-export const NECK_LEN: Record<Look, number> = { a: 0, b: 14 };
 export const NECK_B = `<rect x="-11" y="-6" width="22" height="${NECK_LEN.b + 14}" fill="#fff" stroke="#000" stroke-width="5"/>`;
 const neckB = (skin: string) => (skin === "#fff" ? NECK_B : NECK_B.replace('fill="#fff"', `fill="${skin}"`));
 const neckShift = (deg: number) => Math.sin((deg * Math.PI) / 180) * 10;
-/**
- * 首の横の位置。斜めは胸が向く側へ寄せ、服の中心の線（襟の V のまん中、x 10）に合わせる（奥の肩の方が首に近く見える）。
- * 真横も同じで、首は胴のまん中より少し前（x 6）に立ち、服の襟のまん中（outfit.ts の CX.side）をここにそろえる。
- * 首を 0 のままにすると、襟の開きが首の前へずれて浮いて見えた
- */
-// 斜めは服の中心の線（10）に合わせると頭が前へ出すぎて見えたので、少し戻して 6 にする（11/3 作者の確認）
-const NECK_X: Record<View, number> = { front: 0, quarter: 6, side: 6 };
+
+/** 手足の見かけの長さ（len の倍率を掛けた長さ） */
+const segLen = (len: Lengths | undefined) => (s: Seg, full: number) => full * (len?.[s] ?? 1);
+/** 正面で胴を前後へ傾けると、胴は縦に縮んで見える。肩・首・頭はその分だけ下がる */
+const TORSO_TOP = 142;
+/** 正面の顔の部品を上下にずらす量（胴と首の前への傾きの和から。最大 9） */
+const faceTilt = (a: Angles) => Math.round(16 * Math.sin((Math.max(-90, Math.min(90, a.torso + a.neck)) * Math.PI) / 180) * 10) / 10;
 
 /** いちばん低い点（靴底・ひざ・手・頭）の腰からの高さ。地面に置くのに使う */
-function lowest(a: Angles, view: View, look: Look, top: number): number {
+function lowest(a: Angles, view: View, look: Look, top: number, len?: Lengths): number {
   const r = rig(a, view);
+  const sl = segLen(len);
+  const kT = view === "front" ? torsoScale(a.torso) : 1;
   const ys: number[] = [];
   r.legs.forEach((g, i) => {
     const hip = T(SPOT[view].leg[i], 0);
-    const knee = mul(mul(hip, R(g.thigh)), T(0, L.thigh));
-    const ankle = mul(mul(knee, R(g.shin)), T(0, L.shin));
+    const knee = mul(mul(hip, R(g.thigh)), T(0, sl(`leg_${g.s}_upper`, L.thigh)));
+    const ankle = mul(mul(knee, R(g.shin)), T(0, sl(`leg_${g.s}_lower`, L.shin)));
     const foot = mul(ankle, R(g.ankle));
     ys.push(at(knee, 0, 20), ...[-22, 38].map((x) => at(foot, x, L.sole)));
   });
   const torso = R(r.torso);
   r.arms.forEach((g, spot) => {
-    const sh = mul(mul(torso, T(SPOT[view].arm[spot], -142 + L.shoulderDrop)), R(g.upper));
-    const hand = mul(mul(mul(sh, T(0, L.upperArm)), R(g.lower)), T(0, L.lowerArm));
+    const sh = mul(mul(torso, T(SPOT[view].arm[spot], -TORSO_TOP * kT + L.shoulderDrop)), R(g.upper));
+    const hand = mul(mul(mul(sh, T(0, sl(`arm_${g.s}_upper`, L.upperArm))), R(g.lower)), T(0, sl(`arm_${g.s}_lower`, L.lowerArm)));
     ys.push(at(hand, 0, 15));
   });
-  const head = mul(mul(mul(torso, T(NECK_X[view] + neckShift(r.neck), -142 - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
+  const head = mul(mul(mul(torso, T(NECK_X[view] + neckShift(r.neck), -TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)), R(r.neck)), T(0, NECK_PIVOT));
   ys.push(at(head, 0, 0), at(head, 0, top));
   return Math.max(...ys);
 }
@@ -446,8 +567,12 @@ export function characterSvg(c: CharacterSpec): string {
   const hair = c.hair ?? "bob";
   const f: FaceParts = { ...DEFAULT_FACE, ...c.face };
   const skin = SKIN_TONE[f.skin];
-  const top = headwear === "none" ? (HAIR_TOP[hair] ?? -92) : HEADWEAR[headwear].top;
-  const low = lowest(c.angles, view, look, top);
+  const hairTop = HAIR_TOP[hair] ?? -92;
+  const top = headwear === "none" ? hairTop : HEADWEAR[headwear].perch ? Math.min(hairTop, HEADWEAR[headwear].top) : HEADWEAR[headwear].top;
+  const low = lowest(c.angles, view, look, top, c.len);
+  const sl = segLen(c.len);
+  // 正面で胴を前後へ傾けた姿勢（おじぎ・持ち上げる・押す）は、胴を縦に縮め、肩と頭をその分だけ下げる
+  const kT = view === "front" ? torsoScale(c.angles.torso) : 1;
   const o = c.outfit ?? {};
   const sleeve = o.sleeve ?? cloth.arm;
   // 手足は 1 本ごとに 2 回描く: まず全部の段の縁（黒）、次に全部の段の中身（灰色）。
@@ -459,21 +584,23 @@ export function characterSvg(c: CharacterSpec): string {
     const far = i === 0 && view !== "front";
     const fill = o.pants ? (far ? farTone(o.pants) : o.pants) : far ? cloth.legFar : cloth.leg;
     const shoeFill = o.boots ? (far ? farTone(o.boots) : o.boots) : far ? cloth.shoeFar : cloth.shoe;
-    const boot = o.boots ? bootSvg(L.shin, shoeFill) : "";
+    const [th, sh] = [sl(`leg_${g.s}_upper`, L.thigh), sl(`leg_${g.s}_lower`, L.shin)].map((v) => +n(v));
+    const boot = o.boots ? bootSvg(sh, shoeFill) : "";
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(L.thigh, 40, pass, fill)}<g transform="translate(0 ${L.thigh})${rot(g.shin)}">${seg(L.shin, 40, pass, fill)}${pass === "fill" ? `${boot}<g transform="translate(0 ${L.shin})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(th, 40, pass, fill)}<g transform="translate(0 ${th})${rot(g.shin)}">${seg(sh, 40, pass, fill)}${pass === "fill" ? `${boot}<g transform="translate(0 ${sh})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
     const g = r.arms[spot];
+    const [ua, la] = [sl(`arm_${g.s}_upper`, L.upperArm), sl(`arm_${g.s}_lower`, L.lowerArm)].map((v) => +n(v));
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].arm[spot]} ${-142 + L.shoulderDrop})${rot(g.upper)}">${seg(L.upperArm, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${L.upperArm})${rot(g.lower)}">${seg(L.lowerArm, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, L.lowerArm, sleeve) : ""}${pass === "fill" ? `<circle cy="${L.lowerArm}" r="15" fill="${o.gloves ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
+      `<g transform="translate(${SPOT[view].arm[spot]} ${n(-TORSO_TOP * kT + L.shoulderDrop)})${rot(g.upper)}">${seg(ua, 32, pass, sleeve)}${pass === "fill" && spot === 1 && o.armband ? armbandSvg(sleeve) : ""}<g transform="translate(0 ${ua})${rot(g.lower)}">${seg(la, 32, pass, sleeve)}${pass === "fill" && o.cuffs ? cuffSvg(o.cuffs, la, sleeve) : ""}${pass === "fill" ? `<circle cy="${la}" r="15" fill="${o.gloves ?? (look === "b" && cloth.hand === "#fff" ? skin : cloth.hand)}" stroke="#000" stroke-width="5"/>` : ""}</g></g>`;
     return chain("edge") + chain("fill");
   };
   const headAt = (inner: string) =>
-    `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${-142 - L.headUp - NECK_LEN[look] - NECK_PIVOT})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
-  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f));
+    `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
+  const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0));
   // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
   const neck = look === "b" ? headAt(neckB(skin)) : "";
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
@@ -481,7 +608,7 @@ export function characterSvg(c: CharacterSpec): string {
   const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face)).behind : "";
   // 描く順: 奥の腕 → 奥の足 → 手前の足 → 首 → 胴 → 頭 → 手前の腕。正面は両腕とも体の前（胴と頭のあと）に描く。
   // 手前の腕は頭より上へ挙げても、頭と顔より前に描く（顔の前に手をかざす・頭の上へ挙げるとき、手前の腕は頭よりこちら側にある）
-  const body0 = torso(view, look) + outfitTorso(view, o);
+  const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;
   const front = view === "front";
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
   const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;

@@ -84,15 +84,22 @@ describe("キャラクターを作る画面の顔と髪", () => {
     expect(bad).toEqual([]);
   }, 300000);
 
-  it("かぶり物は 8 つの髪の全部を覆う（縁より上の髪が無い）", () => {
+  it("かぶり物は 8 つの髪の全部を覆う（縁より上の髪は、かぶり物の中か、その列のかぶり物の真下にだけある）", () => {
     const bad: string[] = [];
     for (const view of VIEWS)
       for (const hair of HAIRS)
         for (const kind of Object.keys(HEADWEAR) as HeadwearKind[]) {
-          if (HEADWEAR[kind].hair === "hide") continue;
+          // 頭の上に載せるだけの小さな帽子（看護の帽子）は髪を切らない
+          if (HEADWEAR[kind].hair === "hide" || HEADWEAR[kind].perch) continue;
           const h = hairSvg(view, hair, kind);
           const hatAt = paint(headwearSvg(kind, view, "new"));
-          const out = points(paint(h.back + h.front)).filter(([x, y]) => y < HEADWEAR[kind].bottom - 3 && !hatAt(x, y));
+          // 髪は列ごとにかぶり物のいちばん下の線まで詰めるので、その列でかぶり物より下にある髪は覆われているとみなす。
+          // つばの端の外 3 画素（縁取りの線の丸み）までは、つばの端と同じ列とみなす
+          const under = (x: number, y: number) => {
+            for (let dx = -3; dx <= 3; dx++) for (let v = y - 1; v >= Math.max(-180, y - 120); v--) if (hatAt(x + dx, v)) return true;
+            return false;
+          };
+          const out = points(paint(h.back + h.front)).filter(([x, y]) => y < HEADWEAR[kind].bottom - 3 && !hatAt(x, y) && !under(x, y));
           if (out.length) bad.push(`${view}・${hair}・${kind}: ${out.length} 点（${out[0]}）`);
         }
     expect(bad).toEqual([]);

@@ -259,12 +259,13 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
 const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
   const c = CX[view], w = W(view);
   const x = (d: number) => n(c + d * SPAN[view]);
-  // 真横は首の真下に縦の線を出さない: 手ぬぐいの垂れは前の端に 1 本、ネクタイは胸の前の端、スカーフは首を巻く帯と前の結び目
+  // 真横は首の真下に縦の線を出さない: 手ぬぐいの垂れは前の端に 1 本、ネクタイは胸の前の端、スカーフは首を巻く帯と前の結び目。
+  // 結び目は手前の腕（肩の付け根から下、x 20 まで）より前に置く（腕にかぶさって見えないように）
   if (view === "side") {
     if (kind === "towel")
       return `<path d="M${-w + 6} -142Q${c} -124 ${w - 6} -142V-130Q${c} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/><path d="M${w - 12} -130V-86H${w - 2}V-134Z" fill="#fff" ${S(4)}/>`;
     if (kind === "tie") return `<path d="M${w - 12} -134H${w - 6}L${w - 5} -74L${w - 9} -64L${w - 13} -74Z" fill="#222" ${S(3)}/>`;
-    return `<path d="M-8 -145H20Q23 -139 20 -133H-8Q-11 -139 -8 -145Z" fill="#222" ${S(4)}/><path d="M15 -136L21 -112L27 -132Z" fill="#222" ${S(4)}/>`;
+    return `<path d="M-8 -145H20Q23 -139 20 -133H-8Q-11 -139 -8 -145Z" fill="#222" ${S(4)}/><path d="M21 -140L24 -118L31 -135Z" fill="#222" ${S(4)}/>`;
   }
   if (kind === "towel")
     return `<path d="M${-w + 6} -142Q${x(0)} -124 ${w - 6} -142V-130Q${x(0)} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
@@ -280,8 +281,9 @@ const tagSvg = (view: View, kind: "clip" | "lanyard") => {
     const x = view === "side" ? c - 4 : c + 14;
     return `<rect x="${x}" y="-114" width="22" height="14" fill="#fff" ${S(3)}/><path d="M${x + 5} -107H${x + 17}" stroke="#000" stroke-width="2.5"/>`;
   }
-  // 真横の紐は首の後ろから胸の名札へ斜めに 1 本（V に寄る 2 本は首の枠の続きに見えた）
-  const cord = view === "side" ? `M-4 -140L${x(0)} -96` : `M${x(-18)} -140L${x(0)} -96L${x(18)} -140`;
+  // 真横の紐は首の後ろから胸の名札へ斜めに 1 本（V に寄る 2 本は首の枠の続きに見えた）。
+  // 始まりは首の幅（x −5〜17）より後ろの肩の上に置く（首の幅の内から始めると、首の線の続きに見えた）
+  const cord = view === "side" ? `M-18 -137L${x(0)} -96` : `M${x(-18)} -140L${x(0)} -96L${x(18)} -140`;
   return `<path d="${cord}" stroke="#444" stroke-width="4" fill="none"/>` +
     `<rect x="${x(-11)}" y="-98" width="22" height="16" fill="#fff" ${S(3)}/><path d="M${x(-6)} -90H${x(6)}" stroke="#000" stroke-width="2.5"/>`;
 };

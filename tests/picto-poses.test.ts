@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { POSE_NAMES, POSES } from "../src/shared/picto/poses";
+import { characterSvg } from "../src/shared/picto/character";
+import { POSE_NAMES, POSES, poseAngles, stickJoints, stickSvg } from "../src/shared/picto/poses";
 import { renderFrame } from "../src/shared/picto/scene";
 import { posePoints, validateFigure } from "../src/shared/picto/skeleton";
 import { checkStyle } from "../src/shared/picto/style";
@@ -27,5 +28,44 @@ describe("主な姿勢 4 つ（016a）", () => {
     const squat = at("squat");
     const stand = at("stand");
     expect(squat.head[1] - stand.head[1]).toBeGreaterThan(120); // しゃがむと頭が低い
+  });
+});
+
+describe("向きごとの角度（poseAngles）と棒人間", () => {
+  it("正面は左右の手足が外へ開き、立ち姿で体の軸が傾かない", () => {
+    for (const name of ["stand", "walk", "point"] as const) {
+      const j = stickJoints(poseAngles(name, "front"), "front");
+      // 左右の足首が腰の中心をはさんで、ほぼ同じだけ外にある（同じ側へ傾かない）
+      expect(j.ankle[0][0], name).toBeLessThan(0);
+      expect(j.ankle[1][0], name).toBeGreaterThan(0);
+      expect(Math.abs(j.ankle[0][0] + j.ankle[1][0]), name).toBeLessThan(12);
+    }
+    // 横から見た角度をそのまま正面に渡すと、前後に振った左右の足が同じ側へ傾く
+    const raw = stickJoints({ angles: POSES.walk, len: {} }, "front");
+    expect(Math.abs(raw.ankle[0][0] + raw.ankle[1][0])).toBeGreaterThan(30);
+  });
+
+  it("名前の付いた姿勢は、どの向きでも角度と長さが数になり、棒人間とキャラが描ける", () => {
+    for (const name of POSE_NAMES)
+      for (const view of ["front", "quarter", "side"] as const) {
+        const p = poseAngles(name, view);
+        for (const v of [...Object.values(p.angles), ...Object.values(p.len)]) expect(Number.isFinite(v), `${name} ${view}`).toBe(true);
+        for (const v of Object.values(p.len)) expect(v, `${name} ${view}`).toBeGreaterThan(0);
+        expect(stickSvg(p, view)).toContain('data-part="stick"');
+        expect(characterSvg({ angles: p.angles, len: p.len, x: 100, groundY: 306, height: 270, facing: "right", view, hair: "short" })).toContain("<");
+      }
+  });
+
+  it("基本の動作の姿勢がそろい、正面で形が分かれる", () => {
+    for (const name of ["lift", "carry", "push", "pull", "sit", "kneel", "look_up", "look_down", "bow", "wave", "stop", "check", "climb", "phone", "write", "run"]) expect(POSE_NAMES).toContain(name);
+    const sit = stickJoints(poseAngles("sit", "side"), "side");
+    expect(Math.abs(sit.knee[1][1] - sit.hip[1])).toBeLessThan(10); // 座るとももが床と平ら
+    // 正面の押す・引く・運ぶは同じ形にならない（手の位置が違う）
+    const hand = (n: "push" | "pull" | "carry") => stickJoints(poseAngles(n, "front"), "front").hand[1];
+    const [a, b, c] = [hand("push"), hand("pull"), hand("carry")];
+    expect(Math.hypot(a[0] - b[0], a[1] - b[1]) + Math.hypot(a[0] - c[0], a[1] - c[1]) + Math.hypot(b[0] - c[0], b[1] - c[1])).toBeGreaterThan(40);
+    // 正面の転ぶは両腕を真上に挙げない（バンザイにしない）
+    const fall = stickJoints(poseAngles("fall", "front"), "front");
+    expect(fall.hand[0][1]).toBeGreaterThan(fall.head[1]);
   });
 });

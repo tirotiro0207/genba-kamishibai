@@ -169,18 +169,21 @@ export const earsSvg = (view: View, p: FaceParts) => {
     ink(`M${n(cx + 2.5)} -37Q${n(cx - 2.5)} -37 ${n(cx - 2)} -31Q${n(cx - 1.5)} -27 ${n(cx + 2)} -26`);
 };
 
-/** 顔（輪郭・目・まつげ・眉・鼻・口・ひげ）。初めの値は今までの FACE_B と同じ文字列になる */
-export const faceSvg = (view: View, p: FaceParts) => {
+/** 正面でうつむく・見上げるときに、顔の部品を上下にずらす（輪郭はそのまま）。0 のときは何も足さない */
+const shiftY = (svg: string, dy: number) => (dy && svg ? `<g transform="translate(0 ${dy})">${svg}</g>` : svg);
+/** 顔（輪郭・目・まつげ・眉・鼻・口・ひげ）。初めの値は今までの FACE_B と同じ文字列になる。tilt は顔の部品を下へずらす量 */
+export const faceSvg = (view: View, p: FaceParts, tilt = 0) => {
   const lm = landmarks(p.face, view);
   const [nx, ny, nr] = lm.nose;
   return `<path d="${faceOutline(p.face)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
-    lm.eyes.map((e) => eyeSvg(e, p, view)).join("") + browSvg(lm, p.brows, view) +
-    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, p.mouth) + beardSvg(lm, p.beard);
+    shiftY(lm.eyes.map((e) => eyeSvg(e, p, view)).join("") + browSvg(lm, p.brows, view) +
+    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, p.mouth) + beardSvg(lm, p.beard), tilt);
 };
 
 /** 眼鏡（マスクより上、髪の前の層より下に描く）。斜めの奥のレンズは細く、蔓は見える耳へ 1 本 */
-export const glassesSvg = (view: View, p: FaceParts) => {
+export const glassesSvg = (view: View, p: FaceParts, tilt = 0): string => {
   if (p.glasses === "none") return "";
+  if (tilt) return shiftY(glassesSvg(view, p), tilt);
   const lm = landmarks(p.face, view);
   const r = EYE_SIZE[p.eyeSize][1] + 3.5;
   const lens = (x: number, sx: number) => p.glasses === "round"

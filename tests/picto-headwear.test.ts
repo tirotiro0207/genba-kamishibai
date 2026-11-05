@@ -1,13 +1,14 @@
 import { Resvg } from "@resvg/resvg-js";
 import { describe, expect, it } from "vitest";
+import { hairScale } from "../src/shared/picto/avatar";
 import { type Hair, HEADWEAR, type HeadwearKind, hairSvg, headwearSvg, type View } from "../src/shared/picto/character";
 
 // 頭だけを 1 倍で描き、塗られた所（不透明な画素）を取り出す。原点（首の付け根）は (100, 180)
-const mask = (body: string) => {
+const mask = (body: string, min = 0) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><g transform="translate(100 180)">${body}</g></svg>`;
   const img = new Resvg(svg).render();
   const px = img.pixels; // 読むたびに写しを作るので 1 回だけ取る
-  return (x: number, y: number) => px[(y * 200 + x) * 4 + 3] > 0;
+  return (x: number, y: number) => x >= 0 && y >= 0 && x < 200 && y < 200 && px[(y * 200 + x) * 4 + 3] > min;
 };
 
 const VIEWS: View[] = ["front", "quarter", "side"];
@@ -15,26 +16,75 @@ const HAIRS: Hair[] = ["bob", "short", "bun"];
 const KINDS = Object.keys(HEADWEAR) as HeadwearKind[];
 
 describe("かぶり物と髪", () => {
-  it("かぶり物は髪に覆いかぶさる: 縁より上の髪は全部かぶり物の中に入る（はみ出す髪が無い）", () => {
+  it("かぶり物は髪に覆いかぶさる: 縁より上の髪は全部かぶり物の中か、その列のかぶり物の真下に入る（はみ出す髪が無い）", () => {
     const bad: string[] = [];
     for (const view of VIEWS)
       for (const hair of HAIRS)
         for (const kind of KINDS) {
-          if (HEADWEAR[kind].hair === "hide") continue;
+          if (HEADWEAR[kind].hair === "hide" || HEADWEAR[kind].perch) continue;
           const h = hairSvg(view, hair, kind);
           const hairAt = mask(h.back + h.front);
           const hatAt = mask(headwearSvg(kind, view, "new"));
+          // 列ごとのかぶり物のいちばん下。その下の髪は、かぶり物の縁の真下で縁にくっついている髪
+          const low = Array.from({ length: 200 }, (_, x) => {
+            let u = -1;
+            for (let y = 0; y < 200; y++) if (hatAt(x, y)) u = y;
+            return u;
+          });
           const out: string[] = [];
           for (let y = 0; y < 180 + HEADWEAR[kind].bottom - 3; y++)
-            for (let x = 0; x < 200; x++) if (hairAt(x, y) && !hatAt(x, y)) out.push(`${x - 100},${y - 180}`);
+            for (let x = 0; x < 200; x++) if (hairAt(x, y) && !hatAt(x, y) && !(low[x] >= 0 && y > low[x])) out.push(`${x - 100},${y - 180}`);
           if (out.length) bad.push(`${view}・${hair}・${kind}: ${out.length} 点（${out[0]} ほか）`);
         }
     expect(bad).toEqual([]);
   }, 60000);
 
+  it("縁と髪の間に白いすき間が無い: 髪を上へ伸ばして、列ごとにかぶり物のいちばん下の線まで詰める（細い顔）", () => {
+    // 作者の見直しですき間が残っていた組み合わせ
+    const cases: [View, Hair, HeadwearKind][] = [
+      ["quarter", "curly", "helmet"], ["front", "twinTails", "helmet"], ["quarter", "twinTails", "towel"],
+      ["front", "curly", "straw"], ["side", "shortBob", "welderUp"],
+    ];
+    const bad: string[] = [];
+    for (const [view, hair, kind] of cases) {
+      const h = hairSvg(view, hair, kind, hairScale("slim"));
+      const hat = headwearSvg(kind, view, "new");
+      const hairAt = mask(h.behind + h.back + h.front, 127);
+      const hatAt = mask(hat, 127);
+      // 顔の位置にも何かが塗られているとみなすため、顔の形の代わりに髪とかぶり物の外の白は数えない: 白い所 = 何も塗られていない所
+      const anyAt = mask(h.behind + h.back + `<path d="M-40 -70H40V0H-40Z"/>` + h.front + hat, 127);
+      const gap = new Set<string>();
+      for (let x = 0; x < 200; x++) {
+        let u = -1;
+        for (let y = 0; y < 200; y++) if (hatAt(x, y)) u = y;
+        if (u < 0) continue;
+        const run: string[] = [];
+        for (let y = u + 1; y < Math.min(200, u + 30); y++) {
+          if (anyAt(x, y)) { if (hairAt(x, y)) run.forEach((k) => gap.add(k)); break; }
+          run.push(`${x},${y}`);
+        }
+      }
+      // 3 画素四方より大きいすき間だけを数える（縁のにじみと、髪の縦の縁のすぐ外の細い筋は見えない）
+      const wide = [...gap].filter((k) => {
+        const [x, y] = k.split(",").map(Number);
+        return [[-1, 0], [1, 0], [0, -1], [0, 1]].every(([dx, dy]) => gap.has(`${x + dx},${y + dy}`));
+      });
+      if (wide.length) bad.push(`${view}・${hair}・${kind}: ${wide.length}`);
+    }
+    expect(bad).toEqual([]);
+  }, 60000);
+
+  it("頭の上に載せる小さな帽子（看護の帽子）は髪を切らない", () => {
+    expect(hairSvg("front", "bun", "nurse")).toEqual(hairSvg("front", "bun", "none"));
+    const perch = hairSvg("front", "bob", "nurse");
+    expect(perch.front).not.toContain("clip-path");
+    expect(perch.front).not.toContain('stroke="#777"'); // かぶるとつやの線は描かない
+  });
+
   it("髪をしまうかぶり物は髪を描かず、かぶり物をかぶるとお団子とつやの線を描かない", () => {
     expect(hairSvg("quarter", "bob", "hygiene")).toEqual({ back: "", front: "", behind: "" });
-    expect(hairSvg("side", "bun", "helmet").back).toBe("");
+    // 安全帽の下のお団子は切り口より上にあるので、後ろの層には伸ばした髪（use）だけが入り、お団子はそのまま描かない
+    expect(hairSvg("side", "bun", "helmet").back).not.toContain('clip-path="url(#hcut-helmet-side)"');
     // かぶらないときのお団子は参考絵から取った形で、団子も前の層に入る
     expect(hairSvg("side", "bun", "none").front).not.toBe(hairSvg("side", "bun", "helmet").front);
     expect(hairSvg("front", "bob", "chef").front).not.toContain("#777");
