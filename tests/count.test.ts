@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { count, countBuildLog, countTests, fillAppendix, taskIds, toMarkdown } from "../scripts/count";
+import { count, countBuildLog, countTests, fillAppendix, NOT_YET, readFailures, taskIds, toMarkdown } from "../scripts/count";
 
 // 113: 数えるスクリプトの前半。097: 行数と制作記録の行
 const log = ["2026-11-03\taaaa111\t005: 角度", "2026-11-03\tbbbb222\t表を直す", "2026-11-02\tcccc333\t費用を測る", "2026-11-02\t002・002b: 共通部品", "2026-11-02\t001: 骨組み"].join("\n");
@@ -67,5 +67,20 @@ describe("数えるスクリプト（113）", () => {
     expect(out.match(/^### .+$/gm)).toEqual(["### 全体", "### フォルダごとのファイル", "### 日ごと"]);
     expect(out.endsWith("## 数え方\n\n- そのまま\n")).toBe(true);
     expect(() => fillAppendix("# 節が無い\n", "", { hash: "a", day: "b" })).toThrow();
+  });
+
+  it("failures.md の 3 つの欄を読み、数が空なら「まだ」と出す（097）", () => {
+    const md = ["# x", "", "## 1. 書き足し", "", "| 項目 | 数 |", "|---|---|", "| 見た枚数 | 20 |", "| 書き足しの合計 |  |", "", "## 2. 文を添えたカード", "", "| 項目 | 数 |", "|---|---|", "| 文を添えたカード |  |"].join("\n");
+    const rows = readFailures(md);
+    expect(rows).toEqual([
+      { section: "1. 書き足し", item: "見た枚数", value: "20" },
+      { section: "1. 書き足し", item: "書き足しの合計", value: null },
+      { section: "2. 文を添えたカード", item: "文を添えたカード", value: null },
+    ]);
+    const c = { ...count("", "", [], () => ""), failures: rows };
+    const out = toMarkdown(c);
+    expect(out).toContain("| 1. 書き足し | 見た枚数 | 20 |");
+    expect(out).toContain(`| 2. 文を添えたカード | 文を添えたカード | ${NOT_YET} |`);
+    expect(toMarkdown(count("", "", [], () => ""))).not.toContain("うまくいかなかったこと");
   });
 });

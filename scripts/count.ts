@@ -1,6 +1,6 @@
 // 数えるスクリプトの前半（113）。git と作業の表から、コミット数・テスト数・ファイル数・日ごとの済んだマスを数えて表にする。
 // 097: 行数（コードのファイル）と、制作記録（docs/build-log.md）の日ごとの行の数も数える。
-// 現場の確認のデータが要る数（docs/failures.md の 3 つの欄）はここでは数えない。
+// 現場の確認のデータが要る数（docs/failures.md の 3 つの欄）はここでは数えない。欄の数が空のあいだは「まだ」と出す（072・083 が済んでから埋める）。
 // 期間（最初と最後のコミットの日時）も出す。README の数（106・107）と付録（103）はこの出力から取る。
 // 使い方: npx tsx scripts/count.ts（表を標準出力に出す）
 //         npx tsx scripts/count.ts --appendix（docs/appendix-build-effort.md の「数えた表」を、いまの数で貼り替える）
@@ -57,7 +57,32 @@ export interface Counts {
   span?: { first: { at: string; hash: string }; last: { at: string; hash: string } };
   /** 作業の表では済みだが、件名の頭にその番号が付いたコミットも、表の「コミット」の欄に当たるコミットも無いマス */
   unlogged: string[];
+  /** docs/failures.md の 3 つの欄の数。空の欄は null（まだ） */
+  failures?: FailureRow[];
 }
+
+export interface FailureRow {
+  section: string;
+  item: string;
+  value: string | null;
+}
+
+/** failures.md の「## 1.」〜「## 3.」の表を読む。数の欄が空なら null */
+export function readFailures(md: string): FailureRow[] {
+  const out: FailureRow[] = [];
+  let section = "";
+  for (const line of md.split(/\r?\n/)) {
+    const h = /^## (\d\.\s*.+)$/.exec(line);
+    if (h) section = h[1].trim();
+    if (!section) continue;
+    const cells = /^\|(.*)\|\s*$/.exec(line)?.[1].split("|").map((x) => x.trim());
+    if (!cells || cells.length < 2 || cells[0] === "項目" || /^-+$/.test(cells[0])) continue;
+    out.push({ section, item: cells[0], value: cells[1] || null });
+  }
+  return out;
+}
+
+export const NOT_YET = "まだ（072・083 のあと）";
 
 export const CODE_EXT = /\.(ts|tsx|css|sql|mjs|js|py)$/;
 const lineCount = (s: string) => (s ? s.split(/\r?\n/).length - (s.endsWith("\n") ? 1 : 0) : 0);
@@ -148,6 +173,16 @@ export function toMarkdown(c: Counts): string {
     "",
     `済みだが、当たるコミットが無いマス（件名の頭の番号・表の「コミット」の欄のどちらにも無い）: ${c.unlogged.join("・") || "無し"}`,
     "",
+    ...(c.failures
+      ? [
+          "## うまくいかなかったこと（docs/failures.md の 3 つの欄）",
+          "",
+          "| 欄 | 項目 | 数 |",
+          "|---|---|---|",
+          ...c.failures.map((f) => `| ${f.section} | ${f.item} | ${f.value ?? NOT_YET} |`),
+          "",
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -165,7 +200,8 @@ function main() {
   const files = git("ls-files").split(/\r?\n/).filter(Boolean);
   const ends = git("log", "--format=%ci%x09%h").split(/\r?\n/).filter(Boolean);
   const at = (l: string) => ({ at: l.split("\t")[0], hash: l.split("\t")[1] });
-  const c = { ...count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8")), span: { first: at(ends.at(-1)!), last: at(ends[0]) } };
+  const failures = files.includes("docs/failures.md") ? readFailures(readFileSync("docs/failures.md", "utf-8")) : undefined;
+  const c = { ...count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8")), span: { first: at(ends.at(-1)!), last: at(ends[0]) }, failures };
   const table = toMarkdown(c);
   if (!process.argv.includes("--appendix")) return void process.stdout.write(table);
   const f = "docs/appendix-build-effort.md";
