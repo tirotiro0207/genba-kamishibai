@@ -48,11 +48,12 @@ export interface CardBody {
 /** 脚本（src/shared/make/script.ts）。物語（コマに縛らない話の筋）と、それを 3〜4 コマに移したコマ割り */
 export interface CardScript {
   /** 1 段目の物語 */
-  story?: { setting: string; beats: { what: string; viewer: string }[]; why_shown: string; time: string | null; avoid: string[] };
+  story?: { takeaway: string; peak_picture: string; result_picture: string; setting: string; beats: { what: string; viewer: string }[]; why_shown: string; time: string | null; avoid: string[] };
   /** 物語の場面をどうまとめ・落としたか */
   merged?: string;
   trigger: string;
-  frames: { who: string; action: string; viewer: string }[];
+  /** role はコマの役（場・きっかけ・山場・結果）。11/5 の 2 回目より前の脚本には無い */
+  frames: { role?: string; who: string; action: string; viewer: string }[];
   why_shown: string;
   avoid: string[];
   /** 描ける部品だけで見せられるか。false のときは missing に足りない物 */

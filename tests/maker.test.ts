@@ -28,7 +28,7 @@ describe("正式な流れの作成（034a）", () => {
     expect(String(client.scripts[1].messages[0].content)).toContain(`場面 1: ${STORY.beats[0].what}／見る人が分かること: ${STORY.beats[0].viewer}`);
     const sent = String(client.sent[0].messages[0].content);
     expect(sent).toContain("脚本（このとおりの筋で描く");
-    expect(sent).toContain(`1 コマ目: ${SCRIPT.frames[0].who}／${SCRIPT.frames[0].action}／見る人が分かること: ${SCRIPT.frames[0].viewer}`);
+    expect(sent).toContain(`1 コマ目（${SCRIPT.frames[0].role}）: ${SCRIPT.frames[0].who}／${SCRIPT.frames[0].action}／見る人が分かること: ${SCRIPT.frames[0].viewer}`);
     expect(sent).toContain(`なぜの見せ方: ${SCRIPT.why_shown}`);
   });
 
@@ -44,14 +44,23 @@ describe("正式な流れの作成（034a）", () => {
     expect(sys).toContain("火花（spark）");
     expect(sys).toContain("bubble_alert");
     expect(sys).toMatch(/「？」は「分からない・どうするか聞いている」/);
-    expect(sys).toMatch(/3〜4 コマに選んでまとめる/);
-    expect(String(bd.messages[0].content)).toContain("物語:\n場面: 盤のある部屋で新人が作業している");
+    expect(sys).toMatch(/①場（いつもの作業）②きっかけ（危険の瞬間・！）③山場（決まりの動き）④結果（なぜ）/);
+    expect(sys).toMatch(/きっかけと山場は必ず絵にする[\s\S]*3 コマにするなら場を省く/);
+    expect(String(st.system)).toMatch(/先に着地点を決める/);
+    expect(String(bd.messages[0].content)).toMatch(/新人が最後に分かること: /);
+    expect(String(bd.messages[0].content)).toContain("物語:\n新人が最後に分かること:");
   });
 
   it("物語とコマ割りは形が合わなければ 1 回だけ書き直させ、2 回とも足りなければ止める", async () => {
     expect(scriptErrors(SCRIPT)).toEqual([]);
     expect(scriptErrors({ ...SCRIPT, frames: SCRIPT.frames.slice(0, 2) })).toEqual(["コマ（frames）は 3〜4"]);
     expect(storyErrors(STORY)).toEqual([]);
+    expect(storyErrors({ ...STORY, takeaway: " " })).toEqual(["着地点（takeaway・peak_picture・result_picture）が空"]);
+    expect(storyErrors({ ...STORY, beats: [...STORY.beats, ...STORY.beats, ...STORY.beats] })).toContain("場面（beats）は 3〜6");
+    const noPeak = { ...SCRIPT, frames: SCRIPT.frames.map((f) => ({ ...f, role: f.role === "山場" ? "結果" : f.role })) };
+    expect(scriptErrors(noPeak)).toContain("「山場」のコマが無い");
+    const swapped = { ...SCRIPT, frames: [...SCRIPT.frames].reverse() };
+    expect(scriptErrors(swapped)).toContain("コマの役の順は 場 → きっかけ → 山場 → 結果");
     expect(storyErrors({ ...STORY, time: "7min" })).toEqual(["時間の札（time）は 1min・5min・10min・30min・1h のどれか: 7min"]);
     const bad = { ...SCRIPT, frames: [] };
     let boards = 0;

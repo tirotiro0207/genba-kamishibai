@@ -14,6 +14,8 @@ import type { OkRule, Scene } from "./maker";
 export const SCRIPT_MODEL = "claude-opus-5-5";
 /** 見る人の仕事。今は電気工事の会社だけ（テナントに業種を持たせたら、そこから渡す） */
 export const DEFAULT_TRADE = "電気工事";
+/** コマの役（場 → きっかけ → 山場 → 結果）。きっかけと山場は欠かせない */
+export const FRAME_ROLES = ["場", "きっかけ", "山場", "結果"] as const;
 
 /** 小物の日本語の名前（脚本の係は日本語で考え、絵の係へは kind の名前で渡す） */
 export const PROP_JA: Record<PropKind, string> = {
@@ -93,6 +95,12 @@ const times = Object.values(ELAPSED).join("・");
 export const STORY_SYSTEM = `あなたは、${DEFAULT_TRADE}の会社の新入社員に向けた「文字の無い人形の絵のカード」の脚本を書く係（物語の段）です。
 渡された「守ること」と「なぜ」が、絵だけで伝わる短い物語を書きます。コマの数はまだ考えません。あとで別の係が 3〜4 コマに移します。
 
+先に着地点を決める（物語より前に書く）:
+- takeaway: 新人が最後に分かること 1 文（伝えたい 1 点。これが読み取れることを一番に置く）
+- peak_picture: 山場の絵。決まりの動きをしている瞬間を 1 枚の絵として
+- result_picture: 結果の絵。決まりを守った（守らなかった）ことで、どうなったかを 1 枚の絵として
+物語は、この着地点へ向けて短く書く。長く書くと、あとのコマ割りで大事な場面が落ちる。着地点に要らない場面は書かない。
+
 物語の決まり:
 1. 決まりが働くきっかけを、はっきり起こす。「〜したら」「〜のときは」「〜の前に」の部分が、物語の中で目に見える出来事として起きること。
 2. きっかけが「異常」「いつもと違う」のように広い言葉なら、${DEFAULT_TRADE}の現場でよくある、目で見て一目で危ないと分かる具体的な 1 つに決める
@@ -102,9 +110,10 @@ export const STORY_SYSTEM = `あなたは、${DEFAULT_TRADE}の会社の新入�
 5. 「すぐに」「早く」は、気づいてから動くまでにほかのことをしていないこと。「10 分」のような時間の数字は、そのまま time に「10min」の形で書く（使える札: ${times}）。
 6. 場面ごとに、見る人がそこで分かること（1 つ）を書く。読み違えそうなことは avoid に書く。
 
-返す中身:
+返す中身（この順に考える）:
+- takeaway・peak_picture・result_picture: 上の着地点
 - setting: どこで・誰が・何をしているところか
-- beats: 物語の場面を順に（3〜8 個）。what は起きること・人の動きを細かく、viewer は見る人がそこで分かること
+- beats: 物語の場面を順に（3〜6 個）。what は起きること・人の動きを細かく、viewer は見る人がそこで分かること
 - why_shown: 「なぜ」が物語のどこでどう見えるか
 - time: 時間の札に書く数字（「10min」など）。要らなければ null
 - avoid: 読み違えそうなことと、その避け方`;
@@ -129,19 +138,27 @@ export const BOARD_SYSTEM = `あなたは、${DEFAULT_TRADE}の会社の新入�
 - 「✓」と ✓ の印は「確かめた・これでよい」。異常を受けた側が ✓ を返すと「そのままでいい」と読まれる。受けた側は体の動き（現場へ行く・止める・離れさせる）で応える。
 - 危ない・おかしいと知らせるのは「！」の話す吹き出し（bubble_alert）で、中にその物（火花・盤など）を入れる。
 
+コマには役がある（絵の連なりの研究にならう）。どのコマにも role を 1 つ付ける:
+- 場: いつもの作業。どこで誰が何をしているか
+- きっかけ: 危険の瞬間（！）。決まりが働く出来事が起きる
+- 山場: 決まりの動き（守らない側なら、まちがった動き）
+- 結果: どうなったか（なぜ）。物語の着地点の result_picture
+
 コマ割りの決まり:
-1. 物語の場面を、3〜4 コマに選んでまとめる。1 コマで見る人が分かることは 1 つ。きっかけ → 気づく → 決まりの動き → 結果（なぜ）の順。
-2. どの場面をまとめ・落としたかを merged に書く。落とすと伝わらなくなる場面は落とさない。
-3. コマごとに、出る人（役と立つ位置 左・中・右）、体の動き、置く小物（kind の名前で）、吹き出し（kind と中の物）を細かく書く。
-4. そのコマに出ない人は「出ない」と書く（絵の係は人を枠の外に出す）。
-5. 物語に time があれば、時間がたったコマにたった時間の札（elapsed_…）を置く。
-6. ○× の組の片側なら、最後のコマにだけ ○（circle_mark）か ×（cross_mark）を置く。
-7. 描ける物で見せられないことがあれば drawable を false にし、何があれば見せられるかを missing に書く（それでも、いちばん近いコマ割りを書く）。
+1. 標準は 4 コマで ①場（いつもの作業）②きっかけ（危険の瞬間・！）③山場（決まりの動き）④結果（なぜ）。
+   きっかけと山場は必ず絵にする（欠けると意味が崩れる）。3 コマにするなら場を省く。見る人は漫画に慣れていないので、省いたコマを頭で補えないと考える。
+2. 物語の着地点（takeaway）が最後のコマまで見て読み取れることを一番に置く。山場は peak_picture、結果は result_picture のとおりに描く。
+3. 1 コマで見る人が分かることは 1 つ。どの場面をまとめ・落としたかを merged に書く。落とすと伝わらなくなる場面は落とさない。
+4. コマごとに、出る人（役と立つ位置 左・中・右）、体の動き、置く小物（kind の名前で）、吹き出し（kind と中の物）を細かく書く。
+5. そのコマに出ない人は「出ない」と書く（絵の係は人を枠の外に出す）。
+6. 物語に time があれば、時間がたったコマにたった時間の札（elapsed_…）を置く。
+7. ○× の組の片側なら、最後のコマにだけ ○（circle_mark）か ×（cross_mark）を置く。
+8. 描ける物で見せられないことがあれば drawable を false にし、何があれば見せられるかを missing に書く（それでも、いちばん近いコマ割りを書く）。
 
 返す中身:
 - trigger: きっかけをどのコマでどう見せるか
 - merged: 物語の場面をどうまとめ・落としたか
-- frames: コマごとに who（出る人と立つ位置。出ない人も）・action（体の動き・小物の kind・吹き出しの kind と中の物を細かく）・viewer（見る人がこのコマで分かること 1 つ）
+- frames: コマごとに role（場・きっかけ・山場・結果）・who（出る人と立つ位置。出ない人も）・action（体の動き・小物の kind・吹き出しの kind と中の物を細かく）・viewer（見る人がこのコマで分かること 1 つ）
 - why_shown: 「なぜ」をどのコマでどう見せるか
 - avoid: 読み違えそうなことと、その避け方
 - drawable・missing`;
@@ -149,8 +166,11 @@ export const BOARD_SYSTEM = `あなたは、${DEFAULT_TRADE}の会社の新入�
 const STORY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["setting", "beats", "why_shown", "time", "avoid"],
+  required: ["takeaway", "peak_picture", "result_picture", "setting", "beats", "why_shown", "time", "avoid"],
   properties: {
+    takeaway: { type: "string" },
+    peak_picture: { type: "string" },
+    result_picture: { type: "string" },
     setting: { type: "string" },
     beats: { type: "array", items: { type: "object", additionalProperties: false, required: ["what", "viewer"], properties: { what: { type: "string" }, viewer: { type: "string" } } } },
     why_shown: { type: "string" },
@@ -168,7 +188,12 @@ const BOARD_SCHEMA = {
     merged: { type: "string" },
     frames: {
       type: "array",
-      items: { type: "object", additionalProperties: false, required: ["who", "action", "viewer"], properties: { who: { type: "string" }, action: { type: "string" }, viewer: { type: "string" } } },
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["role", "who", "action", "viewer"],
+        properties: { role: { type: "string", enum: [...FRAME_ROLES] }, who: { type: "string" }, action: { type: "string" }, viewer: { type: "string" } },
+      },
     },
     why_shown: { type: "string" },
     avoid: { type: "array", items: { type: "string" } },
@@ -207,6 +232,9 @@ export function storyParams(rule: OkRule, statements: Statement[], scene?: Scene
 
 export function storyText(s: Story): string {
   return [
+    `新人が最後に分かること: ${s.takeaway}`,
+    `山場の絵: ${s.peak_picture}`,
+    `結果の絵: ${s.result_picture}`,
     `場面: ${s.setting}`,
     ...s.beats.map((b, i) => `場面 ${i + 1}: ${b.what}／見る人が分かること: ${b.viewer}`),
     `なぜの見せ方: ${s.why_shown}`,
@@ -223,7 +251,8 @@ export function boardParams(rule: OkRule, statements: Statement[], story: Story,
 export function scriptText(s: CardScript): string {
   return [
     `きっかけ: ${s.trigger}`,
-    ...s.frames.map((f, i) => `${i + 1} コマ目: ${f.who}／${f.action}／見る人が分かること: ${f.viewer}`),
+    ...(s.story ? [`新人が最後に分かること: ${s.story.takeaway}`] : []),
+    ...s.frames.map((f, i) => `${i + 1} コマ目${f.role ? `（${f.role}）` : ""}: ${f.who}／${f.action}／見る人が分かること: ${f.viewer}`),
     `なぜの見せ方: ${s.why_shown}`,
     ...(s.avoid.length ? [`避けること: ${s.avoid.join("／")}`] : []),
   ].join("\n");
@@ -231,8 +260,9 @@ export function scriptText(s: CardScript): string {
 
 export function storyErrors(s: Story): string[] {
   const e: string[] = [];
+  if (!s?.takeaway?.trim() || !s?.peak_picture?.trim() || !s?.result_picture?.trim()) e.push("着地点（takeaway・peak_picture・result_picture）が空");
   if (!s?.setting?.trim()) e.push("場面（setting）が空");
-  if (!Array.isArray(s?.beats) || s.beats.length < 3 || s.beats.length > 8) e.push("場面（beats）は 3〜8");
+  if (!Array.isArray(s?.beats) || s.beats.length < 3 || s.beats.length > 6) e.push("場面（beats）は 3〜6");
   if (!s?.why_shown?.trim()) e.push("なぜの見せ方（why_shown）が空");
   if (s?.time && !Object.values(ELAPSED).includes(s.time)) e.push(`時間の札（time）は ${times} のどれか: ${s.time}`);
   return e;
@@ -243,7 +273,15 @@ export function scriptErrors(s: CardScript): string[] {
   const e: string[] = [];
   if (!s?.trigger?.trim()) e.push("きっかけ（trigger）が空");
   if (!Array.isArray(s?.frames) || s.frames.length < 3 || s.frames.length > 4) e.push("コマ（frames）は 3〜4");
-  else if (s.frames.some((f) => !f.action?.trim() || !f.viewer?.trim())) e.push("動き（action）か分かること（viewer）が空のコマがある");
+  else {
+    if (s.frames.some((f) => !f.action?.trim() || !f.viewer?.trim())) e.push("動き（action）か分かること（viewer）が空のコマがある");
+    // コマの役: きっかけと山場は欠かせない。順は 場 → きっかけ → 山場 → 結果
+    const roles = s.frames.map((f) => f.role);
+    for (const need of ["きっかけ", "山場"] as const) if (!roles.includes(need)) e.push(`「${need}」のコマが無い`);
+    const order = roles.map((r) => FRAME_ROLES.indexOf(r as (typeof FRAME_ROLES)[number]));
+    if (order.some((x) => x < 0)) e.push(`コマの役は ${FRAME_ROLES.join("・")} のどれか`);
+    else if (order.some((x, i) => i > 0 && x < order[i - 1])) e.push(`コマの役の順は ${FRAME_ROLES.join(" → ")}`);
+  }
   if (!s?.why_shown?.trim()) e.push("なぜの見せ方（why_shown）が空");
   return e;
 }

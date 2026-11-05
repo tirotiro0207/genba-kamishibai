@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { MemoryCallLog } from "../src/shared/claude";
 import { makerParams } from "../src/shared/make/maker";
 import { AGENT, bandOf, evidenceOf, type FormalReading, hasEvidence, judgeParams, rateOf, readParams, verifyCard } from "../src/shared/verify/formal";
+import { droppableFrame, passes, verifyWithDrop } from "../src/shared/verify/drop";
 import { sampleCard } from "./fixtures/card";
 
 // 確かめる AI の正式版（047）
@@ -94,5 +95,38 @@ describe("証拠（どの絵を見て・何点で・なぜか）", () => {
     expect(JSON.stringify(sent[0])).not.toContain(card.rule);
     expect(e.rate).toBe(60);
     expect(log.records.map((r) => r.label)).toEqual(["確かめる AI（正式・読む）", "確かめる AI（正式・照らす）"]);
+  });
+});
+
+describe("1 コマ抜いた版（11/5）", () => {
+  const j = { points: [{ id: "s1", credit: "full" as const, frame: 3, reason: "当てている" }, { id: "s2", credit: "full" as const, frame: 3, reason: "倒れる" }], dangerous: false, danger_reason: null, summary: "伝わる" };
+  const roles = (r: string[]) => ({ ...card, frames: r.map((_, i) => ({ t: i })), script: { trigger: "t", frames: r.map((role) => ({ role, who: "w", action: "a", viewer: "v" })), why_shown: "w", avoid: [], drawable: true, missing: null } });
+  it("抜くのは脚本で「場」の役のコマ。脚本が無い・場が無い・数が合わないときは抜かない", () => {
+    expect(droppableFrame(roles(["場", "きっかけ", "山場", "結果"]))).toBe(0);
+    expect(droppableFrame(roles(["きっかけ", "山場", "結果"]))).toBeNull();
+    expect(droppableFrame(card)).toBeNull();
+    expect(droppableFrame({ ...roles(["場", "きっかけ", "山場", "結果"]), frames: [{ t: 0 }, { t: 1 }, { t: 2 }] })).toBeNull();
+  });
+
+  it("全部のコマと場を抜いたコマの 2 回読ませ、両方が 85 以上で危ない取り違えが無ければ通る", async () => {
+    const counts: number[] = [];
+    const client = {
+      messages: {
+        create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+          if (String(p.system).includes("新入社員です")) {
+            counts.push((p.messages[0].content as { type: string }[]).filter((b) => b.type === "image").length);
+            return reply(READING);
+          }
+          return reply(j);
+        },
+      },
+    };
+    const r = await verifyWithDrop({ client, log: new MemoryCallLog() }, "app", roles(["場", "きっかけ", "山場", "結果"]), [IMG, IMG, IMG, IMG]);
+    expect(counts).toEqual([4, 3]);
+    expect(r.dropped?.index).toBe(0);
+    expect(r.pass).toBe(passes(r.full) && passes(r.dropped!.evidence));
+    expect(passes({ ...r.full, rate: 85, dangerous: false } as never)).toBe(true);
+    expect(passes({ ...r.full, rate: 84, dangerous: false } as never)).toBe(false);
+    expect(passes({ ...r.full, rate: 100, dangerous: true } as never)).toBe(false);
   });
 });

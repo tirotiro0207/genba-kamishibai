@@ -38,9 +38,9 @@ export function sampleCard(): CardBody {
 export const SCRIPT = {
   trigger: "壁の盤の前に新人が来る",
   frames: [
-    { who: "新人（左）", action: "盤の前に立つ", viewer: "盤を触る場面" },
-    { who: "新人", action: "検電器を盤に当てる", viewer: "先に検電する" },
-    { who: "新人", action: "✓ の印", viewer: "電気が来ていないと確かめた" },
+    { role: "きっかけ", who: "新人（左）", action: "盤の前に立つ", viewer: "盤を触る場面" },
+    { role: "山場", who: "新人", action: "検電器を盤に当てる", viewer: "先に検電する" },
+    { role: "結果", who: "新人", action: "✓ の印", viewer: "電気が来ていないと確かめた" },
   ],
   merged: "そのまま 3 コマ",
   why_shown: "3 コマ目の ✓",
@@ -50,6 +50,9 @@ export const SCRIPT = {
 };
 /** 脚本の 1 段目（物語）の偽の答え */
 export const STORY = {
+  takeaway: "盤に触る前に検電すれば感電しない",
+  peak_picture: "新人が検電器を盤に当てている",
+  result_picture: "新人が ✓ を出して盤を開ける",
   setting: "盤のある部屋で新人が作業している",
   beats: [
     { what: "新人が盤の前に来る", viewer: "盤を触る場面" },
