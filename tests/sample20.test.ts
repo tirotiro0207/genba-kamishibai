@@ -4,11 +4,13 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { makeForm } from "../scripts/sample20";
 import type { Exec } from "../src/node/d1-node";
-import { formCsv, pickSample, readForm, summarize, summaryMarkdown } from "../src/shared/sample20";
+import { formCsv, hasScript, pickSample, readForm, scriptedOnly, summarize, summaryMarkdown } from "../src/shared/sample20";
 
 // 064: 20 枚を種で選び、監修者の記入欄を作って集計する。D1 は手元と同じ表を node:sqlite に作り、作りもののカードで試す
 const root = join(import.meta.dirname, "..");
 const ids = Array.from({ length: 120 }, (_, i) => `card-${String(i).padStart(3, "0")}`);
+// 脚本のあるカードの本文に入れる、作りものの脚本
+const script = { trigger: "きっかけ", frames: [{ role: "場", who: "作業者", action: "立つ", viewer: "場所が分かる" }], why_shown: "", avoid: [], drawable: true, missing: null };
 
 function memExec(): { db: DatabaseSync; exec: Exec } {
   const db = new DatabaseSync(":memory:");
@@ -61,14 +63,54 @@ describe("20 枚の選び方と記入欄（064）", () => {
     const card = db.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)");
     const draft = db.prepare("INSERT INTO night_drafts (run_id, tenant_id, sort_run, page, item, state, card_id) VALUES (?, ?, 'sort', ?, 0, 'done', ?)");
     ids.forEach((id, i) => {
-      card.run(id, "practice", JSON.stringify({ rule: `決まり ${i}` }));
+      card.run(id, "practice", JSON.stringify({ rule: `決まり ${i}`, script }));
       draft.run(i < 100 ? "run-a" : "run-b", "practice", i, id);
     });
-    card.run("other", "demo", JSON.stringify({ rule: "ほか" }));
-    const r = await makeForm(exec, "practice", "s1", "run-a");
+    card.run("other", "demo", JSON.stringify({ rule: "ほか", script }));
+    const r = await makeForm(exec, "practice", "s1", { run: "run-a" });
     expect(r.total).toBe(100);
+    expect(r.droppedNoScript).toBe(0);
+    expect(r.short).toBe(false);
     expect(r.picked.map((p) => p.id)).toEqual(pickSample("s1", ids.slice(0, 100)));
     expect(r.picked[0].title).toMatch(/^決まり \d+$/);
     expect((await makeForm(exec, "practice", "s1")).total).toBe(120);
+  });
+
+  it("脚本のある行だけを残し、脚本の無い行と JSON が壊れた行を分けて返す（11/6）", () => {
+    const rows = [
+      { id: "a", body: JSON.stringify({ rule: "あ", script }) },
+      { id: "b", body: JSON.stringify({ rule: "い" }) },
+      { id: "c", body: JSON.stringify({ rule: "う", script: { ...script, frames: [] } }) },
+      { id: "d", body: JSON.stringify({ rule: "え", script: null }) },
+      { id: "e", body: "{壊れた" },
+    ];
+    const f = scriptedOnly(rows);
+    expect(f.kept.map((r) => r.id)).toEqual(["a"]);
+    expect(f.noScript).toEqual(["b", "c", "d"]);
+    expect(f.broken).toEqual(["e"]);
+    expect(hasScript({ script })).toBe(true);
+    expect(hasScript(null)).toBe(false);
+  });
+
+  it("脚本の無いカードは既定で外し、外した枚数を返す。足りないときは short が立つ。--include-noscript なら入れる（11/6）", async () => {
+    const { db, exec } = memExec();
+    const card = db.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)");
+    // 30 枚のうち脚本のあるのは 12 枚、脚本の無いのは 17 枚、本文の壊れたのが 1 枚
+    ids.slice(0, 30).forEach((id, i) => card.run(id, "practice", i === 29 ? "{壊れた" : JSON.stringify(i < 12 ? { rule: `決まり ${i}`, script } : { rule: `古い ${i}` })));
+    const r = await makeForm(exec, "practice", "s1");
+    expect(r.total).toBe(30);
+    expect(r.eligible).toBe(12);
+    expect(r.droppedNoScript).toBe(17);
+    expect(r.droppedBroken).toBe(1);
+    expect(r.short).toBe(true);
+    expect(r.picked.map((p) => p.id).sort()).toEqual(ids.slice(0, 12));
+    expect(r.csv.trim().split("\n")).toHaveLength(14);
+    const all = await makeForm(exec, "practice", "s1", { includeNoScript: true });
+    expect(all.eligible).toBe(29);
+    expect(all.droppedNoScript).toBe(0);
+    expect(all.noScript).toBe(17);
+    expect(all.picked).toHaveLength(20);
+    expect(all.short).toBe(false);
+    expect(all.picked.map((p) => p.id)).not.toContain("card-029");
   });
 });

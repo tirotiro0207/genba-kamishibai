@@ -17,6 +17,36 @@ export function pickSample(seed: string, ids: string[], n = SAMPLE_SIZE): string
   return out.slice(0, n);
 }
 
+/** 本文に脚本（コマ割りが 1 つ以上ある script）があるか（11/6） */
+export function hasScript(body: unknown): boolean {
+  const s = (body as { script?: unknown } | null)?.script;
+  if (!s || typeof s !== "object") return false;
+  const frames = (s as { frames?: unknown }).frames;
+  return Array.isArray(frames) && frames.length > 0;
+}
+
+/**
+ * 脚本のあるカードの行だけを残す（11/6）。11/5 より前の作り方のカードには脚本が無く、監修者がそれを見て数字を出さないようにする。
+ * 外した行は黙って落とさず、脚本の無い行と本文の JSON が読めない行に分けて ID を返す
+ */
+export function scriptedOnly<R extends { id: string; body: string }>(rows: R[]): { kept: R[]; noScript: string[]; broken: string[] } {
+  const kept: R[] = [];
+  const noScript: string[] = [];
+  const broken: string[] = [];
+  for (const r of rows) {
+    let body: unknown;
+    try {
+      body = JSON.parse(r.body);
+    } catch {
+      broken.push(r.id);
+      continue;
+    }
+    if (hasScript(body)) kept.push(r);
+    else noScript.push(r.id);
+  }
+  return { kept, noScript, broken };
+}
+
 export interface Entry {
   card: string;
   outcome: Outcome;
