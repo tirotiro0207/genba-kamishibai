@@ -11,30 +11,30 @@ export const POSES = {
   /** 指差す（手前の腕を前へまっすぐ） */
   point: pose({ arm_near_upper: 90, arm_near_lower: 0, arm_far_upper: -10, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
   /** しゃがむ */
-  squat: pose({ torso: 22, neck: -5, leg_near_upper: 100, leg_near_lower: -140, leg_far_upper: 92, leg_far_lower: -135, arm_near_upper: 75, arm_near_lower: 15, arm_far_upper: 65, arm_far_lower: 20 }),
+  squat: pose({ torso: 22, neck: -5, leg_near_upper: 100, leg_near_lower: -140, leg_far_upper: 98, leg_far_lower: -140, arm_near_upper: 75, arm_near_lower: 15, arm_far_upper: 65, arm_far_lower: 20 }),
   /** 手を挙げる */
   raise_hand: pose({ arm_near_upper: 150, arm_near_lower: 5, arm_far_upper: -10, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
   /** 歩く */
-  walk: pose({ torso: 6, arm_near_upper: -30, arm_near_lower: 25, arm_far_upper: 35, arm_far_lower: 25, leg_near_upper: 30, leg_near_lower: -10, leg_far_upper: -25, leg_far_lower: -35 }),
-  /** 倒れる（後ろへ倒れかかる） */
-  fall: pose({ torso: -30, neck: -30, arm_near_upper: 120, arm_near_lower: 20, arm_far_upper: 150, arm_far_lower: 10, leg_near_upper: 45, leg_near_lower: -20, leg_far_upper: 20, leg_far_lower: -5 }),
+  walk: pose({ torso: 6, arm_near_upper: -30, arm_near_lower: 25, arm_far_upper: 35, arm_far_lower: 25, leg_near_upper: 22, leg_near_lower: -4, leg_far_upper: -18, leg_far_lower: -12 }),
+  /** 倒れる（後ろへ倒れかかる。あごを引き、腕を前へ出してバランスを取ろうとする） */
+  fall: pose({ torso: -30, neck: 10, arm_near_upper: 80, arm_near_lower: 20, arm_far_upper: 100, arm_far_lower: 10, leg_near_upper: 45, leg_near_lower: -20, leg_far_upper: 20, leg_far_lower: -5 }),
   /** 申し出る（少し前へ出て、手前の手を前に上げる） */
   report: pose({ torso: 10, neck: -5, arm_near_upper: 115, arm_near_lower: 20, arm_far_upper: 10, arm_far_lower: 30, leg_near_upper: 18, leg_far_upper: -12, leg_far_lower: -10 }),
   /** 手元（手前の手を胸の前へ。手元のアップに使う） */
   hands: pose({ torso: 15, neck: 25, arm_near_upper: 55, arm_near_lower: 60, arm_far_upper: 45, arm_far_lower: 70, leg_near_upper: 5, leg_far_upper: -5 }),
   // 基本の動作（11/5〜）。腕の角度は胴に対する値なので、腕を真下へ垂らすときは胴の傾きと同じ数にする
   /** 持ち上げる（ひざを曲げて腰を落とし、両手を足元の物へ下ろす） */
-  lift: pose({ torso: 28, neck: 10, arm_near_upper: 36, arm_near_lower: 18, arm_far_upper: 32, arm_far_lower: 22, leg_near_upper: 78, leg_near_lower: -100, leg_far_upper: 68, leg_far_lower: -90 }),
+  lift: pose({ torso: 28, neck: 10, arm_near_upper: 36, arm_near_lower: 18, arm_far_upper: 32, arm_far_lower: 22, leg_near_upper: 78, leg_near_lower: -100, leg_far_upper: 77, leg_far_lower: -101 }),
   /** 運ぶ（物を胸の前に抱えて歩く） */
-  carry: pose({ torso: 4, neck: 5, arm_near_upper: 48, arm_near_lower: 52, arm_far_upper: 44, arm_far_lower: 58, leg_near_upper: 20, leg_near_lower: -6, leg_far_upper: -14, leg_far_lower: -22 }),
+  carry: pose({ torso: 4, neck: 5, arm_near_upper: 48, arm_near_lower: 52, arm_far_upper: 44, arm_far_lower: 58, leg_near_upper: 20, leg_near_lower: -6, leg_far_upper: -14, leg_far_lower: -10 }),
   /** 押す（前へ体を預け、両腕を前へ伸ばす。前の足を曲げ、後ろの足を伸ばす） */
-  push: pose({ torso: 24, neck: -12, arm_near_upper: 104, arm_near_lower: 6, arm_far_upper: 100, arm_far_lower: 10, leg_near_upper: 32, leg_near_lower: -34, leg_far_upper: -30, leg_far_lower: -4 }),
-  /** 引く（体を後ろへ引き、両腕を前へ伸ばしてつかむ。前の足で踏ん張る） */
-  pull: pose({ torso: -12, neck: 8, arm_near_upper: 70, arm_near_lower: 8, arm_far_upper: 66, arm_far_lower: 12, leg_near_upper: 30, leg_near_lower: -4, leg_far_upper: -12, leg_far_lower: -32 }),
+  push: pose({ torso: 24, neck: -12, arm_near_upper: 104, arm_near_lower: 6, arm_far_upper: 100, arm_far_lower: 10, leg_near_upper: 32, leg_near_lower: -34, leg_far_upper: -24, leg_far_lower: -2 }),
+  /** 引く（体を後ろへ引き、ひじを体の横へ引きつけて、手は胸の前でつかむ。前の足で踏ん張る） */
+  pull: pose({ torso: -12, neck: 8, arm_near_upper: -12, arm_near_lower: 90, arm_far_upper: -16, arm_far_lower: 94, leg_near_upper: 30, leg_near_lower: -4, leg_far_upper: -12, leg_far_lower: -28 }),
   /** 座る（腰かけて、両手をももに置く。いすは小物で足す） */
-  sit: pose({ torso: 4, neck: 4, arm_near_upper: 46, arm_near_lower: 36, arm_far_upper: 40, arm_far_lower: 42, leg_near_upper: 90, leg_near_lower: -90, leg_far_upper: 86, leg_far_lower: -86 }),
+  sit: pose({ torso: 4, neck: 4, arm_near_upper: 2, arm_near_lower: 63, arm_far_upper: 6, arm_far_lower: 58, leg_near_upper: 90, leg_near_lower: -90, leg_far_upper: 90, leg_far_lower: -92 }),
   /** ひざをつく（手前のひざを床につき、奥の足を前へ立てる） */
-  kneel: pose({ torso: 4, neck: 12, arm_near_upper: 30, arm_near_lower: 30, arm_far_upper: 52, arm_far_lower: 34, leg_near_upper: -6, leg_near_lower: -92, leg_far_upper: 90, leg_far_lower: -90 }),
+  kneel: pose({ torso: 4, neck: 12, arm_near_upper: 30, arm_near_lower: 30, arm_far_upper: 43, arm_far_lower: 0, leg_near_upper: -6, leg_near_lower: -84, leg_far_upper: 90, leg_far_lower: -90 }),
   /** 見上げる（顔を上へ向け、胴も少し反らす） */
   look_up: pose({ torso: -6, neck: -36, arm_near_upper: 2, arm_near_lower: 8, arm_far_upper: -12, arm_far_lower: 6, leg_near_upper: 4, leg_far_upper: -4 }),
   /** 見下ろす（足元をのぞき込む） */
@@ -53,6 +53,12 @@ export const POSES = {
   phone: pose({ neck: 6, arm_near_upper: 118, arm_near_lower: 140, arm_far_upper: -10, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
   /** 書く（奥の手で板を持ち、手前の手で書く。うつむいて手元を見る） */
   write: pose({ torso: 10, neck: 32, arm_near_upper: 58, arm_near_lower: 66, arm_far_upper: 42, arm_far_lower: 92, leg_near_upper: 5, leg_far_upper: -5 }),
+  /** 足元を指差す（腕を伸ばして斜め下を差し、うつむく） */
+  point_down: pose({ torso: 6, neck: 30, arm_near_upper: 46, arm_near_lower: 0, arm_far_upper: -4, arm_far_lower: 10, leg_near_upper: 5, leg_far_upper: -5 }),
+  /** 頭の上で作業する（両腕を上げ、上を見る） */
+  reach_up: pose({ neck: -25, arm_near_upper: 160, arm_near_lower: 10, arm_far_upper: 152, arm_far_lower: 16, leg_near_upper: 5, leg_far_upper: -5 }),
+  /** つまずく（前へ倒れかかり、腕を前へ出す。後ろの足が浮く） */
+  trip: pose({ torso: 30, neck: -10, arm_near_upper: 110, arm_near_lower: 10, arm_far_upper: 95, arm_far_lower: 20, leg_near_upper: 25, leg_near_lower: -15, leg_far_upper: -35, leg_far_lower: -40 }),
   /** 走る（体を前へ倒し、ひじを曲げて腕を前後に大きく振る） */
   run: pose({ torso: 14, neck: -4, arm_near_upper: -30, arm_near_lower: 85, arm_far_upper: 60, arm_far_lower: 75, leg_near_upper: 55, leg_near_lower: -70, leg_far_upper: -30, leg_far_lower: -65 }),
 } satisfies Record<string, Angles>;
@@ -85,21 +91,33 @@ export type Seg = Exclude<Bone, "torso" | "neck">;
 /** 手足の見かけの長さの倍率（正面で前後へ振った手足は短く見える）。無い段は 1 */
 export type Lengths = Partial<Record<Seg, number>>;
 /** 描く向きの角度と見かけの長さ。characterSvg に angles と len として渡す */
-export interface ViewPose { angles: Angles; len: Lengths }
+export interface ViewPose { angles: Angles; len: Lengths; over?: LegsOver }
+/** 胴より前に描く足 */
+export type LegsOver = Partial<Record<"far" | "near", boolean>>;
+/** ももを前へ 40 度より上げた足は、胴（服の裾）より前に描く。a は横から見た角度 */
+export const legsOver = (a: Angles): LegsOver => ({ far: a.leg_far_upper >= 40, near: a.leg_near_upper >= 40 });
 
 const DEG = Math.PI / 180;
 /** 正面で手足をもともと外へ開く角度（度）。腕は体の横から少し離し、足はほぼまっすぐ下ろす（大きく開くとがに股に見えた） */
 const OPEN = { arm: 10, leg: 3 };
 /**
  * 姿勢ごとの外への開き（度。正で外、負で体の中心の側）。正面の見え方を決める。
- * 引く: ひじを横へ張り、手を胸の前で寄せる（押す・運ぶと見分けるため）。倒れる: 腕を横へ広げてバランスを崩す（真上に挙げるとバンザイに見えた）
+ * 倒れる: 腕を横へ広げてバランスを崩す（真上に挙げるとバンザイに見えた）
  */
 const SPREAD: Partial<Record<PoseName, Partial<Record<Seg, number>>>> = {
-  pull: { arm_near_upper: 30, arm_far_upper: 30, arm_near_lower: -70, arm_far_lower: -70 },
   push: { arm_near_upper: 14, arm_far_upper: 14, arm_near_lower: 4, arm_far_lower: 4 },
   fall: { arm_near_upper: 72, arm_far_upper: 64, arm_near_lower: 80, arm_far_lower: 70, leg_near_upper: 12, leg_far_upper: 6 },
   climb: { arm_near_upper: 22, arm_far_upper: 22, arm_near_lower: 6, arm_far_lower: 10 },
   wave: { arm_near_upper: 40, arm_near_lower: 0 },
+  // 指差す・確かめるは、カメラを向いた腕が短い切れ端になって読めなかったので、斜め外へ開いて見せる
+  point: { arm_near_upper: 45, arm_near_lower: 45 },
+  check: { arm_near_upper: 28, arm_near_lower: 28 },
+  point_down: { arm_near_upper: 30, arm_near_lower: 30 },
+  reach_up: { arm_near_upper: 18, arm_far_upper: 18, arm_near_lower: 4, arm_far_lower: 4 },
+  trip: { arm_near_upper: 22, arm_far_upper: 22 },
+  // しゃがむ・持ち上げるはひざを外へ開く（正面でももが体の前に重なって見えなくなるのを防ぐ）
+  squat: { leg_near_upper: 30, leg_far_upper: 30, leg_near_lower: 6, leg_far_lower: 6 },
+  lift: { leg_near_upper: 18, leg_far_upper: 18, leg_near_lower: 4, leg_far_lower: 4 },
   raise_hand: { arm_near_upper: 16, arm_near_lower: 10 },
 };
 
@@ -108,6 +126,33 @@ const seen = (theta: number, alpha: number): [number, number] => {
   const x = Math.sin(alpha * DEG), y = Math.cos(alpha * DEG) * Math.cos(theta * DEG);
   return [Math.atan2(x, y) / DEG, Math.max(0.12, Math.hypot(x, y))];
 };
+
+/**
+ * 足の写し方。カメラの方（前）や後ろへ向いた足は、正面へ写した縦の長さ y がほぼ 0 になり、外への開き x のわずかな値だけで
+ * 真横や上へ向いてしまう（しゃがむ・座るの正面で、ももが横へ折れて見えた）。y を 0.35 で下から押さえて、ももは下か斜め下へ向ける。
+ * 見かけの長さも 0.3 より短くしない
+ */
+const seenLeg = (theta: number, alpha: number): [number, number] => {
+  const x = Math.sin(alpha * DEG), y = Math.cos(alpha * DEG) * Math.cos(theta * DEG);
+  return [Math.atan2(x, Math.max(0.35, y)) / DEG, Math.max(0.3, Math.hypot(x, y))];
+};
+
+/**
+ * 正面の前腕。ひじを 40 度より曲げた前腕は、3 次元の向きのうち、縦の分（cos）はそのまま、横に寝た分（sin）を前と体の中心の側に分ける。
+ * 手が体の前へ出るほど（前への出 z が大きいほど）、手を胸の前（肩から体の中心へ 38 寄った所）へ寄せる。
+ * 曲げた角度の割合で寄せる前の式では、手が肩の真下に残り、ひじだけ張って見えた。後ろへ振った腕は寄せない
+ */
+function forearm(upper: number, bend: number, pu: number, ku: number): [number, number] {
+  const th = upper + bend;
+  const z = L.upperArm * Math.sin(upper * DEG) + L.lowerArm * Math.sin(th * DEG);
+  const elbowOut = L.upperArm * ku * Math.sin(pu * DEG);
+  const vy = Math.cos(th * DEG), h = Math.abs(Math.sin(th * DEG));
+  // 手の横の行き先（肩から外へ正）。寄せない腕は、肩の外への開き（OPEN.arm）くらい外へ向ける
+  const pull = z > 0 && bend >= 40;
+  const want = pull ? (-38 * Math.min(1, z / 50) - elbowOut) / L.lowerArm : Math.sin(OPEN.arm * DEG) * h;
+  const side = Math.max(-h, Math.min(h, want));
+  return [Math.atan2(side, vy) / DEG, Math.max(0.12, Math.hypot(side, vy))];
+}
 
 /**
  * 横から見た角度（POSES の数）を、正面で描く角度と見かけの長さにする。
@@ -121,14 +166,16 @@ function frontOf(a: Angles, spread: Partial<Record<Seg, number>> = {}): ViewPose
   for (const s of ["near", "far"] as const) {
     const up = `arm_${s}_upper` as const, lo = `arm_${s}_lower` as const;
     const au = spread[up] ?? OPEN.arm;
-    const al = spread[lo] ?? au - 0.6 * Math.min(100, Math.max(0, a[lo]));
-    const [pu, ku] = seen(a[up] - a.torso, au);
-    const [pl, kl] = seen(a[up] + a[lo] - a.torso, al);
+    // 上腕の見かけの長さは 0.3 より短くしない（押すの正面で、カメラを向いた腕が消えて手が肩に付いた）
+    const [pu, ku0] = seen(a[up] - a.torso, au);
+    const ku = Math.max(0.3, ku0);
+    const [pl, kl] = spread[lo] !== undefined ? seen(a[up] + a[lo] - a.torso, spread[lo]) : forearm(a[up] - a.torso, a[lo], pu, ku);
     out[up] = pu; out[lo] = pl - pu; len[up] = ku; len[lo] = kl;
     const tu = `leg_${s}_upper` as const, tl = `leg_${s}_lower` as const;
     const lu = spread[tu] ?? OPEN.leg;
-    const [qu, mu] = seen(a[tu], lu);
-    const [ql, ml] = seen(a[tu] + a[tl], spread[tl] ?? lu);
+    const [qu, mu] = seenLeg(a[tu], lu);
+    // すねが後ろへ 60 度より向く足（ひざをつく・走る後ろの足）は、すねを真上へ短く立て、ももの後ろに隠す（characterSvg が靴を後ろに描く）
+    const [ql, ml] = a[tu] + a[tl] <= -60 ? [180, 0.3] : seenLeg(a[tu] + a[tl], spread[tl] ?? lu);
     out[tu] = qu; out[tl] = ql - qu; len[tu] = mu; len[tl] = ml;
   }
   return { angles: out, len };
@@ -159,8 +206,12 @@ export function reach(view: View, side: "near" | "far", target: [number, number]
   return { [`arm_${side}_upper`]: ru / sign, [`arm_${side}_lower`]: rl / sign };
 }
 
-/** 顔の横の見える耳の位置（電話を当てる所）。胴の座標で、首を傾けない立ち姿のとき */
-const EAR_AT: Record<View, [number, number]> = { front: [46, -186], quarter: [-16, -182], side: [6, -182] };
+/**
+ * 顔の横の見える耳の位置（電話を当てる所）。胴の座標で、首を傾けない立ち姿のとき。
+ * 耳の印（avatar.ts の EAR_MARK、頭の原点から y −32）に首の横の位置（NECK_X）を足した所。正面は顔の縁の外の耳たぶへ少し出す
+ * （顔の内側に置くと、手が頬や目の上に来て、目をこすっているように見えた）
+ */
+const EAR_AT: Record<View, [number, number]> = { front: [54, -190], quarter: [-29, -190], side: [1, -190] };
 
 /**
  * 向きごとに手で決めた形（3 次元から写すだけでは不自然になるもの）。
@@ -172,10 +223,13 @@ const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>>
   stop: { quarter: { arm_near_upper: 12, arm_near_lower: 8, arm_far_upper: 72, arm_far_lower: 50 } },
   phone: {
     front: reach("front", "near", EAR_AT.front),
+    // 斜めと真横もひじは後ろへ張る（前へ出すと、前腕が顔の前を横切った）
     quarter: reach("quarter", "near", EAR_AT.quarter),
     side: reach("side", "near", EAR_AT.side),
   },
   raise_hand: { quarter: { arm_near_upper: 184, arm_near_lower: 0 } },
+  // 頭の上の作業は、斜めと真横で手前の腕を真上より少し後ろへ立てて、顔を隠さない
+  reach_up: { quarter: { arm_near_upper: 184, arm_near_lower: 0 }, side: { arm_near_upper: 194, arm_near_lower: 0 } },
   wave: { quarter: { arm_near_upper: 200, arm_near_lower: -24 } },
 };
 
@@ -188,12 +242,12 @@ const BY_VIEW: Partial<Record<PoseName, Partial<Record<View, Partial<Angles>>>>>
 export function poseAngles(src: PoseName | Angles, view: View): ViewPose {
   const name = typeof src === "string" ? src : undefined;
   const a = name ? POSES[name] : (src as Angles);
-  const base: ViewPose = view === "front" ? frontOf(a, name ? SPREAD[name] : undefined) : { angles: a, len: {} };
+  const base: ViewPose = { ...(view === "front" ? frontOf(a, name ? SPREAD[name] : undefined) : { angles: a, len: {} }), over: legsOver(a) };
   const hand = name ? BY_VIEW[name]?.[view] : undefined;
   if (!hand) return base;
   const len = { ...base.len };
   for (const k of Object.keys(hand)) delete len[k as Seg];
-  return { angles: { ...base.angles, ...hand }, len };
+  return { angles: { ...base.angles, ...hand }, len, over: base.over };
 }
 
 // ---- 棒人間（姿勢の土台を見るための絵） ----

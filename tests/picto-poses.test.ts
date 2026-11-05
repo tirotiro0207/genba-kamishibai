@@ -57,7 +57,7 @@ describe("向きごとの角度（poseAngles）と棒人間", () => {
   });
 
   it("基本の動作の姿勢がそろい、正面で形が分かれる", () => {
-    for (const name of ["lift", "carry", "push", "pull", "sit", "kneel", "look_up", "look_down", "bow", "wave", "stop", "check", "climb", "phone", "write", "run"]) expect(POSE_NAMES).toContain(name);
+    for (const name of ["lift", "carry", "push", "pull", "sit", "kneel", "look_up", "look_down", "bow", "wave", "stop", "check", "climb", "phone", "write", "run", "point_down", "reach_up", "trip"]) expect(POSE_NAMES).toContain(name);
     const sit = stickJoints(poseAngles("sit", "side"), "side");
     expect(Math.abs(sit.knee[1][1] - sit.hip[1])).toBeLessThan(10); // 座るとももが床と平ら
     // 正面の押す・引く・運ぶは同じ形にならない（手の位置が違う）
@@ -67,5 +67,30 @@ describe("向きごとの角度（poseAngles）と棒人間", () => {
     // 正面の転ぶは両腕を真上に挙げない（バンザイにしない）
     const fall = stickJoints(poseAngles("fall", "front"), "front");
     expect(fall.hand[0][1]).toBeGreaterThan(fall.head[1]);
+  });
+
+  it("両足で立つ姿勢は、どの向きでも左右の足首の高さがそろう（片足だけ浮かない）", () => {
+    const planted = ["stand", "point", "squat", "raise_hand", "walk", "report", "hands", "lift", "carry", "push", "pull", "sit", "look_up", "look_down", "bow", "wave", "stop", "check", "phone", "write", "point_down", "reach_up"] as const;
+    for (const name of planted)
+      for (const view of ["front", "quarter", "side"] as const) {
+        const j = stickJoints(poseAngles(name, view), view);
+        expect(Math.abs(j.ankle[0][1] - j.ankle[1][1]), `${name} ${view}`).toBeLessThan(6);
+      }
+  });
+
+  it("正面のももは、上や真横へ向かない（カメラを向いたももが横へ折れて見えない）", () => {
+    for (const name of POSE_NAMES) {
+      const { angles: a } = poseAngles(name, "front");
+      for (const s of ["near", "far"] as const) expect(Math.abs(a[`leg_${s}_upper`]), `${name} ${s}`).toBeLessThan(75);
+    }
+  });
+
+  it("ももを上げた足は、胴（服の裾）より前に描く", () => {
+    expect(poseAngles("squat", "side").over).toEqual({ far: true, near: true });
+    expect(poseAngles("stand", "front").over).toEqual({ far: false, near: false });
+    const squat = poseAngles("squat", "side");
+    const svg = characterSvg({ ...squat, x: 100, groundY: 306, height: 270, facing: "right", view: "side", hair: "short" });
+    // 胴（ベストの裾の帯）が、手前の足のももより先に出てくる
+    expect(svg.indexOf('stroke="#333" stroke-width="12"')).toBeLessThan(svg.lastIndexOf('translate(6 0)'));
   });
 });

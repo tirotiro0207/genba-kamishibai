@@ -5,7 +5,7 @@
 import { armbandSvg, bootSvg, cuffSvg, earSvg, farTone, headMarks, hem, maskSvg, type Outfit, outfitTorso, visorSvg } from "./outfit";
 import { DEFAULT_FACE, earsSvg, type Expression, type FaceParts, faceHalfWidth, faceSvg, glassesSvg, hairScale, type Mood, SKIN_TONE, type Vowel } from "./avatar";
 import { TRACED, TRACED_TOP, type TracedHair } from "./hair-traced";
-import { type Angles, type Lengths, type Seg, torsoScale } from "./poses";
+import { type Angles, type Lengths, type LegsOver, legsOver, type Seg, torsoScale } from "./poses";
 import { L, NECK_LEN, NECK_X, SPOT, type View } from "./body";
 
 export { L, NECK_LEN, SPOT };
@@ -56,6 +56,8 @@ export interface CharacterSpec {
   speak?: Vowel;
   /** 手足の見かけの長さの倍率（poseAngles が正面で返す。前後へ振った手足は短く見える）。無い段は 1 */
   len?: Lengths;
+  /** 胴より前に描く足（ももを前へ上げた足は、服の裾の上に重なる）。poseAngles が返す。無ければ斜めと真横は角度から決め、正面はどれも後ろ */
+  over?: LegsOver;
 }
 
 const UNIT = 434;
@@ -590,9 +592,13 @@ export function characterSvg(c: CharacterSpec): string {
     const shoeFill = o.boots ? (far ? farTone(o.boots) : o.boots) : far ? cloth.shoeFar : cloth.shoe;
     const [th, sh] = [sl(`leg_${g.s}_upper`, L.thigh), sl(`leg_${g.s}_lower`, L.shin)].map((v) => +n(v));
     const boot = o.boots ? bootSvg(sh, shoeFill) : "";
+    // 正面で、すねが後ろへ向く足（ひざをつく・走る後ろの足）は、すねと靴がももの後ろに隠れる。靴を足より先に、床と平行に描く
+    const hidden = view === "front" && Math.abs(g.thigh + g.shin) > 90;
+    const shoeAt = (ankle: number) => `<g transform="translate(0 ${sh})">${view === "front" ? shoeFront(i, ankle, shoeFill) : shoe(ankle, shoeFill)}</g>`;
     const chain = (pass: Pass) =>
-      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(th, 40, pass, fill)}<g transform="translate(0 ${th})${rot(g.shin)}">${seg(sh, 40, pass, fill)}${pass === "fill" ? `${boot}<g transform="translate(0 ${sh})">${view === "front" ? shoeFront(i, g.ankle, shoeFill) : shoe(g.ankle, shoeFill)}</g>` : ""}</g></g>`;
-    return chain("edge") + chain("fill");
+      `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}">${seg(th, 40, pass, fill)}<g transform="translate(0 ${th})${rot(g.shin)}">${seg(sh, 40, pass, fill)}${pass === "fill" && !hidden ? `${boot}${shoeAt(g.ankle)}` : ""}</g></g>`;
+    const back = !hidden ? "" : `<g transform="translate(${SPOT[view].leg[i]} 0)${rot(g.thigh)}"><g transform="translate(0 ${th})${rot(g.shin)}">${shoeAt(-(g.thigh + g.shin))}</g></g>`;
+    return back + chain("edge") + chain("fill");
   };
   /** spot: 0 が奥の腕（far）、1 が手前の腕（near） */
   const arm = (spot: number) => {
@@ -605,8 +611,14 @@ export function characterSvg(c: CharacterSpec): string {
   const headAt = (inner: string) =>
     `<g transform="translate(${n(NECK_X[view] + neckShift(r.neck))} ${n(-TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT)})${rot(r.neck)} translate(0 ${NECK_PIVOT})">${inner}</g>`;
   const head = headAt(look === "a" ? HEAD[view] + (headwear === "none" ? "" : headwearSvg(headwear, view, role)) : headB(view, hair, headwear, role, o, f, view === "front" ? faceTilt(c.angles) : 0, { expression: c.expression, speak: c.speak }));
-  // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）
-  const neck = look === "b" ? headAt(neckB(skin)) : "";
+  // 首は胴より先に描き、付け根を胴の襟の下に隠す（胴の上に描くと首の下の縁が見えて、首が切れて見える）。
+  // 首を傾けるときは、上の端だけ頭と一緒に回し、下の端は胴に残して間を結ぶ（首ごと回すと、下の端が襟から外れて首が抜けて見えた）
+  const neck = look !== "b" ? "" : r.neck === 0 ? headAt(neckB(skin)) : (() => {
+    const hm = mul(mul(T(NECK_X[view] + neckShift(r.neck), -TORSO_TOP * kT - L.headUp - NECK_LEN[look] - NECK_PIVOT), R(r.neck)), T(0, NECK_PIVOT));
+    const p = (x: number, y: number) => `${n(hm[0] * x + hm[2] * y + hm[4])} ${n(at(hm, x, y))}`;
+    const by = n(-TORSO_TOP * kT + 6), bx = NECK_X[view];
+    return `<path d="M${p(-11, -6)}L${p(11, -6)}L${n(bx + 11)} ${by}L${n(bx - 11)} ${by}Z" fill="${skin}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>`;
+  })();
   // 後ろ髪（ロング・ポニーテールの尾）は首と胴より後ろ。首の回転と同じ変換で頭に付いてくる
   // 前の層と同じ横の倍率で描く（倍率を外すと、細い顔で毛先だけ外へずれて段や平らな切れ目が出る）
   const behind = look === "b" ? hairSvg(view, hair, headwear, hairScale(f.face, f.faceSize)).behind : "";
@@ -615,6 +627,13 @@ export function characterSvg(c: CharacterSpec): string {
   const body0 = kT === 1 ? torso(view, look) + outfitTorso(view, o) : `<g transform="scale(1 ${+kT.toFixed(3)})">${torso(view, look) + outfitTorso(view, o)}</g>`;
   const front = view === "front";
   const upper = `${behind ? headAt(behind) : ""}${neck}${body0}${head}${front ? arm(0) : ""}${arm(1)}`;
-  const body = `<g transform="rotate(${n(r.torso)})">${front ? "" : arm(0)}</g>${leg(0)}${leg(1)}<g transform="rotate(${n(r.torso)})">${upper}</g>`;
+  // ももを前へ上げた足（しゃがむ・座る・ひざをつく・走る）は胴のあと、頭の前に描く。裾が足の前に出ると、服が足を突き抜けて見えた
+  const over = c.over ?? (front ? {} : legsOver(c.angles));
+  const late = (["far", "near"] as const).map((s) => !!over[s]);
+  const rotT = (s: string) => `<g transform="rotate(${n(r.torso)})">${s}</g>`;
+  const body = !late[0] && !late[1]
+    ? `${rotT(front ? "" : arm(0))}${leg(0)}${leg(1)}${rotT(upper)}`
+    : `${rotT(front ? "" : arm(0))}${late[0] ? "" : leg(0)}${late[1] ? "" : leg(1)}${rotT(`${behind ? headAt(behind) : ""}${neck}${body0}`)}` +
+      `${late[0] ? leg(0) : ""}${late[1] ? leg(1) : ""}${rotT(`${head}${front ? arm(0) : ""}${arm(1)}`)}`;
   return `<g data-part="figure" transform="translate(${n(c.x)} ${n(c.groundY - low * k)}) scale(${(d * k).toFixed(4)} ${k.toFixed(4)})">${body}</g>`;
 }
