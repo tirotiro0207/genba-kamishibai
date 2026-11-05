@@ -17,9 +17,10 @@ const blank: AnswerFields = { ja: "", own: "" };
 export const LIFT_MS = 350;
 
 /**
- * 見ているあいだは、見せるものと「分かった」をスクロールせずに 1 画面に収める（11/6）。
- * 画面の高さから画面の中の位置を引いた高さを --fit-h に入れ、カードもページの画像もその中に縮めて収める（ブラウザの拡大はそのまま使える）。
- * ページの側だけスクロールが要ると、その分が「分かるまでの時間」に入り、カードと比べられなくなるため
+ * 見ているあいだの見せ方（11/6）。カードの側は、絵と「分かった」をスクロールせずに 1 画面に収める
+ * （画面の高さから画面の中の位置を引いた高さを --fit-h に入れ、その中に縮める。絵なので縮めても読める）。
+ * ページの側は幅いっぱいでスクロールあり（1 画面に縮めると本文の字が 6〜9px になり読めない。今の現場でもマニュアルはめくって読む）。
+ * どちらの側も「分かった」は画面の下に貼り付け、いつでも押せる。時間は表紙が抜けてから「分かった」までで、スクロールの時間も入る
  */
 function useFitHeight(on: boolean) {
   const ref = useRef<HTMLFormElement>(null);
@@ -168,7 +169,7 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
 
   const n = items.findIndex((x) => x.item === cur.item) + 1;
   return (
-    <form ref={fitRef} className={ms === null ? "answer self-view" : "answer"} onSubmit={submit} data-testid="self" data-item={cur.item}>
+    <form ref={fitRef} className={ms === null ? `answer self-view ${cur.shown === "card" ? "self-fit" : "self-scroll"}` : "answer"} onSubmit={submit} data-testid="self" data-item={cur.item}>
       {banner}
       <p className="who">
         {n} / {items.length}
@@ -186,7 +187,7 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
               </div>
             </div>
           )}
-          <button type="button" className="big go" disabled={shownAt === null} onClick={got} data-testid="self-got">
+          <button type="button" className="big go self-got" disabled={shownAt === null} onClick={got} data-testid="self-got">
             分かった
           </button>
         </>

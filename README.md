@@ -208,6 +208,8 @@ TBD — one paragraph: who pays (companies that hire workers from abroad, starti
 | Dangerous misreadings | TBD |
 | Time to understand: card vs. text | TBD |
 
+How "time to understand" is measured: the timer starts when the cover has fully lifted and stops at "Got it". The card is shown fitted to one screen (it is a picture, so it stays readable). The original manual page is shown at full width with scrolling, so its text stays readable without zooming; scrolling time counts as reading time, the same way people page through the manual today. On both sides "Got it" stays pinned to the bottom of the screen.
+
 Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 
 ## Not built

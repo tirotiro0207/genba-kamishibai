@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { sampleCard } from "../tests/fixtures/card";
 
@@ -10,6 +11,9 @@ if (process.env.LAPTOP_CHANNEL) test.use({ channel: process.env.LAPTOP_CHANNEL }
 // 元のページの画像と同じ縦長（A4 の縦・150 dpi ほど）の、無地の画像
 const page1 = () => sharp({ create: { width: 1240, height: 1754, channels: 3, background: "#f4f4f4" } }).png().toBuffer();
 
+// FIT_PAGES に本物のページの画像を 2 つ（カンマ区切り）渡すと、その画像で確かめる（会社の資料なので手元だけ。リポジトリに入れない）
+const real = process.env.FIT_PAGES?.split(",");
+
 async function crossTrial(request: APIRequestContext, people: string[]) {
   const ids: string[] = [];
   for (const rule of ["① 検電", "① 吊り荷"]) {
@@ -17,8 +21,11 @@ async function crossTrial(request: APIRequestContext, people: string[]) {
     ids.push(((await res.json()) as { id: string }).id);
   }
   const t = (await (await request.post("/api/t/practice/trials", { data: { design: "cross", participants: people.map((id) => ({ id, group: "ベトナム" })) } })).json()) as { id: string };
-  const png = await page1();
-  for (const k of ["A", "B"]) expect((await request.put(`/api/t/practice/files/pages/${t.id}-${k}.png`, { headers: { "content-type": "image/png" }, data: png })).status()).toBe(201);
+  const blank = await page1();
+  for (const [i, k] of ["A", "B"].entries()) {
+    const png = real ? readFileSync(real[i]) : blank;
+    expect((await request.put(`/api/t/practice/files/pages/${t.id}-${k}.png`, { headers: { "content-type": "image/png" }, data: png })).status()).toBe(201);
+  }
   expect((await request.put(`/api/t/practice/trials/${t.id}/material`, { data: { A: { card: ids[0], page: `pages/${t.id}-A.png` }, B: { card: ids[1], page: `pages/${t.id}-B.png` } } })).status()).toBe(201);
   return t;
 }
@@ -76,35 +83,44 @@ test("ノートパソコン: 表紙が抜けきった時から数える（マウ
   expect((await rows(request, t.id)).filter((r) => r.participant === "m1")).toHaveLength(2);
 });
 
-// 13 インチ（1280×800 ほど）と 15 インチ（1366×768・1920×1080）の画面で、見せるものと「分かった」が 1 画面に収まるか。
-// 11/6 から画面の高さに合わせて縮めるので、カードの側も文の側も、見せるものの下の端と「分かった」の下の端が画面の高さ以内になる
+// 13 インチ（1280×800 ほど）と 15 インチ（1366×768・1920×1080）の画面で（11/6 本部の決定）:
+// カードの側は絵と「分かった」が 1 画面に収まる。ページの側は幅いっぱいでスクロールあり、「分かった」は画面の下に貼り付いていつでも押せる。
+// どちらの側も「はじめる」はスクロールせずに押せる
 for (const vp of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }, { width: 1024, height: 768 }]) {
-  test(`ノートパソコン: ${vp.width}×${vp.height} で見せるものが 1 画面に収まるか`, async ({ page, request }) => {
+  test(`ノートパソコン: ${vp.width}×${vp.height} でカードは 1 画面、ページは幅いっぱいで「分かった」がいつでも押せる`, async ({ page, request }) => {
     await page.setViewportSize(vp);
     const t = await crossTrial(request, [`v${vp.width}a`, `v${vp.width}b`]);
     await page.goto(`/#/t/practice/trial/${t.id}/self/v${vp.width}a`);
-    const fit: Record<string, { bottom: number; got: number }> = {};
+    const inView = async (id: string) => {
+      const g = (await page.getByTestId(id).boundingBox())!;
+      return g.y >= 0 && g.y + g.height <= vp.height;
+    };
     for (let k = 0; k < 2; k++) {
       await expect(page.getByTestId("self-start")).toBeEnabled();
+      expect(await inView("self-start")).toBe(true);
       await page.getByTestId("self-start").click();
       await expect(page.getByTestId("self-got")).toBeEnabled();
-      const m = page.getByTestId("material");
-      const shown = (await m.getAttribute("data-shown"))!;
-      const b = (await m.boundingBox())!;
-      const g = (await page.getByTestId("self-got").boundingBox())!;
-      fit[shown] = { bottom: Math.round(b.y + b.height), got: Math.round(g.y + g.height) };
-      expect(await page.evaluate(() => window.scrollY)).toBe(0);
-      expect(fit[shown].bottom).toBeLessThanOrEqual(vp.height);
-      expect(fit[shown].got).toBeLessThanOrEqual(vp.height);
-      // 縮めすぎない: カードの絵もページの画像も、画面の高さの半分より大きく見える
-      const big = shown === "card" ? page.locator(".read-frames") : page.locator(".material-page");
-      expect((await big.boundingBox())!.height).toBeGreaterThan(vp.height * 0.5);
-      if (process.env.FIT_SHOTS) await page.screenshot({ path: `${process.env.FIT_SHOTS}/fit-${vp.width}x${vp.height}-${shown}.png` });
+      const shown = (await page.getByTestId("material").getAttribute("data-shown"))!;
+      expect(await inView("self-got")).toBe(true);
+      if (shown === "card") {
+        const b = (await page.getByTestId("material").boundingBox())!;
+        expect(b.y + b.height).toBeLessThanOrEqual(vp.height);
+        expect((await page.locator(".read-frames").boundingBox())!.height).toBeGreaterThan(vp.height * 0.5);
+      } else {
+        // ページは見せるものの幅いっぱい（縮めて 1 画面にしない）
+        const m = (await page.getByTestId("material").boundingBox())!;
+        const img = (await page.locator(".material-page").boundingBox())!;
+        expect(img.width).toBeGreaterThan(m.width - 24);
+        console.log(`page ${vp.width}x${vp.height} img ${Math.round(img.width)}x${Math.round(img.height)}`);
+        // いちばん下までスクロールしても「分かった」は画面の中
+        await page.mouse.wheel(0, 5000);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+        expect(await inView("self-got")).toBe(true);
+      }
+      if (process.env.FIT_SHOTS) await page.screenshot({ path: `${process.env.FIT_SHOTS}/v2-${vp.width}x${vp.height}-${shown}${real ? "-real" : ""}.png` });
       await page.getByTestId("self-got").click();
       await page.getByTestId("self-text-ja").fill("x");
       await page.getByTestId("self-submit").click();
     }
-    test.info().annotations.push({ type: "fit", description: `${vp.width}x${vp.height} 画面の高さ ${vp.height} / ${JSON.stringify(fit)}` });
-    console.log(`fit ${vp.width}x${vp.height}`, JSON.stringify(fit));
   });
 }
