@@ -6,12 +6,10 @@
 import { useMemo, useState } from "react";
 import { FACE_OPTIONS, type FaceParts } from "../../shared/picto/avatar";
 import { characterSvg, type Hair } from "../../shared/picto/character";
-import { TRACED_HAIRS } from "../../shared/picto/hair-traced";
 import { STANDING } from "../../shared/picto/skeleton";
-import { type Avatar, DEFAULT_AVATAR, saveAvatar } from "./store";
+import { type Avatar, DEFAULT_AVATAR, HAIRS, saveAvatar } from "./store";
 import "./avatar.css";
 
-const HAIRS: readonly Hair[] = ["bob", ...TRACED_HAIRS];
 const HAIR_LABEL: Record<string, string> = {
   bob: "おかっぱ", short: "ショート", bun: "おだんご", long: "ロング", ponytail: "ポニーテール", buzz: "坊主", sidePart: "七三",
   curly: "くせ毛", twoBlock: "ツーブロック", mash: "マッシュ", centerPart: "センター分け", slickBack: "オールバック", shortBob: "ショートボブ",

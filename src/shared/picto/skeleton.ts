@@ -66,6 +66,8 @@ export function validateFigure(f: FigureSpec): string[] {
 
 export type Pt = [number, number];
 export type Joint = "hip" | "shoulder" | "neck" | "head" | `${"elbow" | "hand" | "knee" | "foot"}_${"near" | "far"}`;
+/** 関節の名前の一覧（小物の置き場の検査と、AI に渡すスキーマで使う） */
+export const JOINTS: readonly Joint[] = ["hip", "shoulder", "neck", "head", "elbow_near", "elbow_far", "hand_near", "hand_far", "knee_near", "knee_far", "foot_near", "foot_far"];
 
 export interface Posed {
   joints: Record<Joint, Pt>;
@@ -73,6 +75,8 @@ export interface Posed {
   h: number;
   /** 向き（右 1・左 -1） */
   d: 1 | -1;
+  /** 足の下の高さ（キャンバスの高さに対する割合。場面の絵の lift）。床に置く小物（椅子）を、この人の立つ面に置くのに使う */
+  lift?: number;
 }
 
 /** 関節の位置を出す。いちばん低い足先を地面（groundY）に置く */

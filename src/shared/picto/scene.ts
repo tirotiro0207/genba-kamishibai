@@ -132,9 +132,12 @@ export function placePair(distance: number, center = 0.5): [number, number] {
 
 export function validateFrame(f: Frame): string[] {
   const errs: string[] = [];
-  if (!Array.isArray(f.figures) || f.figures.length > 3) errs.push("人物は 0〜3 人");
+  if (!Array.isArray(f?.figures) || f.figures.length > 3) return ["人物は 0〜3 人（figures の並び）"];
+  if (f.props !== undefined && !Array.isArray(f.props)) return ["props は並び"];
+  if (f.figures.some((fig) => !fig || typeof fig !== "object")) return ["figures の中身は形（オブジェクト）"];
+  const inRange = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
   f.figures.forEach((fig, i) => {
-    if (fig.gaze && (Math.abs(fig.gaze.angle) > 90 || fig.gaze.length < 0.1 || fig.gaze.length > 1.5)) errs.push(`figures[${i}].gaze が範囲の外`);
+    if (fig.gaze !== undefined && !(fig.gaze && inRange(fig.gaze.angle, -90, 90) && inRange(fig.gaze.length, 0.1, 1.5))) errs.push(`figures[${i}].gaze が範囲の外`);
     if (fig.role !== undefined && !ROLES.includes(fig.role)) errs.push(`figures[${i}].role: ${fig.role}`);
     for (const e of fig.emphasis ?? []) if (!["thick", "large", "dark", "frame"].includes(e)) errs.push(`figures[${i}].emphasis: ${e}`);
     if (fig.expression !== undefined && !EXPRESSIONS.includes(fig.expression)) errs.push(`figures[${i}].expression: ${fig.expression}`);
@@ -142,7 +145,7 @@ export function validateFrame(f: Frame): string[] {
     if (fig.lift !== undefined && !(typeof fig.lift === "number" && fig.lift >= 0 && fig.lift <= LIFT_MAX)) errs.push(`figures[${i}].lift が範囲の外（0〜${LIFT_MAX}）: ${fig.lift}`);
   });
   errs.push(...validateProps(f.props ?? [], f.figures.length));
-  if (f.zoom && (f.zoom.figure < 0 || f.zoom.figure >= f.figures.length || f.zoom.factor < 1 || f.zoom.factor > 5)) errs.push("zoom が範囲の外");
+  if (f.zoom && !(Number.isInteger(f.zoom.figure) && f.zoom.figure >= 0 && f.zoom.figure < f.figures.length && inRange(f.zoom.factor, 1, 5))) errs.push("zoom が範囲の外");
   return errs;
 }
 
@@ -211,7 +214,7 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
   const props = frame.props ?? [];
   const worn = props.map(wornOn);
   const chars = figs.map((f, i) => sceneCharacter(f, props.filter((_, k) => worn[k] === i), size, g));
-  const posed: Posed[] = chars.map((c) => ({ joints: characterJoints(c), h: c.height, d: c.facing === "right" ? 1 : -1 }));
+  const posed: Posed[] = chars.map((c, i) => ({ joints: characterJoints(c), h: c.height, d: c.facing === "right" ? 1 : -1, ...(figs[i].lift ? { lift: figs[i].lift } : {}) }));
   const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
   // 人の腰に付けた椅子（11/6）は、人より先に描く（座った人が椅子の前に来る）
   const behind = (p: PropSpec) => !("figure" in p.at) || p.kind === "chair";
