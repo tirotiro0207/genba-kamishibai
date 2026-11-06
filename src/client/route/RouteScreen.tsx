@@ -4,7 +4,7 @@
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { type CardBody, type CardPart, routeOf, type SourceRef } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 import { req } from "../make/MakeScreen";
 import { partBoxes } from "../../shared/boxes";
 import "./route.css";
@@ -139,7 +139,7 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
       <div className="route-main">
         <div className="route-pic">
           <div className="route-face" data-testid="route-face" data-frame={at}>
-            <span dangerouslySetInnerHTML={{ __html: renderFrame(frames[at].frame).svg }} />
+            <span dangerouslySetInnerHTML={{ __html: frameSvg(frames[at]?.frame) }} />
             {/* 大きい箱を先に置き、人の手の小物のような小さい部品を上にしてタップできるようにする */}
             {[...(boxes[at] ?? [])].sort((p, q) => q.w * q.h - p.w * p.h).map((x) => (
               <button

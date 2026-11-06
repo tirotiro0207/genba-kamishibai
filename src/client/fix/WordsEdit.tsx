@@ -4,7 +4,7 @@
 import { useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 
 /** 送る先（POST /:id/rework）。frame が null ならカード全体 */
 export type SendWords = (text: string, frame: number | null) => Promise<{ version: number; rework: { count: number; left: number } }>;
@@ -57,7 +57,7 @@ export function WordsEdit({ body, version, busy, setBusy, onSend }: { body: Card
         <div className={`words-faces${shown.length > 1 ? " many" : ""}`} data-testid="words-faces" data-version={version}>
           {shown.map((j) => (
             <figure key={`${version}-${j}`} className="fix-face still">
-              <span dangerouslySetInnerHTML={{ __html: renderFrame(frames[j].frame).svg }} />
+              <span dangerouslySetInnerHTML={{ __html: frameSvg(frames[j].frame) }} />
               <figcaption>{j + 1} コマ目</figcaption>
             </figure>
           ))}

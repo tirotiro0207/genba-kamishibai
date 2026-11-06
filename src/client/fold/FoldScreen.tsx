@@ -6,7 +6,7 @@ import type { CardBody } from "../../shared/card";
 import { faceText } from "../../shared/card-face";
 import { type FoldPage, foldPage, foldTotal } from "../../shared/fold";
 import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 import { req } from "../make/MakeScreen";
 import { useReducedMotion } from "../motion/Slide";
 import "./fold.css";
@@ -88,7 +88,7 @@ export function FoldScreen({ tenant, cardId }: { tenant: string; cardId: string 
   if (!card || !pages) return <p>読み込み中…</p>;
   const total = foldTotal(pages);
   const count = foldTotal(pages.slice(0, shown));
-  const svg = card.motion.kind === "keyframes" ? renderFrame(cutFrames(card.motion.json)[0].frame).svg : "";
+  const svg = card.motion.kind === "keyframes" ? frameSvg(cutFrames(card.motion.json)[0]?.frame) : "";
   const face = faceText(svg).length;
 
   return (

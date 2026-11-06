@@ -7,8 +7,8 @@ import { partBoxes } from "../../shared/boxes";
 import type { CardBody } from "../../shared/card";
 import { dragPatch, movePart, type Target, pinchPatch } from "../../shared/move";
 import { frameAt, type MotionJson } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
 import { keyIndexAt } from "../../shared/redo";
+import { frameSvg } from "../Safe";
 
 type Pt = { x: number; y: number };
 type Grab = { id: string; json: MotionJson; target: Target; pts: Map<number, Pt>; start: Map<number, Pt> };
@@ -109,7 +109,7 @@ export function TouchEdit({ body, at, busy, onSave }: { body: CardBody; at: numb
   return (
     <div className="fix-main">
       <div ref={ref} className="fix-face touch" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} data-testid="touch-face">
-        <span dangerouslySetInnerHTML={{ __html: renderFrame(frameAt(json, t)).svg }} />
+        <span dangerouslySetInnerHTML={{ __html: frameSvg(frameAt(json, t)) }} />
         {boxes
           .filter((b) => b.part === part)
           .map((b) => (
