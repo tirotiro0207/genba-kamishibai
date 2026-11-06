@@ -1,6 +1,8 @@
 // 会社の言葉（085・§5 L1 ③）。人の直しの前と後の文から、言い換えと使わない言い方を取り出す。API は使わない。
 // 文字ごとの最長共通部分列で違う所（かたまり）を見つけ、かたまりの端が漢字・カタカナ・英数字の途中なら、
 // 同じ種類の文字が続くところまで前後を広げて、言葉の切れ目に揃える（「検電器」→「検電ドライバー」の「器」だけを取らない）。
+// 比べる前にふりがな（｜漢字《よみ》）を外す。ふりがなを足しただけ・外しただけの直しを、言い換えや使わない言い方にしない。
+import { rubyBase } from "./ruby";
 
 export type WordKind = "call" | "rephrase" | "avoid";
 
@@ -105,7 +107,7 @@ export function fieldTexts(side: Record<string, unknown>): Record<string, string
 export function wordsFromChange(before: Record<string, unknown>, after: Record<string, unknown>): CompanyWord[] {
   const a = fieldTexts(before);
   const b = fieldTexts(after);
-  return TEXT_FIELDS.flatMap((f) => (f in a && f in b ? wordsFromEdit(a[f], b[f]) : []));
+  return TEXT_FIELDS.flatMap((f) => (f in a && f in b ? wordsFromEdit(rubyBase(a[f]), rubyBase(b[f])) : []));
 }
 
 /** 使わない言い方として見せる言い換えの回数（1 回の直しは好みかもしれないので、2 回から） */

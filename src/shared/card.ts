@@ -3,6 +3,7 @@
 // 絵の作り方を変えてもカードの形は変えずに済むようにする。コマは時刻と、切り出した PNG の置き場の鍵。
 // 絵の部品 → カードの文 → 元の文の位置（資料のページと行、または話した言葉）の経路を部品ごとに必ず持つ。
 import { type MotionJson, validateMotion } from "./picto/motion";
+import { bareKanji, brokenRuby } from "./ruby";
 
 /** 元の文の位置。監査の記録 ① と同じ形 */
 export type SourceRef =
@@ -34,8 +35,11 @@ export interface CardPart {
 export interface CardBody {
   rule: string;
   why: string;
-  /** 言葉の欄（036 で埋める）。やさしい日本語と母語 */
-  words?: { ja: string; vi: string };
+  /**
+   * 言葉の欄（036 で埋める）。やさしい日本語と、作れたときだけ母語（vi）。
+   * 訳は新入社員にも監修者にも出さない（11/5 の決定）ので、vi は無くてよい。前に作った訳のデータは消さずに残す
+   */
+  words?: { ja: string; vi?: string };
   statements: Statement[];
   motion: CardMotion;
   /** 3〜4 コマ。png は切り出した PNG の置き場の鍵（まだ切り出していなければ無い） */
@@ -84,8 +88,10 @@ export const STATUS_LABEL: Record<CardStatus, string> = {
 };
 
 /**
- * 許される移り方。下書きは作り直せる（draft へ戻る）。署名済みからは停止だけ。
- * 停止したカードは直すときに下書きへ戻し、もう一度確かめて署名する。
+ * 状態の欄を直に動かすときに許される移り方（状態を変える呼び出しが canMove で見る）。下書きは作り直せる（draft へ戻る）。
+ * 状態の欄を直に動かすときは、署名済みからは停止だけ。停止したカードは直すときに下書きへ戻し、もう一度確かめて署名する。
+ * 中身を直す道（直す・作り直す・やり直す・元に戻す）はこの表を通らない。11/5 の決定で、署名済みも直せ、直すと版が上がって
+ * 下書き（AI が書いた文が残っていれば AI 下書き）へ戻り、前の版に回収の知らせが出る（worker の reopenOnEdit）。
  * 11/5（作者）: ホームのカードの管理から、署名の前のカードも止められるようにした（使わないと決めた下書きを一覧で分けるため）
  */
 export const TRANSITIONS: Record<CardStatus, readonly CardStatus[]> = {
@@ -126,7 +132,10 @@ export function validateCard(c: CardBody): string[] {
   const errs: string[] = [];
   if (!isStr(c.rule)) errs.push("rule（守ること）が要る");
   if (!isStr(c.why)) errs.push("why（なぜ）が要る");
-  if (c.words !== undefined && !(isStr(c.words?.ja) && isStr(c.words?.vi))) errs.push("words は ja と vi が要る");
+  if (c.words !== undefined) {
+    if (!isStr(c.words?.ja)) errs.push("words は ja が要る");
+    if (c.words?.vi !== undefined && !(typeof c.words.vi === "string" && c.words.vi.length <= 2000)) errs.push("words.vi は 2000 字までの文");
+  }
 
   const sts = Array.isArray(c.statements) ? c.statements : [];
   if (!sts.length) errs.push("statements が要る");
@@ -181,6 +190,21 @@ export function validateCard(c: CardBody): string[] {
   });
   // 経路の無い部品は保存できない
   for (const t of targets) if (!covered.has(t)) errs.push(`${t.replace(/^(\w+):(.*)$/, (_, a, b) => (a === "element" ? `部品 ${b}` : `${a}s[${b}]`))} に経路が無い`);
+  return errs;
+}
+
+/**
+ * 言葉の欄のやさしい日本語の、ふりがなの検査（docs/yasashii-nihongo.md「残した漢字には、すべてふりがな」）。
+ * AI の答えは words.ts で確かめているので、人が直した文も同じ決まりで見る。問題の一覧を返す（空なら通る）。
+ * before を渡すと、words.ja が変わったときだけ見る（決まりより前に作ったカードを、ほかの欄の直しや元に戻すで止めない）
+ */
+export function wordsRubyErrors(c: CardBody, before?: CardBody): string[] {
+  const ja = c?.words?.ja;
+  if (typeof ja !== "string" || (before && before.words?.ja === ja)) return [];
+  const errs: string[] = [];
+  const bare = bareKanji(ja);
+  if (bare.length) errs.push(`words.ja にふりがなの無い漢字がある: ${bare.join("・")}（「｜漢字《よみ》」でふりがなを付けるか、ひらがなにする）`);
+  if (brokenRuby(ja)) errs.push("words.ja のふりがなの書き方が崩れている（「｜漢字《よみ》」の形にする）");
   return errs;
 }
 
