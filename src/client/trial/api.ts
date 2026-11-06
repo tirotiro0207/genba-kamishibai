@@ -32,7 +32,8 @@ export interface ResponseRow {
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const tenant = decodeURIComponent(path.split("/")[3] ?? "");
   const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...authHeaders(tenant), ...(init?.headers ?? {}) } });
-  const body = await res.json();
+  // JSON でない返事（前に立つ置き場の 5xx の HTML や 413 など）でも、読めない字ではなく HTTP の番号で伝える
+  const body = await res.json().catch(() => ({}));
   // 送り直しで 409（済んでいる）を見分けられるように、HTTP の番号を付けて投げる
   if (!res.ok) throw Object.assign(new Error((body as { error?: string }).error ?? `HTTP ${res.status}`), { status: res.status });
   return body as T;
@@ -60,6 +61,9 @@ export interface Grade {
 export const listGrades = (tenant: string, id: string, grader: Grader) => req<{ grades: Grade[] }>(`${base(tenant)}/${id}/grades?grader=${grader}`).then((r) => r.grades);
 export const postGrade = (tenant: string, id: string, body: { response_seq: number; grader: Grader; verdict: Verdict; answer_ja?: string; field?: "ja" | "own" }) =>
   req<{ seq: number }>(`${base(tenant)}/${id}/grades`, { method: "POST", body: JSON.stringify(body) });
+/** やめた参加者の答えを消す（025b）。答え・秒・訳を空にして印を付ける。消したあとはその人の答えを受け付けない */
+export const eraseParticipant = (tenant: string, id: string, participant: string) =>
+  req<{ erased: { responses: number; grades: number; pictures: number } }>(`${base(tenant)}/${id}/erase`, { method: "POST", body: JSON.stringify({ participant }) });
 export const csvUrl = (tenant: string, id: string) => `${base(tenant)}/${id}/answers.csv`;
 
 /** その参加者・項目で次に見せるもの（済んでいれば null） */
@@ -127,7 +131,7 @@ export async function fileUrl(tenant: string, path: string, src?: string): Promi
 /** 置き場に画像を入れる */
 export async function putFile(tenant: string, path: string, file: Blob) {
   const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/files/${path}`, { method: "PUT", headers: { ...authHeaders(tenant), "content-type": file.type || "application/octet-stream" }, body: file });
-  if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`);
 }
 
 /** 交差の回の結果（11/5）。国籍ごとの数はまとめた数だけ */

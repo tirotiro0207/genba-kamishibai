@@ -96,6 +96,9 @@ export function TimeScreen({ tenant, id }: { tenant: string; id: string }) {
   }, [tenant, id, reload]);
   if (err) return <p className="err">{err}</p>;
   if (!trial) return <p>読み込み中…</p>;
+  // 時間の記録は前からの回（順の回）だけ。交差の回は 1 人が自分で受ける画面（self）を使う
+  if (trial.design === "cross") return <p className="err">この回は交差の回なので、時間の記録は使わない。新入社員が自分で受ける画面から受ける</p>;
+  if (!trial.participants.length) return <p className="err">この回には参加者がいない</p>;
   return (
     <div className="lanes">
       {[0, 1].map((i) => (
