@@ -29,9 +29,9 @@ export function wranglerExec(where: "local" | "remote"): Exec {
         const why = all.slice(-600);
         // 手元の D1 に何本も同時に書くと、ファイルの取り合いで internal error が返る（書けていない）。少し待って送り直す。
         // 4 本のときは、workerd が SQLITE_IOERR で立ち上がれないこともある（同じく書けていない）。
-        // 本番は、INSERT を送り直すと二重に書く恐れがあるので、読み（SELECT）と WHERE 付きの UPDATE が 1 文だけのときに限って送り直す
+        // 本番は、INSERT を送り直すと二重に書く恐れがあるので、送り直してよい文（isRetrySafe）に限る
         const local = where === "local" && /internal error|SQLITE_BUSY|SQLITE_IOERR|database is locked/i.test(why);
-        const safe = where === "remote" && /^\s*(SELECT|UPDATE\b[\s\S]*\bWHERE\b)/i.test(sql) && !sql.includes(";\n");
+        const safe = where === "remote" && isRetrySafe(sql);
         // 063 で、Cloudflare の API がときどき「アカウントが認められない（7403）」を返した。中身を流す前に断られているので、どの文でも送り直してよい
         const denied = where === "remote" && /"code":\s*7403\b/.test(all);
         if (attempt < 5 && (local || denied || (safe && attempt < 3))) {
@@ -45,6 +45,17 @@ export function wranglerExec(where: "local" | "remote"): Exec {
     const parsed = JSON.parse(out.slice(out.indexOf("["))) as { results?: Record<string, unknown>[]; meta?: { changes?: number } }[];
     return { results: parsed.flatMap((r) => r.results ?? []), changes: parsed.reduce((s, r) => s + (r.meta?.changes ?? 0), 0) };
   };
+}
+
+/**
+ * 本番で送り直してよい文か。1 文だけの SELECT か、WHERE 付きの UPDATE。
+ * ただし「attempts = attempts + 1」のように前の値から足し引きする UPDATE は、届いていたのに失敗が返ると二重に足すので送り直さない
+ */
+export function isRetrySafe(sql: string): boolean {
+  if (sql.includes(";\n")) return false;
+  if (/^\s*SELECT\b/i.test(sql)) return true;
+  if (!/^\s*UPDATE\b[\s\S]*\bWHERE\b/i.test(sql)) return false;
+  return !/\b(\w+)\s*=\s*\1\s*[-+]/i.test(sql);
 }
 
 /** 値を SQL の文字に埋める（? の数だけ、引用符の外の ? を順に置き換える） */
