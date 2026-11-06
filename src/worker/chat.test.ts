@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BudgetExceededError } from "../shared/claude";
 import { PDF_MODEL } from "./chat";
 import { setClientFactory } from "./claude-client";
 import { signRole } from "./people";
@@ -39,7 +40,8 @@ describe("新しいカードを作るチャット", () => {
     expect(String(sent.at(-1)?.messages[0].content)).toContain("作る人の指示");
     expect(String(sent.at(-1)?.messages[0].content)).toContain("検電の決まりだけ");
     const x = (await (await call(`/api/t/practice/extract/${got.messages[1].extraction}`)).json()) as { rules: { where: { page: number; line: number } }[] };
-    expect(x.rules[0].where).toEqual({ page: 7, line: 1 });
+    // 添付が 2 つのときは、どの資料のページかも持つ（A の 1 ページと B の 1 ページを取り違えない）
+    expect(x.rules[0].where).toEqual({ page: 7, line: 1, doc: "安全.pdf" });
 
     // 2 回目は添付なしの指示だけ。資料は前のものを使う
     const again = (await (await call(`${base}/${chat.id}/messages`, json("POST", { text: "理由も入れて" }))).json()) as Chat;
@@ -69,6 +71,32 @@ describe("新しいカードを作るチャット", () => {
     const chat = (await (await call(base, json("POST"))).json()) as Chat;
     expect((await call(`${base}/${chat.id}/messages`, json("POST", {}))).status).toBe(400);
     expect((await call(`${base}/${chat.id}/messages`, json("POST", { files: [{ name: "a.txt", text: "a\nb", pages: [{ page: 1, lines: 5 }] }] }))).status).toBe(400);
-    expect((await call(`/api/t/other/chats/${chat.id}`)).status).not.toBe(200);
+    // 別のテナント（ある架空の会社）からは、同じ番号のチャットは見えない
+    expect((await call(`/api/t/demo/chats/${chat.id}`)).status).toBe(404);
+  });
+
+  it("資料が長すぎるときは、足した添付を資料からも指示の行からも外す", async () => {
+    const chat = (await (await call(base, json("POST"))).json()) as Chat;
+    const long = Array.from({ length: 2100 }, () => "あいうえおかきくけこ").join("\n");
+    const got = (await (await call(`${base}/${chat.id}/messages`, json("POST", { text: "これで", files: [{ name: "長い.txt", text: long }] }))).json()) as Chat;
+    expect(got.messages[1].text).toContain("長すぎます");
+    expect(got.messages[0].files).toEqual([]);
+    expect(got.files).toEqual([]);
+  });
+
+  it("取り出しが途中で止まっても、書いた指示は残る。費用の上限は理由を返事にする", async () => {
+    setClientFactory(() => ({ messages: { create: async () => { throw new BudgetExceededError("app", "perDay", 1); } } }));
+    try {
+      const chat = (await (await call(base, json("POST"))).json()) as Chat;
+      const got = (await (await call(`${base}/${chat.id}/messages`, json("POST", { text: "脚立の天板に乗らない" }))).json()) as Chat;
+      expect(got.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+      expect(got.messages[1].text).toContain("費用の上限");
+      setClientFactory(() => ({ messages: { create: async () => { throw new Error("つながらない"); } } }));
+      expect((await call(`${base}/${chat.id}/messages`, json("POST", { text: "理由も入れて" }))).status).toBe(500);
+      const after = (await (await call(`${base}/${chat.id}`)).json()) as Chat;
+      expect(after.messages.at(-1)).toMatchObject({ role: "user", text: "理由も入れて" });
+    } finally {
+      setClientFactory(() => ({ messages: { create: async (p: Anthropic.MessageCreateParamsNonStreaming) => (sent.push(p), reply({ rules: [] })) } }));
+    }
   });
 });
