@@ -213,7 +213,7 @@ export function cutFrames(m: MotionJson): { t: number; frame: Frame }[] {
   return m.keyframes.filter((k) => k.mark).map((k) => ({ t: k.t, frame: frameAt(m, k.t) }));
 }
 
-/** 再生用: fps で刻んだ各時刻の SVG */
+/** 再生用: fps で刻んだ各時刻の SVG（本体の画面からは呼ばない。テストで動きを確かめる道具） */
 export function playSvgs(m: MotionJson, fps = 12): string[] {
   const end = m.keyframes[m.keyframes.length - 1].t;
   const out: string[] = [];

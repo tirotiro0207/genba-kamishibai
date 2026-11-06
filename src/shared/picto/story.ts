@@ -171,7 +171,7 @@ export function storyPartsSvg(parts: StoryPart[], size: number): string {
     .join("");
 }
 
-/** 起の 1 枚: カードと同じ場面（人形・小物）に、起の部品を足す。枠の線より下に重ねる */
+/** 起の 1 枚: カードと同じ場面（人形・小物）に、起の部品を足す。枠の線より下に重ねる（本体からは呼ばない。scripts/story-panels.ts とテストが使う） */
 export function storyFrameSvg(frame: Frame, parts: StoryPart[], size = 768): string {
   const { svg } = renderFrame(frame, size);
   const at = svg.lastIndexOf('<g data-part="border">');

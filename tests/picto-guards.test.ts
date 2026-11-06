@@ -5,7 +5,7 @@ import { DEFAULT_FACE } from "../src/shared/picto/avatar";
 import { characterSvg } from "../src/shared/picto/character";
 import { keyToFrame, type MotionJson, validateFrameJson, validateMotion } from "../src/shared/picto/motion";
 import { POSES } from "../src/shared/picto/poses";
-import { validateProps } from "../src/shared/picto/props";
+import { craneTip, propCenters, validateProps } from "../src/shared/picto/props";
 import { renderFrame, validateFrame } from "../src/shared/picto/scene";
 import { STANDING } from "../src/shared/picto/skeleton";
 
@@ -95,5 +95,17 @@ describe("高い所に立つ人の椅子", () => {
     const ground = chairFeet(0);
     expect(ground).toBeGreaterThan(0.88 * 768 - 10);
     expect(Math.abs(chairFeet(0.2) - (ground - 0.2 * 768))).toBeLessThan(2);
+  });
+});
+
+describe("吊り荷の真ん中の点（タップの範囲と絵をそろえる）", () => {
+  it("クレーンにつながった吊り荷は先の真下、つながらなければ置き場所の点", () => {
+    const crane = { kind: "crane" as const, at: { x: 0.4, y: 0.88 }, size: 0.4 };
+    const tip = craneTip([0.4 * 768, 0.88 * 768], 0.4 * 768, 1);
+    const [, near] = propCenters([crane, { kind: "suspended_load", at: { x: 0.66, y: 0.6 }, size: 0.14 }], [], 768);
+    expect(near[0]).toBeCloseTo(tip[0], 6);
+    expect(near[1]).toBeCloseTo(0.6 * 768, 6);
+    const [, far] = propCenters([crane, { kind: "suspended_load", at: { x: 0.2, y: 0.5 }, size: 0.1 }], [], 768);
+    expect(far).toEqual([0.2 * 768, 0.5 * 768]);
   });
 });

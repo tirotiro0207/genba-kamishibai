@@ -295,7 +295,7 @@ export function anchorPoint(at: PropAnchor, posed: Posed[], size: number): { c: 
   return { c: [at.x * size, at.y * size], d: 1 };
 }
 
-/** 描き方の付け足し。W は縁の太さ、icon は吹き出しの中の小さい絵、worn は人の頭や手に着けたとき */
+/** 描き方の付け足し。W は縁の太さ、icon は吹き出しの中の小さい絵、worn は人の頭や手に着けたとき（propsSvg を直接呼ぶときだけ。場面の絵では服になる） */
 interface Opt {
   W: number;
   icon?: boolean;
@@ -1677,25 +1677,51 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
   return `<g data-part="bubble">${tail}${box}${icon}${mark}</g>`;
 }
 
-export function propsSvg(props: PropSpec[], posed: Posed[], size: number): string {
-  const W = lineWidth(size);
-  // クレーンと吊り荷をつなぐ（11/5）: 吊り荷がクレーンの先の近く（横に吊り荷の大きさの 0.8 倍まで）で先より下にあれば、
-  // 吊り荷を先の真下へ寄せ、ワイヤーを先から垂らす。クレーンは自分のワイヤーとフックを描かない
+/**
+ * 小物を描く。場面の絵（scene.ts の renderFrame）は、人に着ける小物（頭・手・足・体。WORN）を先に服とかぶり物に置き換えて、ここへは渡さない。
+ * そのため着けたときの描き方（worn の分かれ・人に付けた安全帯の body の分かれ・harnessStraps）は、propsSvg を直接呼ぶとき（scripts/export-props.ts とテスト）だけ使う
+ */
+/**
+ * クレーンと吊り荷をつなぐ（11/5）: 吊り荷がクレーンの先の近く（横に吊り荷の大きさの 0.8 倍まで）で先より下にあれば、
+ * 吊り荷を先の真下へ寄せ、ワイヤーを先から垂らす。クレーンは自分のワイヤーとフックを描かない。
+ * tips はクレーンの先（クレーンでなければ null）、link は吊り荷の番号 → クレーンの番号
+ */
+function craneLinks(props: PropSpec[], posed: Posed[], size: number): { tips: (Pt | null)[]; link: Map<number, number> } {
   const tips = props.map((p) => (p.kind === "crane" ? (() => { const a = anchorPoint(p.at, posed, size); return craneTip(a.c, p.size * size, a.d); })() : null));
-  const link = new Map<number, number>(); // 吊り荷の番号 → クレーンの番号
+  const link = new Map<number, number>();
   props.forEach((p, i) => {
     if (p.kind !== "suspended_load") return;
     const { c } = anchorPoint(p.at, posed, size);
     const j = tips.findIndex((t) => t !== null && Math.abs(t[0] - c[0]) <= p.size * size * 0.8 && t[1] < c[1]);
     if (j >= 0) link.set(i, j);
   });
+  return { tips, link };
+}
+
+/**
+ * 小物を描く真ん中の点（px）。ふつうは置き場所の点（anchorPoint）で、クレーンにつながった吊り荷だけ先の真下へ寄せる。
+ * 絵と同じ点で箱（タップの範囲）を作るときに使う。props は propsSvg に渡すのと同じ並び（同じ組で描く小物）
+ */
+export function propCenters(props: PropSpec[], posed: Posed[], size: number): Pt[] {
+  const { tips, link } = craneLinks(props, posed, size);
+  return props.map((p, i) => {
+    const { c } = anchorPoint(p.at, posed, size);
+    const j = link.get(i);
+    return j === undefined ? c : [tips[j]![0], c[1]];
+  });
+}
+
+export function propsSvg(props: PropSpec[], posed: Posed[], size: number): string {
+  const W = lineWidth(size);
+  const { tips, link } = craneLinks(props, posed, size);
+  const centers = propCenters(props, posed, size);
   const linkedCranes = new Set(link.values());
   return props
     .map((p, i) => {
       const a = anchorPoint(p.at, posed, size);
       const d = a.d;
       const j = link.get(i);
-      const c: Pt = j === undefined ? a.c : [tips[j]![0], a.c[1]];
+      const c = centers[i];
       if (BUBBLES.has(p.kind)) {
         let to: Pt | null = null;
         if ("figure" in p.at) {
@@ -1747,7 +1773,7 @@ function anchorLine([cx, cy]: Pt, s: number, d: number, size: number, W: number)
     `<rect x="${n(tx - s * 0.2)}" y="${n(top)}" width="${n(s * 0.64)}" height="${n(s * 0.12)}" rx="${n(s * 0.03)}" fill="${STEEL}" stroke="${INK}" stroke-width="${n(W)}" stroke-linejoin="round"/>`;
 }
 
-/** 安全帯の肩とももをつなぐベルト（フルハーネス）。肩から腰へ 2 本、胸に横の 1 本、ももに 1 本ずつ。縁の黒の上に濃い灰を重ねる */
+/** 安全帯の肩とももをつなぐベルト（フルハーネス）。肩から腰へ 2 本、胸に横の 1 本、ももに 1 本ずつ。縁の黒の上に濃い灰を重ねる（propsSvg を直接呼ぶときだけ。場面の絵では服の fullHarness が描く） */
 function harnessStraps(p: Posed, W: number): string {
   const j = p.joints;
   const tw = p.h * PROPORTION.torsoWidth * 0.32;
