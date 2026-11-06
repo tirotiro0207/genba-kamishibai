@@ -3,8 +3,9 @@
 // 送る前に、入る文字を行番号付きで画面に出して確かめる。送ると決まりと「どこから」が出て、目で確かめて OK を押す。
 // OK した項目は、1 つずつ「カードにする」で未承認の下書きにする（034a の作成。038）。会社のテナントは先に PIN で入る。
 import { useEffect, useState } from "react";
+import { pinLost, statsChanged } from "../events";
 import { Slide } from "../motion/Slide";
-import { needsPin, TenantPin } from "../pin/TenantPin";
+import { needsPin } from "../pin/TenantPin";
 import "./make.css";
 
 type Source = { kind: "doc"; doc: string; pages: { page: number; lines: number }[] } | { kind: "speech" };
@@ -44,25 +45,40 @@ function headers(tenant: string): Record<string, string> {
 export async function req<T>(tenant: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(api(tenant, path), { ...init, headers: { ...headers(tenant), ...(init?.headers ?? {}) } });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  if (!res.ok) {
+    const msg = (body as { error?: string }).error ?? `HTTP ${res.status}`;
+    // 入ったしるしが無い・切れた（401・403）は、どの画面でも App が PIN の画面に戻す
+    if ((res.status === 401 || res.status === 403) && needsPin(msg)) pinLost(tenant);
+    throw new Error(msg);
+  }
+  // カードを作った・変えたら、上の数字の帯を読み直す（作成・保存・直し・戻す・状態・署名のどれでも）
+  if ((init?.method ?? "GET") !== "GET" && /^\/(cards(\/|$)|extract\/[^/]+\/make$)/.test(path)) statsChanged();
   return body as T;
 }
 
 const where = (w: Where) => (w.page ? `${w.page} ページ ${w.line} 行` : `${w.line} 行目`);
 
 /** 置き場にある、文字にした資料（031b の pdf/<名前>/index.json）の一覧 */
-function useDocs(tenant: string) {
+function useDocs(tenant: string): [string[], string] {
   const [docs, setDocs] = useState<string[]>([]);
+  // 読めなかったときの一言（資料が無いのと見分けるため）。PIN が要るときは App が PIN の画面に戻すので出さない
+  const [fail, setFail] = useState("");
   useEffect(() => {
     req<{ files: { path: string }[] }>(tenant, "/files?prefix=pdf/")
-      .then((r) => setDocs(r.files.filter((f) => f.path.endsWith("/index.json")).map((f) => f.path.split("/")[1])))
-      .catch(() => setDocs([]));
+      .then((r) => {
+        setDocs(r.files.filter((f) => f.path.endsWith("/index.json")).map((f) => f.path.split("/")[1]));
+        setFail("");
+      })
+      .catch((e: Error) => {
+        setDocs([]);
+        setFail(needsPin(e.message) ? "" : e.message);
+      });
   }, [tenant]);
-  return docs;
+  return [docs, fail];
 }
 
 function InputStep({ tenant, onConfirm }: { tenant: string; onConfirm: (text: string, source: Source, focus: string) => void }) {
-  const docs = useDocs(tenant);
+  const [docs, docsFail] = useDocs(tenant);
   const [mode, setMode] = useState<"speech" | "doc">("speech");
   const [speech, setSpeech] = useState("");
   const [doc, setDoc] = useState("");
@@ -134,6 +150,11 @@ function InputStep({ tenant, onConfirm }: { tenant: string; onConfirm: (text: st
                 ))}
               </select>
             </label>
+            {docsFail && (
+              <p className="err" data-testid="docs-fail">
+                資料の一覧を読めませんでした（{docsFail}）
+              </p>
+            )}
             <label>
               ページ（例: 27, 30-31）
               <input value={pages} onChange={(e) => setPages(e.target.value)} data-testid="pages" />
@@ -325,11 +346,7 @@ export function MakeScreen({ tenant }: { tenant: string }) {
   const [err, setErr] = useState("");
   const [x, setX] = useState<{ id: string; rules: Rule[] } | null>(null);
   const [ok, setOk] = useState<number[]>([]);
-  // 会社のテナントは、入ったしるしが無いと置き場も読めない。読めなければ先に PIN を聞く
-  const [gate, setGate] = useState(false);
-  useEffect(() => {
-    req(tenant, "/files?prefix=pdf/").catch((e: Error) => setGate(needsPin(e.message)));
-  }, [tenant]);
+  // 会社のテナントで入ったしるしが無いと、資料の一覧（useDocs）が 401 になり、App が PIN の画面に戻す（同じ一覧を 2 回呼ばない）
 
   async function send() {
     setBusy(true);
@@ -351,7 +368,6 @@ export function MakeScreen({ tenant }: { tenant: string }) {
     setStep(s);
   };
 
-  if (gate) return <TenantPin tenant={tenant} onDone={() => setGate(false)} />;
   return (
     <>
       <Slide k={step} dir={dir}>

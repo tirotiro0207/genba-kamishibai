@@ -4,7 +4,17 @@ import type { CardStatus } from "../../shared/card";
 import { STATUS_LABEL } from "../../shared/card";
 import type { Band } from "../../shared/verify/formal";
 import { req } from "../make/MakeScreen";
+import { roleKey } from "../pin/TenantPin";
 import "./queue.css";
+
+/** 役割のしるし（テナント.役割.番号.…）から役割を読む。仕分けを入れ替えるのは監修者だけ（サーバーも監修者以外を 403 で断る） */
+function roleOf(tenant: string): string | null {
+  try {
+    return sessionStorage.getItem(roleKey(tenant))?.split(".")[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 interface QueueCard {
   id: string;
@@ -42,6 +52,7 @@ export function QueueScreen({ tenant }: { tenant: string }) {
   const [sort, setSort] = useState<SortList | null>(null);
   const [why, setWhy] = useState("");
   const [err, setErr] = useState("");
+  const canSwap = roleOf(tenant) === "supervisor";
   useEffect(() => {
     req<{ cards: QueueCard[] }>(tenant, "/queue").then((r) => setCards(r.cards), (e: Error) => setErr(e.message));
     req<SortList>(tenant, "/sort").then(setSort, (e: Error) => setErr(e.message));
@@ -81,7 +92,7 @@ export function QueueScreen({ tenant }: { tenant: string }) {
                   脚本なし
                 </span>
               )}
-              <a href={`#/t/${tenant}/card/${c.id}`}>{c.rule}</a>
+              <a href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(c.id)}`}>{c.rule}</a>
               <span className="queue-meta">
                 {STATUS_LABEL[c.status]}
                 {c.rate !== null && `・伝わる率 ${c.rate}%`}
@@ -93,7 +104,8 @@ export function QueueScreen({ tenant }: { tenant: string }) {
       <div className="queue-box">
         <h2>仕分けの一覧 {sort?.run && <span className="queue-meta">する {yes}・しない {no}（全 {sort.run.pages} ページ）</span>}</h2>
         {sort && !sort.run && <p className="queue-meta">まだ夜間の仕分けを流していません</p>}
-        {sort?.run && (
+        {sort?.run && !canSwap && <p className="queue-meta">入れ替えるのは監修者です（この役では見るだけ）</p>}
+        {sort?.run && canSwap && (
           <label className="queue-why">
             入れ替えの理由（なくてもよい）
             <input value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} data-testid="swap-why" />
@@ -113,7 +125,7 @@ export function QueueScreen({ tenant }: { tenant: string }) {
                   {p.swap_reason && <span className="queue-meta">（入れ替えの理由: {p.swap_reason}）</span>}
                 </td>
                 <td>
-                  {p.card !== null && (
+                  {p.card !== null && canSwap && (
                     <button type="button" onClick={() => swap(p)} data-testid="sort-swap">
                       {p.card ? "しないにする" : "するにする"}
                     </button>

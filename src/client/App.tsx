@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import "./app.css";
 import { AuditScreen } from "./audit/AuditScreen";
 import { CardScreen } from "./card/CardScreen";
@@ -20,7 +20,9 @@ import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
 import { StudentScreen } from "./student/StudentScreen";
 import { StatsBar } from "./stats/StatsBar";
-import { ENTRY, PinGate, roleKey } from "./pin/TenantPin";
+import { PIN_LOST } from "./events";
+import { ENTRY, NEWHIRE, PinGate, REVIEWERS, roleKey, STAFF, SUPERVISORS, TenantPin } from "./pin/TenantPin";
+import { ScreenGuard } from "./Safe";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
@@ -50,6 +52,46 @@ function BackBar({ tenant, over }: { tenant: string; over: boolean }) {
       </a>
     </nav>
   );
+}
+
+/** 画面ごとに、PIN の画面で選べる役割 */
+function rolesFor(r: string[]) {
+  if (r[2] === "read" || r[2] === "student") return NEWHIRE;
+  if (r[2] === "sign") return SUPERVISORS;
+  if (r[2] === "issue") return REVIEWERS;
+  if (r[2] === "home" || (r[2] === "trial" && (r[4] === "self" || r[4] === "pictures"))) return ENTRY;
+  return STAFF;
+}
+
+/**
+ * 入ったしるしが切れた・無いときの救い（総点検の直し）。どの画面でも、API が「PIN で入ってください」「役割で入ってください」を
+ * 返したら（events.ts の pinLost）、その場で PIN の画面に戻し、入り直したら今の画面を最初から読み直す。
+ * 新しいタブでの直リンクや、期限切れのあとに赤字で止まる行き止まりを無くす
+ */
+function PinRescue({ tenant, roles, children }: { tenant: string | null; roles: readonly { value: string; label: string }[]; children: ReactNode }) {
+  const [lost, setLost] = useState(false);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    setLost(false);
+    if (!tenant) return;
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === tenant) setLost(true);
+    };
+    addEventListener(PIN_LOST, on);
+    return () => removeEventListener(PIN_LOST, on);
+  }, [tenant]);
+  if (lost && tenant)
+    return (
+      <TenantPin
+        tenant={tenant}
+        roles={roles}
+        onDone={() => {
+          setLost(false);
+          setN((x) => x + 1);
+        }}
+      />
+    );
+  return <Fragment key={n}>{children}</Fragment>;
 }
 
 function useRoute() {
@@ -118,6 +160,7 @@ export function App() {
   if (r[0] === "t" && r[2] === "student") body = <StudentScreen tenant={r[1]} />;
   // #/t/<テナント>/trials ・ 試しの回の一覧（11/6。ホームから押してたどり着く）
   if (r[0] === "t" && r[2] === "trials") body = <TrialsScreen tenant={r[1]} />;
+  // #/picto/poses ・ 開発用の姿勢の一覧（どの画面からもリンクしない。姿勢の試験 e2e/poses.spec.ts が開く）
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない
   const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign", "pose", "queue"].includes(r[2]);
@@ -129,7 +172,14 @@ export function App() {
     <main data-testid="app">
       {back && <BackBar tenant={r[1]} over={maker} />}
       {maker && <StatsBar tenant={r[1]} />}
-      <Slide k={r.slice(0, 4).join("/")}>{body}</Slide>
+      <Slide k={r.slice(0, 4).join("/")}>
+        {/* 画面の中で投げられても白くしない（描けない古いカードなど）。画面を変えると守りも新しくなる */}
+        <ScreenGuard key={r.slice(0, 4).join("/")} home={r[0] === "t" ? `#/t/${encodeURIComponent(r[1])}/home` : "#/"}>
+          <PinRescue tenant={r[0] === "t" ? r[1] : null} roles={rolesFor(r)}>
+            {body}
+          </PinRescue>
+        </ScreenGuard>
+      </Slide>
     </main>
   );
 }

@@ -2,10 +2,11 @@
 // 新入社員の画面には出さない（App が作る側の画面にだけ置く）。カードの確かめ・状態が変わると読み直す。
 import { useEffect, useState } from "react";
 import type { Stats } from "../../shared/stats";
+import { STATS_CHANGED } from "../events";
 import { req } from "../make/MakeScreen";
 
-export const STATS_CHANGED = "kamishibai:stats";
-export const statsChanged = () => dispatchEvent(new Event(STATS_CHANGED));
+// 知らせの名前と出し方は events.ts に置いた（req が保存・状態・署名のたびに出す）。前からの呼び出しのために、ここからも出す
+export { STATS_CHANGED, statsChanged } from "../events";
 
 export function StatsBar({ tenant }: { tenant: string }) {
   const [s, setS] = useState<Stats | null>(null);

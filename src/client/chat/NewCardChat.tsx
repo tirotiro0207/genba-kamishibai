@@ -25,7 +25,9 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
   const [rules, setRules] = useState<Rule[] | null>(null);
   const [on, setOn] = useState<number[]>([]);
   const [busy, setBusy] = useState("");
-  const [made, setMade] = useState(0);
+  // 作り終えた決まりの番号。途中で失敗（鍵切れ・502・回数制限）しても、残りだけを作り直せるように覚えておく
+  const [done, setDone] = useState<number[]>([]);
+  const [oked, setOked] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
     req<{ rules: Rule[] }>(tenant, `/extract/${id}`).then((x) => setRules(x.rules), (e: Error) => setErr(e.message));
@@ -33,14 +35,21 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
   if (err && !rules) return <p className="err">{err}</p>;
   if (!rules) return <p className="chat-wait">読み込み中…</p>;
   if (!rules.length) return null;
+  const made = done.length;
+  const left = on.filter((i) => !done.includes(i));
   const make = async () => {
     setErr("");
     try {
-      await req(tenant, `/extract/${id}/ok`, { method: "POST", body: JSON.stringify({ items: on }) });
-      for (const [k, item] of on.entries()) {
+      if (!oked) {
+        await req(tenant, `/extract/${id}/ok`, { method: "POST", body: JSON.stringify({ items: on }) });
+        setOked(true);
+      }
+      let k = done.length;
+      for (const item of left) {
         setBusy(`カードを作っています（${k + 1} / ${on.length}）`);
         await req(tenant, `/extract/${id}/make`, { method: "POST", body: JSON.stringify({ item }) });
-        setMade(k + 1);
+        k += 1;
+        setDone((xs) => [...xs, item]);
       }
       setBusy("");
     } catch (e) {
@@ -54,7 +63,7 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
         {rules.map((r, i) => (
           <li key={i}>
             <label>
-              <input type="checkbox" checked={on.includes(i)} disabled={!!busy || made > 0} onChange={(e) => setOn((xs) => (e.target.checked ? [...xs, i].sort((a, b) => a - b) : xs.filter((x) => x !== i)))} data-testid={`chat-rule-${i}`} />
+              <input type="checkbox" checked={on.includes(i)} disabled={!!busy || oked} onChange={(e) => setOn((xs) => (e.target.checked ? [...xs, i].sort((a, b) => a - b) : xs.filter((x) => x !== i)))} data-testid={`chat-rule-${i}`} />
               <span className={`chat-kind ${r.kind}`}>{r.kind === "do" ? "する" : "しない"}</span>
               <span className="chat-rule-text">{r.text}</span>
             </label>
@@ -62,13 +71,15 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
           </li>
         ))}
       </ul>
-      {made > 0 && !busy ? (
+      {made > 0 && !busy && (
         <p className="chat-done" data-testid="chat-made">
           下書きのカードを {made} 枚作りました。<a href={home(tenant)}>カードの管理へ</a>
         </p>
-      ) : (
+      )}
+      {/* 全部できるまでは押せるボタンを残す。途中で失敗したら、残りだけを作り直す */}
+      {(on.length === 0 || left.length > 0) && (
         <button className="big go chat-make" disabled={!on.length || !!busy} onClick={make} data-testid="chat-make">
-          {busy || (on.length ? `選んだ決まり ${on.length} 個でカードを作る` : "カードにする決まりを選んでください")}
+          {busy || (!on.length ? "カードにする決まりを選んでください" : made > 0 ? `残りの ${left.length} 個でカードを作り直す` : `選んだ決まり ${on.length} 個でカードを作る`)}
         </button>
       )}
       {err && <p className="err">{err}</p>}

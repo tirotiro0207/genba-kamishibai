@@ -107,7 +107,7 @@ function Face({ a }: { a: Avatar }) {
 }
 
 /** 止める前の確認の窓。「止める」を押すまで、カードは止まらない */
-function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => void; onStop: (reason: string | undefined) => Promise<void> }) {
+function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => void; onStop: (reason: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -130,7 +130,7 @@ function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => vo
           消えはしないので、あとで「下書きに戻して直す」から戻せます。
         </p>
         <label>
-          止める理由{signed ? "（必ず書く。回収の知らせに載ります）" : "（書かなくてもよい）"}
+          止める理由{signed ? "（必ず書く。回収の知らせに載ります）" : "（必ず書く。記録に残ります）"}
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} data-testid="home-stop-reason" />
         </label>
         <div className="home-actions home-modal-actions">
@@ -139,10 +139,10 @@ function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => vo
           </button>
           <button
             className="pick danger-fill"
-            disabled={busy || (signed && !reason.trim())}
+            disabled={busy || !reason.trim()}
             onClick={async () => {
               setBusy(true);
-              await onStop(reason.trim() || undefined);
+              await onStop(reason.trim());
               setBusy(false);
             }}
             data-testid="home-stop-go"
@@ -233,7 +233,8 @@ function CardDetail({ tenant, card, role, labels, onChanged }: { tenant: string;
   };
   const cancel = useCallback(() => setStopping(false), []);
   const s = card.status;
-  const canStop = s !== "stopped" && (s !== "signed" || role === "supervisor");
+  // 止めるのは監修者だけ（サーバーの関所と同じ。理由も必ず要る）
+  const canStop = s !== "stopped" && role === "supervisor";
   return (
     <div className="home-detail" data-testid={`home-detail-${card.id}`}>
       {card.signed && (
@@ -245,7 +246,7 @@ function CardDetail({ tenant, card, role, labels, onChanged }: { tenant: string;
       <p className="home-meta">
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
-      {s === "signed" && <p className="home-meta">署名済みのカードも直せます。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "署名済みのカードを止められるのは監修者だけです。" : ""}</p>}
+      {s === "signed" && <p className="home-meta">署名済みのカードも直せます。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "カードを止められるのは監修者だけです。" : ""}</p>}
       <div className="home-actions">
         <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
           編集する（絵のカード）

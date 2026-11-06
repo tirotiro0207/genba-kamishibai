@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import type { CardMotion } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 import { Slide } from "../motion/Slide";
 import { needsPin, PinGate, roleKey, TenantPin, tokenKey } from "../pin/TenantPin";
 import { Ruby } from "../Ruby";
@@ -56,7 +56,7 @@ export function Frames({ motion }: { motion: CardMotion }) {
           <figure key={t} className="read-frame">
             <span className="read-n">{i + 1}</span>
             {/* 自前の描き方で作った SVG */}
-            <div dangerouslySetInnerHTML={{ __html: renderFrame(frame).svg }} />
+            <div dangerouslySetInnerHTML={{ __html: frameSvg(frame) }} />
           </figure>
         ))}
       </div>
@@ -85,6 +85,7 @@ function ReadCards({ tenant }: { tenant: string }) {
   };
   const [err, setErr] = useState("");
   const [tries, setTries] = useState(0);
+  const [seenFail, setSeenFail] = useState(false);
   useEffect(() => {
     setErr("");
     fetch(`/api/t/${encodeURIComponent(tenant)}/read/cards`, { headers: headers(tenant) })
@@ -100,12 +101,26 @@ function ReadCards({ tenant }: { tenant: string }) {
   const shown = cards && cards.length ? cards[Math.min(i, cards.length - 1)].id : null;
   useEffect(() => {
     if (!shown) return;
-    // 役割で入っていれば、そのしるしと端末の番号で記録する（無ければ役割なしの閲覧として残る）
-    fetch(`/api/t/${encodeURIComponent(tenant)}/read/cards/${encodeURIComponent(shown)}/seen`, {
-      method: "POST",
-      headers: { ...headers(tenant), "content-type": "application/json" },
-      body: JSON.stringify({ device: deviceId() }),
-    }).catch(() => undefined);
+    // 役割で入っていれば、そのしるしと端末の番号で記録する（無ければ役割なしの閲覧として残る）。
+    // 送れなかったら（回線・4xx・5xx）1 回だけ送り直し、それでもだめなら隅に小さく知らせる（「見た人」が少なく見えるのに気づけるように）
+    let live = true;
+    const send = () =>
+      fetch(`/api/t/${encodeURIComponent(tenant)}/read/cards/${encodeURIComponent(shown)}/seen`, {
+        method: "POST",
+        headers: { ...headers(tenant), "content-type": "application/json" },
+        body: JSON.stringify({ device: deviceId() }),
+      }).then(
+        (r) => r.ok,
+        () => false,
+      );
+    void (async () => {
+      const ok = (await send()) || (await send());
+      if (!ok) console.warn("見た印を送れなかった", shown);
+      if (live) setSeenFail(!ok);
+    })();
+    return () => {
+      live = false;
+    };
   }, [tenant, shown]);
 
   if (err && needsPin(err)) return <TenantPin tenant={tenant} roles={NEWHIRE} onDone={() => setTries((t) => t + 1)} />;
@@ -138,6 +153,11 @@ function ReadCards({ tenant }: { tenant: string }) {
           つぎ →
         </button>
       </nav>
+      {seenFail && (
+        <p className="done" data-testid="read-seen-fail">
+          見た印を送れませんでした（開き直すと送り直します）
+        </p>
+      )}
     </article>
   );
 }
