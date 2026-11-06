@@ -25,9 +25,14 @@ export async function pickSample(ids: string[], seed: string, n = SAMPLE_SIZE): 
   return ranked.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.id < b.id ? -1 : 1)).slice(0, n).map((x) => x.id);
 }
 
-/** 署名した監修者（supervisor.1 など）以外の監修者。見直しは署名した人とは別の人がする */
-export function reviewerFor(signedBy: string): string | null {
-  if (signedBy === "supervisor.1") return "supervisor.2";
-  if (signedBy === "supervisor.2") return "supervisor.1";
-  return null;
+/** 監修者の枠（今は 2 人。枠を足したら、ここに足す） */
+export const SUPERVISORS = ["supervisor.1", "supervisor.2"] as const;
+
+/**
+ * 署名した監修者（supervisor.1 など）以外の監修者。見直しは署名した人とは別の人がする。
+ * 監修者の一覧から、署名した人以外の最初の人を選ぶ。署名した人が監修者でない（署名は監修者だけの決まりの外）・ほかに監修者がいないときは null
+ */
+export function reviewerFor(signedBy: string, supervisors: readonly string[] = SUPERVISORS): string | null {
+  if (!/^supervisor\.\d+$/.test(signedBy)) return null;
+  return supervisors.find((s) => s !== signedBy) ?? null;
 }

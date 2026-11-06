@@ -11,7 +11,7 @@ export const READ_PASS_RATE = 85;
 
 /** 抜くコマの番号（0 から）。脚本の「場」のコマ。脚本が無い・場が無い・コマの数が脚本と合わないときは null */
 export function droppableFrame(card: CardBody): number | null {
-  const roles = card.script?.frames.map((f) => f.role);
+  const roles = card.script?.frames?.map((f) => f.role);
   if (!roles || roles.length !== card.frames.length) return null;
   const i = roles.indexOf("場");
   return i < 0 ? null : i;

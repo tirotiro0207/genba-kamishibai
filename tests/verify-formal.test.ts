@@ -107,6 +107,8 @@ describe("1 コマ抜いた版（11/5）", () => {
     expect(droppableFrame(roles(["きっかけ", "山場", "結果"]))).toBeNull();
     expect(droppableFrame(card)).toBeNull();
     expect(droppableFrame({ ...roles(["場", "きっかけ", "山場", "結果"]), frames: [{ t: 0 }, { t: 1 }, { t: 2 }] })).toBeNull();
+    // 脚本はあるがコマ割りの無い本文（script: {}）でも落ちない
+    expect(droppableFrame({ ...card, script: {} as never })).toBeNull();
   });
 
   it("全部のコマと場を抜いたコマの 2 回読ませ、両方が 85 以上で危ない取り違えが無ければ通る", async () => {
