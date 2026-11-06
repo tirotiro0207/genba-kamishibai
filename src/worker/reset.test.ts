@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { sampleCard } from "../../tests/fixtures/card";
 import { currentChain, readChain, verifyTenant } from "./audit";
+import { setSessionDeleter } from "./exemplars";
 import { signRole } from "./people";
 import { hashPin } from "./tenant";
 
@@ -74,7 +75,15 @@ describe("データを最初の状態に戻す（030）", () => {
       env.DB.prepare("INSERT INTO night_drafts (run_id, tenant_id, sort_run, page, item) VALUES ('nd1', 'practice', 'nr1', 1, 0)"),
       env.DB.prepare("INSERT INTO card_sessions (tenant_id, card_id, session_id) VALUES ('practice', ?, 'sess-1')").bind(card.id),
     ]);
-    const res = (await (await call("/api/t/practice/reset", json("POST"))).json()) as { removed: Record<string, number>; chain: string; sessions: { left: number } };
+    // 手元の .dev.vars に鍵があっても本物の API を呼ばないよう、消す鍵が無い形に固定する
+    setSessionDeleter(() => null);
+    const res = await (async () => {
+      try {
+        return (await (await call("/api/t/practice/reset", json("POST"))).json()) as { removed: Record<string, number>; chain: string; sessions: { left: number } };
+      } finally {
+        setSessionDeleter(null);
+      }
+    })();
     expect(res.removed).toMatchObject({ card_opens: 1, card_chats: 1, night_runs: 1, night_pages: 1, night_drafts: 1 });
     for (const t of ["card_opens", "card_chats", "night_runs", "night_pages", "night_drafts"])
       expect((await env.DB.prepare(`SELECT count(*) AS n FROM ${t} WHERE tenant_id = 'practice'`).first<{ n: number }>())!.n, t).toBe(0);
