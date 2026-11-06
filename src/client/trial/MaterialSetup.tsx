@@ -14,7 +14,8 @@ export function MaterialSetup({ tenant, id }: { tenant: string; id: string }) {
   useEffect(() => {
     getMaterialConfig(tenant, id).then(
       (m) => m && setS({ A: { ...empty, ...m.A }, B: { ...empty, ...m.B } }),
-      () => {},
+      // 読めなかったときは空の欄のまま黙らない（結び済みの回を作り直さないように）
+      (e: Error) => setErr(`今の結び付けが読めない: ${e.message}`),
     );
   }, [tenant, id]);
   const set = (k: "A" | "B", v: Partial<Slot>) => setS((o) => ({ ...o, [k]: { ...o[k], ...v } }));

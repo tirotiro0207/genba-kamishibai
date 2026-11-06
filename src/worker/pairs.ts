@@ -27,6 +27,12 @@ pairs.post("/", async (c) => {
   for (const id of [b.good, b.bad]) if (!(await getCard(c.env.DB, c.var.tenant.id, id))) return c.json({ error: `カードが無い: ${id}` }, 404);
   const used = await c.env.DB.prepare("SELECT 1 FROM card_pairs WHERE tenant_id = ? AND (good_card IN (?, ?) OR bad_card IN (?, ?)) LIMIT 1").bind(c.var.tenant.id, b.good, b.bad, b.good, b.bad).first();
   if (used) return c.json({ error: "どちらかのカードは、もう別の組に入っている" }, 409);
-  await c.env.DB.prepare("INSERT INTO card_pairs (tenant_id, good_card, bad_card) VALUES (?, ?, ?)").bind(c.var.tenant.id, b.good, b.bad).run();
+  // 同時に 2 つ結ぼうとすると、後の方は一意の決まりで入らない。そのときも 409 で返す
+  try {
+    await c.env.DB.prepare("INSERT INTO card_pairs (tenant_id, good_card, bad_card) VALUES (?, ?, ?)").bind(c.var.tenant.id, b.good, b.bad).run();
+  } catch (e) {
+    if (/UNIQUE constraint failed|PRIMARY KEY/i.test(String((e as Error)?.message ?? e))) return c.json({ error: "どちらかのカードは、もう別の組に入っている" }, 409);
+    throw e;
+  }
   return c.json({ good: b.good, bad: b.bad }, 201);
 });

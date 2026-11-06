@@ -19,7 +19,8 @@ function Inside({ tenant }: { tenant: string }) {
   const [err, setErr] = useState("");
   const load = useCallback(() => {
     req<{ role: string | null; student?: string }>(tenant, "/me").then(setMe, (e: Error) => setErr(e.message));
-    openTrial(tenant).then(setOpen, () => setOpen(null));
+    // 読めないとき（役割のしるしが切れた・回線が切れた）は「まだ はじまって いません」にせず、わけを出す
+    openTrial(tenant).then(setOpen, (e: Error) => setErr(e.message));
   }, [tenant]);
   useEffect(load, [load]);
   const leave = () => {
@@ -31,7 +32,15 @@ function Inside({ tenant }: { tenant: string }) {
     location.hash = go(tenant, "student");
     location.reload();
   };
-  if (err) return <p className="err">{err}</p>;
+  if (err && (!me || open === undefined))
+    return (
+      <div className="student" data-testid="student-err">
+        <p className="err">{err}</p>
+        <button className="big student-leave" onClick={leave} data-testid="student-leave">
+          おわり（つぎの ひとに わたす）
+        </button>
+      </div>
+    );
   if (!me || open === undefined) return <p>よみこみ中…</p>;
   // 作る側の人がこの画面に来たら、ホームへ戻す
   if (me.role !== "newhire" || !me.student) {
@@ -41,6 +50,10 @@ function Inside({ tenant }: { tenant: string }) {
         <a className="big" href={go(tenant, "home")}>
           ← ホームへ
         </a>
+        {/* ID の無い新入社員のしるしだと、ホームからまたここへ戻される。しるしを消して入り直せるようにする */}
+        <button className="big student-leave" onClick={leave} data-testid="student-leave">
+          おわり（つぎの ひとに わたす）
+        </button>
       </div>
     );
   }
@@ -82,6 +95,7 @@ function Inside({ tenant }: { tenant: string }) {
         )}
         {/* 「カードを みる」は外した（11/6 朝 作者: 押しても何も出ない。テストの前に見ると答えが分かってしまう） */}
       </div>
+      {err && <p className="err">{err}</p>}
       {/* 終わったら押して、次の人に渡す（11/6 朝 作者「よくわからない」から言葉を替えた） */}
       <button className="big student-leave" onClick={leave} data-testid="student-leave">
         おわり（つぎの ひとに わたす）

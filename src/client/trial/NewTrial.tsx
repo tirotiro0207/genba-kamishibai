@@ -58,21 +58,21 @@ export function NewTrial({ tenant }: { tenant: string }) {
           {made.design === "cross" ? (
             <>
               <p>
-                <a href={`#/t/${tenant}/trial/${made.id}/material`} data-testid="new-material-link">
+                <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/material`} data-testid="new-material-link">
                   ① で見せるもの（カードとページの画像）を結ぶ
                 </a>
               </p>
               <ul>
                 {made.participants.map((p) => (
                   <li key={p}>
-                    <a href={`#/t/${tenant}/trial/${made.id}/self/${encodeURIComponent(p)}`}>① {p} が受ける</a>
+                    <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/self/${encodeURIComponent(p)}`}>① {p} が受ける</a>
                   </li>
                 ))}
               </ul>
             </>
           ) : (
           <p>
-            <a href={`#/t/${tenant}/trial/${made.id}/time`} data-testid="new-time-link">
+            <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/time`} data-testid="new-time-link">
               ① 時間を計る
             </a>
           </p>
@@ -81,25 +81,25 @@ export function NewTrial({ tenant }: { tenant: string }) {
           <ul>
             {made.participants.map((p) => (
               <li key={p}>
-                <a href={`#/t/${tenant}/trial/${made.id}/answer/${encodeURIComponent(p)}`}>② {p} が答える</a>
+                <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/answer/${encodeURIComponent(p)}`}>② {p} が答える</a>
               </li>
             ))}
           </ul>
           )}
           <p>
-            <a href={`#/t/${tenant}/trial/${made.id}/forecast`} data-testid="new-forecast-link">
+            <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/forecast`} data-testid="new-forecast-link">
               教育担当の勘（絵だけの 8 枚を選んで、答えの前に書く）
             </a>
           </p>
           <ul>
             {made.participants.map((p) => (
               <li key={p}>
-                <a href={`#/t/${tenant}/trial/${made.id}/pictures/${encodeURIComponent(p)}`}>絵だけ: {p} が答える</a>
+                <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/pictures/${encodeURIComponent(p)}`}>絵だけ: {p} が答える</a>
               </li>
             ))}
           </ul>
           <p>
-            <a href={`#/t/${tenant}/trial/${made.id}/grade/g1`}>③ 採点者 1</a> ・ <a href={`#/t/${tenant}/trial/${made.id}/grade/g2`}>③ 採点者 2</a>
+            <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/grade/g1`}>③ 採点者 1</a> ・ <a href={`#/t/${encodeURIComponent(tenant)}/trial/${made.id}/grade/g2`}>③ 採点者 2</a>
           </p>
         </div>
       )}

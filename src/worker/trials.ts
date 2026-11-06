@@ -51,6 +51,9 @@ const view = (t: TrialRow) => {
   return { id: t.id, seed: t.seed, created_at: t.created_at, design: "cross" as const, participants: p.people.map((x) => x.id), assignments };
 };
 
+/** D1 の一意の決まりに当たったときの例外か */
+const isUniqueError = (e: unknown) => /UNIQUE constraint failed|PRIMARY KEY/i.test(String((e as Error)?.message ?? e));
+
 const fixedSet = (participant: string, group: string, set: 1 | 2) => ({ participant, group, set, A: [set === 1 ? "card" : "text"] as ("card" | "text")[], B: [set === 1 ? "text" : "card"] as ("card" | "text")[] });
 
 /**
@@ -70,7 +73,8 @@ trials.post("/", async (c) => {
   // 交差の回（11/5 作者）: 参加者を {id, group（国籍）} で受け取り、国籍ごとに組を半分ずつ分ける
   const cross = b.design === "cross";
   const raw = Array.isArray(b.participants) ? b.participants : null;
-  const people = cross && raw ? raw.map((x) => (x && typeof x === "object" ? (x as { id?: unknown; group?: unknown }) : {})) : [];
+  // 前もって並べる ID も、入るときと同じ形に揃える（student_v_01 → student_V_1）。揃わない ID はそのまま
+  const people = cross && raw ? raw.map((x) => (x && typeof x === "object" ? (x as { id?: unknown; group?: unknown }) : {})).map((x) => ({ ...x, id: normalizeStudent(x.id) ?? x.id })) : [];
   const ps = cross ? people.map((x) => x.id) : raw;
   const okId = (p: unknown) => typeof p === "string" && p.length > 0 && p.length <= 40;
   // 交差の回は参加者 0 人でも作れる（11/6。新入社員が ID を入れてその場で加わる）
@@ -131,7 +135,16 @@ trials.post("/:id/join", async (c) => {
 
 trials.get("/:id", async (c) => {
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
-  return t ? c.json(view(t)) : c.json({ error: "回が無い" }, 404);
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const v = view(t);
+  // 新入社員には、ほかの人の ID・国籍・組を見せない。自分の割り当てだけを返す
+  const person = (c.var as PeopleVars).person;
+  if (person?.role === "newhire") {
+    const me = person.student ?? "";
+    const mine = (v.assignments as { participant: string }[]).filter((a) => a.participant === me);
+    return c.json({ ...v, participants: mine.map((a) => a.participant), assignments: mine });
+  }
+  return c.json(v);
 });
 
 trials.post("/:id/responses", async (c) => {
@@ -152,10 +165,14 @@ trials.post("/:id/responses", async (c) => {
   // 前からの回は項目ごとに 2 回（カードと文）、交差の回は 1 回
   if (k >= a[b.item].length) return c.json({ error: "この項目の答えは済んでいる" }, 409);
   const shown = a[b.item][k];
-  const row = await c.env.DB.prepare("INSERT INTO responses (trial_id, tenant_id, participant, item, shown, ms, answer) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq")
-    .bind(t.id, c.var.tenant.id, a.participant, b.item, shown, ms, answer)
+  // 同じ人・同じ項目の答えが同時に 2 つ来ても、数えたときの件数のままのときだけ入れる（1 つの文の中で数えて入れる）
+  const row = await c.env.DB.prepare(
+    "INSERT INTO responses (trial_id, tenant_id, participant, item, shown, ms, answer) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE (SELECT count(*) FROM responses WHERE trial_id = ?1 AND participant = ?3 AND item = ?4) = ?8 RETURNING seq",
+  )
+    .bind(t.id, c.var.tenant.id, a.participant, b.item, shown, ms, answer, k)
     .first<{ seq: number }>();
-  return c.json({ seq: row?.seq, shown }, 201);
+  if (!row) return c.json({ error: "同じ答えが先に入った。この項目の答えは済んでいるか確かめる" }, 409);
+  return c.json({ seq: row.seq, shown }, 201);
 });
 
 trials.get("/:id/responses", async (c) => {
@@ -243,11 +260,12 @@ trials.post("/:id/erase", async (c) => {
   return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
 });
 
-// 絵だけの 8 枚と 2 項目と教育担当の勘（059）
+// 絵だけの 8 枚と 2 項目と教育担当の勘（059）。止めた（回収した）カードは見せない。
+// 文つきかどうかは回に結んだ順（pos）で決めるので、止めたカードを抜いても、ほかのカードの文つきは変わらない
 const pictureCards = async (db: D1Database, trialId: string) =>
-  (await db.prepare("SELECT tc.card_id AS id, c.body FROM trial_cards tc JOIN cards c ON c.id = tc.card_id WHERE tc.trial_id = ? ORDER BY tc.pos").bind(trialId).all<{ id: string; body: string }>()).results.map((r) => {
+  (await db.prepare("SELECT tc.card_id AS id, tc.pos, c.body FROM trial_cards tc JOIN cards c ON c.id = tc.card_id WHERE tc.trial_id = ? AND c.status != 'stopped' ORDER BY tc.pos").bind(trialId).all<{ id: string; pos: number; body: string }>()).results.map((r) => {
     const body = JSON.parse(r.body) as { rule: string; motion: unknown; words?: { ja?: string } };
-    return { id: r.id, rule: body.rule, motion: body.motion, words: body.words?.ja ?? "" };
+    return { id: r.id, pos: r.pos, rule: body.rule, motion: body.motion, words: body.words?.ja ?? "" };
   });
 const answeredCount = async (db: D1Database, trialId: string) =>
   (await db.prepare("SELECT count(*) AS n FROM picture_answers WHERE trial_id = ?").bind(trialId).first<{ n: number }>())?.n ?? 0;
@@ -261,8 +279,9 @@ trials.post("/:id/cards", async (c) => {
   if (!Array.isArray(ids) || ids.length < 1 || ids.length > PICTURES_MAX || !ids.every((x) => typeof x === "string") || new Set(ids).size !== ids.length) {
     return c.json({ error: `cards は重ならないカードの ID の並び（1〜${PICTURES_MAX}）` }, 400);
   }
-  const found = await c.env.DB.prepare(`SELECT count(*) AS n FROM cards WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).bind(c.var.tenant.id, ...ids).first<{ n: number }>();
+  const found = await c.env.DB.prepare(`SELECT count(*) AS n, coalesce(sum(status = 'stopped'), 0) AS stopped FROM cards WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).bind(c.var.tenant.id, ...ids).first<{ n: number; stopped: number }>();
   if (found?.n !== ids.length) return c.json({ error: "このテナントに無いカードがある" }, 400);
+  if (found.stopped) return c.json({ error: "止めたカードは回に結ばない" }, 400);
   const started = await c.env.DB.prepare("SELECT (SELECT count(*) FROM forecasts WHERE trial_id = ?1) + (SELECT count(*) FROM picture_answers WHERE trial_id = ?1) AS n").bind(t.id).first<{ n: number }>();
   if (started?.n) return c.json({ error: "勘の記入か答えが始まっているので変えない" }, 409);
   await c.env.DB.batch([
@@ -284,12 +303,12 @@ trials.get("/:id/pictures", async (c) => {
     const done = await c.env.DB.prepare("SELECT card_id FROM picture_answers WHERE trial_id = ? AND participant = ?").bind(t.id, p).all<{ card_id: string }>();
     // 半分のカードは文つき（11/6 朝 作者）。① の組と、回に結んだ順で決まる
     const set = (view(t).assignments as { participant: string; set?: 1 | 2 }[]).find((a) => a.participant === p)?.set;
-    const shown = cards.map((x, pos) => ({ id: x.id, motion: x.motion, ...(withWords(set, pos) && x.words ? { words: x.words } : {}) }));
+    const shown = cards.map((x) => ({ id: x.id, motion: x.motion, ...(withWords(set, x.pos) && x.words ? { words: x.words } : {}) }));
     return c.json({ cards: pictureOrder(t.seed, p, shown), answered: done.results.map((r) => r.card_id) });
   }
   const fs = await c.env.DB.prepare("SELECT seq, card_id, rate, created_at FROM forecasts WHERE trial_id = ?").bind(t.id).all<{ seq: number; card_id: string; rate: number; created_at: string }>();
   const items = await c.env.DB.prepare("SELECT item, ja, vi FROM trial_items WHERE trial_id = ? ORDER BY item").bind(t.id).all();
-  return c.json({ cards, forecasts: [...latestForecasts(fs.results).values()], answers: await answeredCount(c.env.DB, t.id), items: items.results });
+  return c.json({ cards: cards.map(({ pos: _pos, ...x }) => x), forecasts: [...latestForecasts(fs.results).values()], answers: await answeredCount(c.env.DB, t.id), items: items.results });
 });
 
 // 教育担当の勘: カードごとの正答率の予想。絵だけの答えが 1 件でも入ったら受け付けない（記入の日時が結果より前になる）
@@ -299,7 +318,8 @@ trials.post("/:id/forecasts", async (c) => {
   const b = await c.req.json<{ card_id?: unknown; rate?: unknown }>().catch(() => ({}) as Record<string, unknown>);
   const rate = Number(b.rate);
   if (!Number.isInteger(rate) || rate < 0 || rate > 100) return c.json({ error: "rate は 0〜100 の整数" }, 400);
-  const on = await c.env.DB.prepare("SELECT 1 FROM trial_cards WHERE trial_id = ? AND card_id = ?").bind(t.id, String(b.card_id)).first();
+  if (typeof b.card_id !== "string") return c.json({ error: "card_id はカードの ID（文字）" }, 400);
+  const on = await c.env.DB.prepare("SELECT 1 FROM trial_cards WHERE trial_id = ? AND card_id = ?").bind(t.id, b.card_id).first();
   if (!on) return c.json({ error: "この回で見せるカードではない" }, 400);
   if (await answeredCount(c.env.DB, t.id)) return c.json({ error: "答えが入り始めたので、勘はもう書けない" }, 409);
   const row = await c.env.DB.prepare("INSERT INTO forecasts (trial_id, tenant_id, card_id, rate) VALUES (?, ?, ?, ?) RETURNING seq, created_at")
@@ -325,9 +345,12 @@ trials.post("/:id/picture-answers", async (c) => {
   const next = order.find((x) => !done.has(x.id));
   if (!next) return c.json({ error: "絵の答えは済んでいる" }, 409);
   if (typeof b.card_id === "string" && b.card_id !== next.id) return c.json({ error: "このカードは今の順番ではない" }, 400);
+  // 同じ人が同時に 2 つ送ると、両方が同じカードを選ぶ。後の方は一意の決まりで入らないので、済んでいるとして返す
   const row = await c.env.DB.prepare("INSERT INTO picture_answers (trial_id, tenant_id, participant, card_id, answer) VALUES (?, ?, ?, ?, ?) RETURNING seq, created_at")
     .bind(t.id, c.var.tenant.id, p, next.id, b.answer.trim().slice(0, 2000))
-    .first<{ seq: number; created_at: string }>();
+    .first<{ seq: number; created_at: string }>()
+    .catch((e: unknown) => (isUniqueError(e) ? null : Promise.reject(e)));
+  if (!row) return c.json({ error: "このカードの答えは済んでいる" }, 409);
   return c.json({ ...row, card_id: next.id }, 201);
 });
 
@@ -337,7 +360,7 @@ trials.get("/:id/picture-answers", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT seq, participant, card_id, answer, created_at FROM picture_answers WHERE trial_id = ? AND erased = 0 ORDER BY seq").bind(t.id).all<{ participant: string; card_id: string }>();
   // その答えが文つきで見たカードか（11/6 朝 作者）。数えるときに文つきと絵だけを分ける
   const sets = new Map((view(t).assignments as { participant: string; set?: 1 | 2 }[]).map((a) => [a.participant, a.set]));
-  const pos = new Map((await pictureCards(c.env.DB, t.id)).map((x, i) => [x.id, i]));
+  const pos = new Map((await pictureCards(c.env.DB, t.id)).map((x) => [x.id, x.pos]));
   return c.json({ answers: results.map((r) => ({ ...r, words: withWords(sets.get(r.participant), pos.get(r.card_id) ?? -1) })) });
 });
 
@@ -380,8 +403,9 @@ trials.put("/:id/material", async (c) => {
   for (const item of ["A", "B"] as const) {
     const x = b[item];
     if (!x || typeof x.card !== "string" || typeof x.page !== "string") return c.json({ error: `${item} に card（カードの ID）と page（置き場の名前）が要る` }, 400);
-    const card = await c.env.DB.prepare("SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?").bind(x.card, c.var.tenant.id).first();
+    const card = await c.env.DB.prepare("SELECT status FROM cards WHERE id = ? AND tenant_id = ?").bind(x.card, c.var.tenant.id).first<{ status: string }>();
     if (!card) return c.json({ error: `${item} のカードがこのテナントに無い` }, 400);
+    if (card.status === "stopped") return c.json({ error: `${item} のカードは止めてあるので結ばない` }, 400);
     const key = fileKey(c.var.tenant.id, x.page);
     if (!key || !(await c.env.FILES.head(key))) return c.json({ error: `${item} のページの画像が置き場に無い` }, 400);
     cfg[item] = { card: x.card, page: x.page };
@@ -424,11 +448,14 @@ trials.get("/:id/material", async (c) => {
       const shown = a[item][0];
       // 文の側の画像は、この回の口から読む（11/6。新入社員は資料の置き場を読めないので、自分に見せるページだけをここで渡す）
       if (shown === "text") return { item, shown, page: cfg[item].page, page_src: `trials/${t.id}/page/${item}?participant=${encodeURIComponent(p)}` };
-      const row = await c.env.DB.prepare("SELECT body FROM cards WHERE id = ? AND tenant_id = ?").bind(cfg[item].card, c.var.tenant.id).first<{ body: string }>();
-      const body = JSON.parse(row!.body) as { motion: unknown; words?: { ja: string } };
+      // 止めた（回収した）カードは見せない
+      const row = await c.env.DB.prepare("SELECT body FROM cards WHERE id = ? AND tenant_id = ? AND status != 'stopped'").bind(cfg[item].card, c.var.tenant.id).first<{ body: string }>();
+      if (!row) return null;
+      const body = JSON.parse(row.body) as { motion: unknown; words?: { ja: string } };
       // 言葉はやさしい日本語だけ（11/5 作者）
       return { item, shown, card: { motion: body.motion, words: body.words ? { ja: body.words.ja } : null } };
     }),
   );
+  if (items.some((x) => x === null)) return c.json({ error: "① のカードが止めてある。教育担当に知らせて、結び直してもらう" }, 409);
   return c.json({ items });
 });
