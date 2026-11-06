@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bareKanji, rubyBase, rubyParen, rubySegments } from "../src/shared/ruby";
+import { bareKanji, brokenRuby, rubyBase, rubyParen, rubySegments } from "../src/shared/ruby";
 
 describe("やさしい日本語のふりがな（docs/yasashii-nihongo.md）", () => {
   it("｜漢字《よみ》を、ふりがなの付いた字に分ける", () => {
@@ -20,5 +20,21 @@ describe("やさしい日本語のふりがな（docs/yasashii-nihongo.md）", (
     expect(bareKanji("｜検電器《けんでんき》を　持って　作業する")).toEqual(["持", "作", "業"]);
     expect(bareKanji("｜検電器《けんでんき》を　もって　しごとを　してください。")).toEqual([]);
     expect(bareKanji("ふりがなの無い文は　ひらがなだけ")).toEqual(["無", "文"]);
+  });
+});
+
+describe("ふりがなの書式が壊れたとき", () => {
+  it("｜を省いた形は、読みがかなだけのときに限る（ふつうの括弧として使った《》を読まない）", () => {
+    expect(rubySegments("注意《重要》を　みる")).toEqual([{ text: "注意《重要》を　みる" }]);
+    expect(brokenRuby("注意《重要》を　みる")).toBe(true);
+    expect(rubySegments("感電《カンデン》")).toEqual([{ text: "感電", ruby: "カンデン" }]);
+  });
+
+  it("《よみ》の無い｜は画面に出さず、壊れた書式として見つける", () => {
+    expect(rubyBase("｜けんでんきを　もつ")).toBe("けんでんきを　もつ");
+    expect(brokenRuby("｜けんでんきを　もつ")).toBe(true);
+    expect(brokenRuby("けんでんき》を　もつ")).toBe(true);
+    expect(brokenRuby("｜検電器《けんでんき》を　もつ")).toBe(false);
+    expect(brokenRuby("ひらがなだけ")).toBe(false);
   });
 });

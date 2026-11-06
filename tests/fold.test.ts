@@ -35,7 +35,7 @@ describe("文字数を数える", () => {
 
   // 手元に文字にした資料があるときだけ: 11/2 に数えた 12 ページの合計と同じになる
   const manual = privatePath("pdf", "manual");
-  it.skipIf(!existsSync(join(manual, "index.json")))("デモの 8 枚の元の 12 ページは numbers.md の合計と同じ", () => {
+  it.skipIf(!existsSync(join(manual, "index.json")))("【手元限定】デモの 8 枚の元の 12 ページは numbers.md の合計と同じ", () => {
     const r = report(countFolder(manual, parsePageList("26,27,32,35,36,39,40,49,55,62,80,92")));
     const want = Number(readFileSync("docs/numbers.md", "utf8").match(/合計（12 ページ） \| (\d+)/)![1]);
     expect(r.total).toBe(want);

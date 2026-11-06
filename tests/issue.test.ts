@@ -38,4 +38,12 @@ describe("週の抜き取りの決まり（088）", () => {
     expect(reviewerFor("supervisor.2")).toBe("supervisor.1");
     expect(reviewerFor("trainer.1")).toBeNull();
   });
+
+  it("監修者が 3 人以上でも、署名した人以外の監修者を選ぶ（空のままにしない）", () => {
+    const three = ["supervisor.1", "supervisor.2", "supervisor.3"];
+    expect(reviewerFor("supervisor.3", three)).toBe("supervisor.1");
+    expect(reviewerFor("supervisor.1", three)).toBe("supervisor.2");
+    expect(reviewerFor("supervisor.3")).toBe("supervisor.1");
+    expect(reviewerFor("supervisor.1", ["supervisor.1"])).toBeNull();
+  });
 });

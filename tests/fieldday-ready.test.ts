@@ -23,7 +23,7 @@ const rows = (md: string) =>
     .slice(1)
     .map((l) => l.slice(1, -1).split("|").map((x) => x.trim()));
 
-describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("当日の準備の確かめ表（066）", () => {
+describe.skipIf(!existsSync(FILE) || !existsSync(RUNSHEET))("【手元限定】当日の準備の確かめ表（066）", () => {
   const sec = sections(existsSync(FILE) ? readFileSync(FILE, "utf-8") : "");
   const run = existsSync(RUNSHEET) ? readFileSync(RUNSHEET, "utf-8") : "";
 

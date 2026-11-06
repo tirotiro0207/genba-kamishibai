@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { MemoryCallLog } from "../src/shared/claude";
-import { addedNumbers, makeWords, wordsParams } from "../src/shared/make/words";
+import { addedNumbers, makeWords, wordsParams, wordsProblems } from "../src/shared/make/words";
 import { sampleCard } from "./fixtures/card";
 
 const msg = (obj: unknown) => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(obj) }], usage: { input_tokens: 500, output_tokens: 200 } }) as unknown as Anthropic.Message;
@@ -68,6 +68,30 @@ describe("言葉の欄（036）", () => {
     expect(client.sent).toHaveLength(2);
     expect(JSON.stringify(client.sent[1].messages)).toContain("ふりがなの無い漢字");
     expect(out.words.ja).toBe("｜検電器《けんでんき》を　もって　しごとを　してください。");
+  });
+
+  it("数字の足しとふりがな抜けが同時にあれば、書き直しの指示に両方を並べる", async () => {
+    const card = sampleCard();
+    const client = fake([
+      { ja: "5 回　検電器を　もつ", vi: "x", terms: [] },
+      { ja: "｜検電器《けんでんき》を　もつ", vi: "x", terms: [] },
+    ]);
+    await makeWords({ client, log: new MemoryCallLog() }, "measure", card);
+    const sent = JSON.stringify(client.sent[1].messages);
+    expect(sent).toContain("「5」");
+    expect(sent).toContain("ふりがなの無い漢字");
+  });
+
+  it("ふりがなの書式が崩れていたら（《よみ》の無い｜）書き直させる", () => {
+    expect(wordsProblems(sampleCard(), { ja: "｜けんでんきを　もつ" })).toEqual([expect.stringContaining("ふりがなの書き方")]);
+    expect(wordsProblems(sampleCard(), { ja: "｜検電器《けんでんき》を　もつ" })).toEqual([]);
+  });
+
+  it("ベトナム語が空でも、やさしい日本語が決まりに合えば作れる（訳は出さない。vi は作れたときだけ残す）", async () => {
+    const client = fake([{ ja: "たしかめる", vi: "", terms: [] }]);
+    const out = await makeWords({ client, log: new MemoryCallLog() }, "measure", sampleCard());
+    expect(client.sent).toHaveLength(1);
+    expect(out.words).toEqual({ ja: "たしかめる" });
   });
 
   it("2 回とも足したら止める", async () => {

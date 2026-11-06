@@ -6,6 +6,34 @@ import { describe, expect, it } from "vitest";
 const TABLES = ["cards", "audit_chains", "audit_log", "card_pairs", "glossary", "company_words", "extractions", "extraction_oks", "card_opens"];
 const lines = readFileSync("demo/seed.sql", "utf-8").split("\n").filter((l) => l && !l.startsWith("--"));
 
+/** INSERT の VALUES (...) を列ごとの値に割る。文字は '' を ' に戻し、文字でない値（数・NULL）はそのままの字で返す */
+function sqlValues(line: string): string[] {
+  const s = line.slice(line.indexOf(") VALUES (") + ") VALUES (".length);
+  const out: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    while (s[i] === " ") i++;
+    if (s[i] === "'") {
+      let v = "";
+      for (i++; i < s.length; i++) {
+        if (s[i] === "'" && s[i + 1] === "'") (v += "'"), i++;
+        else if (s[i] === "'") break;
+        else v += s[i];
+      }
+      out.push(v);
+      i++;
+    } else {
+      const end = s.slice(i).search(/[,)]/);
+      out.push(s.slice(i, i + end).trim());
+      i += end;
+    }
+    while (s[i] === " ") i++;
+    if (s[i] !== ",") break;
+    i++;
+  }
+  return out;
+}
+
 describe("架空の会社の種データ（125）", () => {
   it("どの行も、決まった表への上書きしない INSERT で、テナントは架空の会社だけ", () => {
     expect(lines.length).toBeGreaterThan(0);
@@ -24,7 +52,8 @@ describe("架空の会社の種データ（125）", () => {
       const cols = l.match(/\(([^)]*)\) VALUES/)![1].split(", ");
       const status = cols.indexOf("status");
       expect(status).toBeGreaterThan(0);
-      expect(l).toMatch(/'signed'/);
+      // 列の位置の値そのものを見る（本文の JSON の中に 'signed' があっても通さない）
+      expect(sqlValues(l)[status]).toBe("signed");
     }
   });
 

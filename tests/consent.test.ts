@@ -23,7 +23,7 @@ const sections = (s: string) => {
   return out;
 };
 
-describe.skipIf(files.length === 0)("同意書の下書き（026）", () => {
+describe.skipIf(files.length === 0)("【手元限定】同意書の下書き（026）", () => {
   // 渡すのはやさしい日本語の版だけ（11/4 作者の決定）。ほかの言葉の下書きが置き場にあれば、同じ検査をかける
   it("やさしい日本語の版がある", () => {
     expect(files).toContain("consent.ja-easy.md");

@@ -6,7 +6,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { CardBody } from "../card";
 import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
-import { bareKanji, rubyBase } from "../ruby";
+import { bareKanji, brokenRuby, rubyBase } from "../ruby";
 
 export const WORDS_MODEL = "claude-opus-5-5";
 
@@ -69,14 +69,30 @@ const NUMBER = /\d+(?:[.,]\d+)?/g;
 const digits = (n: string) => n.replace(/[.,]/g, "");
 
 /** 言葉の欄に、カードの文に無い数字があればその数字 */
-export function addedNumbers(card: CardBody, words: { ja: string; vi: string }): string[] {
+export function addedNumbers(card: CardBody, words: { ja: string; vi?: string }): string[] {
   const src = nfkc(card.statements.map((s) => s.text).join("\n"));
   const srcDigits = new Set((src.match(NUMBER) ?? []).map(digits));
-  return [...new Set([...(nfkc(rubyBase(words.ja)).match(NUMBER) ?? []), ...(nfkc(words.vi).match(NUMBER) ?? [])])].filter((n) => !src.includes(n) && !srcDigits.has(digits(n)));
+  return [...new Set([...(nfkc(rubyBase(words.ja)).match(NUMBER) ?? []), ...(nfkc(words.vi ?? "").match(NUMBER) ?? [])])].filter((n) => !src.includes(n) && !srcDigits.has(digits(n)));
+}
+
+/**
+ * 言葉の欄の答えが決まりに合わないところを、書き直しの指示の文にして全部並べる（空なら通る）。
+ * 1 つずつ伝えると、2 回目で別の決まりに引っかかって止まるので、見つけたものは 1 回でまとめて伝える
+ */
+export function wordsProblems(card: CardBody, words: { ja: string; vi?: string }): string[] {
+  if (!words.ja) return ["ja を空にしない"];
+  const out: string[] = [];
+  const added = addedNumbers(card, words);
+  if (added.length) out.push(`カードの文に無い数字 ${added.map((n) => `「${n}」`).join("")}を消す`);
+  const bare = bareKanji(words.ja);
+  if (bare.length) out.push(`ふりがなの無い漢字 ${bare.map((k) => `「${k}」`).join("")}に「｜漢字《よみ》」でふりがなを付けるか、ひらがなにする`);
+  if (brokenRuby(words.ja)) out.push("ふりがなの書き方が崩れている。「｜漢字《よみ》」の形にするか、｜《》を消す");
+  return out;
 }
 
 export interface Words {
-  words: { ja: string; vi: string };
+  /** vi は作れたときだけ（11/5 の決定で、訳は新入社員にも監修者にも出さない。作る部品とデータは残す） */
+  words: { ja: string; vi?: string };
   terms: Term[];
   messages: Anthropic.Message[];
 }
@@ -88,17 +104,14 @@ export async function makeWords(deps: GuardedDeps, purpose: Purpose, card: CardB
     const msg = await guardedCall(deps, { purpose, label: "言葉の欄", params: wordsParams(card, fix) });
     messages.push(msg);
     if (msg.stop_reason !== "end_turn") throw new Error(`言葉の欄が最後まで返らなかった: ${msg.stop_reason}`);
-    const out = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as { ja: string; vi: string; terms: Term[] };
-    const words = { ja: out.ja.trim(), vi: out.vi.trim() };
-    const terms = (out.terms ?? []).map((t) => ({ ja: t.ja.trim(), vi: t.vi.trim() })).filter((t) => t.ja && t.vi);
-    const added = addedNumbers(card, words);
-    const bare = bareKanji(words.ja);
-    if (words.ja && words.vi && !added.length && !bare.length) return { words, terms, messages };
-    fix = added.length
-      ? `カードの文に無い数字 ${added.map((n) => `「${n}」`).join("")}を消す`
-      : bare.length
-        ? `ふりがなの無い漢字 ${bare.map((k) => `「${k}」`).join("")}に「｜漢字《よみ》」でふりがなを付けるか、ひらがなにする`
-        : "ja と vi を空にしない";
+    const out = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as { ja: string; vi?: string; terms: Term[] };
+    const ja = (out.ja ?? "").trim();
+    const vi = (out.vi ?? "").trim();
+    const words = vi ? { ja, vi } : { ja };
+    const terms = (out.terms ?? []).map((t) => ({ ja: (t.ja ?? "").trim(), vi: (t.vi ?? "").trim() })).filter((t) => t.ja && t.vi);
+    const problems = wordsProblems(card, words);
+    if (!problems.length) return { words, terms, messages };
+    fix = problems.join("。また、");
   }
   throw new Error(`言葉の欄が 2 回とも決まりに合わない: ${fix}`);
 }

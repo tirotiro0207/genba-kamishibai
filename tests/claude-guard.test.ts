@@ -144,7 +144,7 @@ describe("全部の用途を合わせた 1 日の上限", () => {
 
   // 手元にだけある、今夜の呼び出しの記録の写しで確かめる（API は呼ばない。CI では記録が無いので飛ばす）
   const real = join(import.meta.dirname, "..", "private", "logs", "api-calls.jsonl");
-  it.skipIf(!existsSync(real))("今夜の記録の写しでは、10 USD の上限で次の呼び出しが止まる", async () => {
+  it.skipIf(!existsSync(real))("【手元限定】今夜の記録の写しでは、10 USD の上限で次の呼び出しが止まる", async () => {
     const copy = join(mkdtempSync(join(tmpdir(), "calls-")), "api-calls.jsonl");
     copyFileSync(real, copy);
     const c = client(["ok"]);
