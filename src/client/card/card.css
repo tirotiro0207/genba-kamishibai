@@ -52,3 +52,6 @@
 .card-strip .read-frame { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; position: relative; }
 .card-strip .read-frame svg { display: block; width: 100%; height: auto; }
 @media (max-width: 640px) { .card-lead-row { grid-template-columns: 1fr; gap: 2px; } }
+/* 絵の直し方の入口（11/6 作者）。絵のすぐ下に 1 列で並べる */
+.card-fixes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card-fixes > span { font-size: 13px; color: var(--muted); margin-right: 4px; }

@@ -99,3 +99,16 @@ test("絵の上にやさしい日本語・決まり・なぜが出て、文を�
   await expect(lead).toBeVisible();
   await page.waitForTimeout(800);
 });
+
+test("絵のすぐ下に直し方の入口が出て、言葉で直すを押すと直す画面が言葉で直すで開く（11/6 作者）", async ({ page }) => {
+  await page.route("**/api/t/practice/cards/card-*", (route) => route.fulfill({ json: view("pending", false) }));
+  await page.goto("/#/t/practice/card/card-pending");
+  const fixes = page.getByTestId("card-fixes");
+  await expect(fixes).toBeVisible();
+  for (const id of ["card-fix-words", "card-fix-ask", "card-fix-touch", "card-fix-pose"]) await expect(page.getByTestId(id)).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.getByTestId("card-fix-words").click();
+  await expect(page).toHaveURL(/fix\/card-pending\/words$/);
+  await expect(page.getByTestId("fix-mode-words")).toHaveClass(/on/);
+  await page.waitForTimeout(600);
+});

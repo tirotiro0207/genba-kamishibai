@@ -65,7 +65,7 @@ function DrawBox({ svg, box, onBox }: { svg: string; box: FixBox | null; onBox: 
   );
 }
 
-export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }) {
+export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId: string; initial?: "ask" | "touch" | "words" }) {
   const [card, setCard] = useState<CardView | null>(null);
   const [err, setErr] = useState("");
   const [at, setAt] = useState(0);
@@ -76,7 +76,7 @@ export function FixScreen({ tenant, cardId }: { tenant: string; cardId: string }
   const [sent, setSent] = useState<{ n: number; version: number } | null>(null);
   const [redone, setRedone] = useState<{ version: number; redo: { parts: string[]; count: number; left: number } } | null>(null);
   // 直し方（11/6）: なぞって AI に頼むか、指で部品を動かすか、言葉でカード全体か 1 コマを直すか
-  const [mode, setMode] = useState<"ask" | "touch" | "words">("ask");
+  const [mode, setMode] = useState<"ask" | "touch" | "words">(initial ?? "ask");
   const [note, setNote] = useState("");
   useEffect(() => {
     req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)

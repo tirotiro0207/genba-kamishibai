@@ -206,6 +206,22 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           </button>
         </nav>
       )}
+      {/* 絵の直し方の入口（11/6 作者「プロンプトで直す・つまみで直すが見つからない」）。前は「文を見る」を開かないと出なかった */}
+      <nav className="card-fixes" aria-label="絵を直す" data-testid="card-fixes">
+        <span>絵を直す</span>
+        <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}/words`} data-testid="card-fix-words">
+          言葉（プロンプト）で直す
+        </a>
+        <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}/ask`} data-testid="card-fix-ask">
+          枠で囲んで AI に頼む
+        </a>
+        <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}/touch`} data-testid="card-fix-touch">
+          指で動かす
+        </a>
+        <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="card-fix-pose">
+          つまみで角度まで動かす
+        </a>
+      </nav>
       <Check tenant={tenant} card={card} onChange={setCard} />
       {!open && (
         <button className="card-show" onClick={() => setOpen(true)} data-testid="card-show">
