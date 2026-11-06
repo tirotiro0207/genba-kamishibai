@@ -3,7 +3,7 @@
 // 取り出しの結果から OK を付けてカードを作るのは、今までの /extract/:id/ok と /extract/:id/make を使う。新入社員の役割では使えない。
 // PDF の文字は、Worker で Claude に読ませて、ページごとの文字にする（/chats/pdf）。Word と文字のファイルは画面の側で文字にして送る
 import { Hono } from "hono";
-import { guardedCall } from "../shared/claude";
+import { BudgetExceededError, guardedCall } from "../shared/claude";
 import { D1CallLog } from "./api-log";
 import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
@@ -85,11 +85,14 @@ function readFiles(x: unknown): Material[] | null {
   return out;
 }
 
-/** 資料ぜんぶを 1 つの元の文にする（ページの行の数をつなぐので、取り出しの「どこから」は元の資料のページと行に戻る） */
+/**
+ * 資料ぜんぶを 1 つの元の文にする（ページの行の数をつなぐので、取り出しの「どこから」は元の資料のページと行に戻る）。
+ * 添付が 2 つ以上のときは、ページごとにどの資料かを持たせる（A の 1 ページと B の 1 ページを取り違えない）
+ */
 export function joinMaterial(ms: Material[]): { text: string; source: InputSource } {
   return {
     text: ms.map((m) => m.text).join("\n"),
-    source: { kind: "doc", doc: ms.map((m) => m.name).join("・").slice(0, 200), pages: ms.flatMap((m) => m.pages) },
+    source: { kind: "doc", doc: ms.map((m) => m.name).join("・").slice(0, 200), pages: ms.flatMap((m) => m.pages.map((p) => (ms.length > 1 ? { ...p, doc: m.name } : p))) },
   };
 }
 
@@ -106,16 +109,23 @@ chats.post("/:id/messages", async (c) => {
   const messages = JSON.parse(r.messages) as ChatMessage[];
   const material = [...(JSON.parse(r.material) as Material[]), ...files];
   const at = new Date().toISOString();
-  messages.push({ role: "user", text, files: files.map((f) => f.name), at });
+  const user: ChatMessage = { role: "user", text, files: files.map((f) => f.name), at };
+  messages.push(user);
 
   // 元の文: 資料があれば資料ぜんぶ。無ければ、書いた指示そのものを話した言葉として扱う
   const instructions = messages.filter((m) => m.role === "user" && m.text).map((m) => m.text);
   let reply: ChatMessage;
   const joined = material.length ? joinMaterial(material) : { text: instructions.join("\n"), source: { kind: "speech" } as InputSource };
+  const save = () =>
+    db.prepare("UPDATE card_chats SET messages = ?, material = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?").bind(JSON.stringify(messages), JSON.stringify(material), r.id, tid).run();
   if (joined.text.length > MAX_INPUT_CHARS) {
     reply = { role: "assistant", text: `資料が長すぎます（${joined.text.length.toLocaleString()} 字。${MAX_INPUT_CHARS.toLocaleString()} 字まで）。ページを絞った資料を添付し直してください`, at };
+    // 足した添付は資料から外すので、指示の行にも添付の名前を残さない（添付済みに見えないように）
     material.splice(material.length - files.length, files.length);
+    user.files = [];
   } else {
+    // 取り出しを呼ぶ前に、指示と添付を残す（呼び出しが途中で落ちても、書いた指示が消えないように）
+    await save();
     try {
       const focus = material.length && instructions.length ? instructions.join("\n").slice(-FOCUS_MAX) : undefined;
       const x = await runExtraction(c.env, tid, joined.text, joined.source, focus);
@@ -127,12 +137,13 @@ chats.post("/:id/messages", async (c) => {
         at: new Date().toISOString(),
       };
     } catch (e) {
-      if (!(e instanceof ExtractError)) throw e;
-      reply = { role: "assistant", text: e.message, at };
+      // 費用の上限で止まったときも、理由を返事として残す（素の 500 にしない）
+      if (!(e instanceof ExtractError) && !(e instanceof BudgetExceededError)) throw e;
+      reply = { role: "assistant", text: e instanceof BudgetExceededError ? `費用の上限に届いたので、取り出しを止めました（${e.message}）` : e.message, at };
     }
   }
   messages.push(reply);
-  await db.prepare("UPDATE card_chats SET messages = ?, material = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?").bind(JSON.stringify(messages), JSON.stringify(material), r.id, tid).run();
+  await save();
   return c.json(view((await getChat(db, tid, r.id))!), 201);
 });
 

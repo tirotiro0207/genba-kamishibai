@@ -5,7 +5,8 @@
 import { Hono } from "hono";
 import type { CardBody } from "../shared/card";
 import { QUEUE_STATUSES, queueOrder } from "../shared/queue";
-import { type CardRow, currentEvidence } from "./cards";
+import { hasScript } from "../shared/sample20";
+import { type CardRow, evidenceByCard } from "./cards";
 import type { Env } from "./env";
 import type { PeopleVars } from "./people";
 import { actorOf } from "./sign";
@@ -33,15 +34,16 @@ queue.get("/queue", async (c) => {
   const night = new Set(
     (await db.prepare("SELECT card_id FROM night_drafts WHERE tenant_id = ? AND card_id IS NOT NULL").bind(tid).all<{ card_id: string }>()).results.map((x) => x.card_id),
   );
-  const items = await Promise.all(
-    results.map(async (r) => {
-      const b = bodyOf(r.body);
-      // 証拠を読むときも本文を読み直すので、読めない本文の枚は証拠なしで並べる
-      const e = b ? await currentEvidence(db, tid, r) : null;
-      return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, night: night.has(r.id), scripted: Boolean(b?.script), rule: b?.rule ?? "" };
-    }),
-  );
-  // scripted: 脚本（11/5〜）を書いてから作ったカードか。前の作り方のカードには見せ場・山場の脚本が無く、一覧に印を出す（11/6）
+  // 証拠はまとめて 1 回で引く（1 枚ごとに読みに行かない）。読めない本文の枚は証拠なしで並べ、broken の印を付ける
+  const evidence = await evidenceByCard(db, tid, results);
+  const items = results.map((r) => {
+    const b = bodyOf(r.body);
+    const e = b ? evidence.get(r.id) : undefined;
+    return { id: r.id, status: r.status, band: e?.band ?? null, dangerous: e?.dangerous ?? false, rate: e?.rate ?? null, created_at: r.created_at, night: night.has(r.id), scripted: hasScript(b), broken: !b, rule: b?.rule ?? "" };
+  });
+  // scripted: 脚本（11/5〜）を書いてから作ったカードか。前の作り方のカードには見せ場・山場の脚本が無く、一覧に印を出す（11/6）。
+  // 判定は週の抜き取り（sample20 の hasScript）と同じ: コマ割りが 1 つ以上ある脚本
+  // broken: 本文の JSON が読めない枚。「rule が空の確認待ち」に見えて気づけないので、印で分かるようにする
   return c.json({ cards: queueOrder(items) });
 });
 

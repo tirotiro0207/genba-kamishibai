@@ -11,6 +11,9 @@ interface Row {
   body: string;
 }
 
+/** 手本の直しを探すときに読む直しの行の数（新しい順）。カードが増えても 1 回に全件を読まない */
+export const EDIT_SCAN_MAX = 500;
+
 /** 同じテナントの今あるカードのうち、カテゴリが同じものの番号（作るカード自身は除く） */
 async function sameCategory(db: D1Database, tenantId: string, category: Category, except?: string) {
   const { results } = await db.prepare("SELECT id AS card_id, body FROM cards WHERE tenant_id = ?").bind(tenantId).all<Row>();
@@ -23,8 +26,8 @@ export async function gatherExemplars(db: D1Database, tenantId: string, text: st
   const ids = await sameCategory(db, tenantId, category, except);
   // ② 人の直し: 文の欄を直した行（枠と指示の依頼・作り直しの行は除く）。新しい順
   const { results: edits } = await db
-    .prepare("SELECT card_id, actor, payload, created_at FROM audit_log WHERE tenant_id = ? AND kind = 'edit' AND json_extract(payload, '$.request') IS NULL ORDER BY created_at DESC, n DESC")
-    .bind(tenantId)
+    .prepare("SELECT card_id, actor, payload, created_at FROM audit_log WHERE tenant_id = ? AND kind = 'edit' AND json_extract(payload, '$.request') IS NULL ORDER BY created_at DESC, n DESC LIMIT ?")
+    .bind(tenantId, EDIT_SCAN_MAX)
     .all<{ card_id: string; actor: string; payload: string; created_at: string }>();
   const e: ExemplarEdit[] = [];
   for (const r of edits) {

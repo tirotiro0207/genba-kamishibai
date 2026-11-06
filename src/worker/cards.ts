@@ -12,7 +12,7 @@ import { summarize } from "../shared/stats";
 import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
-import { appendAudit } from "./audit";
+import { appendAudit, appendAuditIf } from "./audit";
 import { claudeClient } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, personName } from "./people";
@@ -53,9 +53,16 @@ export function readAsk(x: unknown): string | undefined | null {
   return x.trim().slice(0, ASK_MAX) || undefined;
 }
 
-type Payload = { card?: CardBody; actor?: string; reason?: string; ask?: unknown };
+type Payload = { card?: CardBody; reason?: string; ask?: unknown };
 const readBody = async (c: { req: { json: <T>() => Promise<T> } }) => c.req.json<Payload>().catch(() => ({}) as Payload);
-const actorOf = (b: Payload, fallback: string) => (typeof b.actor === "string" && b.actor.trim() ? b.actor.trim().slice(0, 40) : fallback);
+/**
+ * 監査の記録の「誰が」。役割のしるしがあれば役割と番号（supervisor.1）、無ければ fallback（しるしの要らない練習用の呼び出し）。
+ * 画面や呼び出し側が送る名前（actor）は使わない（なりすましを記録に残さない）
+ */
+const whoOf = (c: Ctx, fallback = "anon") => {
+  const person = (c.var as PeopleVars).person;
+  return person ? personActor(person) : fallback;
+};
 
 /** ① 元の文のどこから: 文ごとの元の位置と、部品ごとの経路 */
 export const sourcePayload = (card: CardBody) => ({
@@ -112,7 +119,8 @@ cards.get("/stats", async (c) => {
   const db = c.env.DB;
   const tid = c.var.tenant.id;
   const { results } = await db.prepare(`SELECT ${COLS} FROM cards WHERE tenant_id = ? AND status != 'stopped'`).bind(tid).all<CardRow>();
-  const ev = (await Promise.all(results.map((r) => currentEvidence(db, tid, r)))).filter((e): e is Evidence => !!e);
+  const all = await evidenceByCard(db, tid, results);
+  const ev = results.map((r) => all.get(r.id)).filter((e): e is Evidence => !!e);
   const signs = await db.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND kind = 'sign'").bind(tid).all<{ payload: string }>();
   return c.json(summarize(ev, signs.results.map((r) => (JSON.parse(r.payload) as { minutes?: number | null }).minutes ?? null)));
 });
@@ -139,7 +147,7 @@ cards.post("/", async (c) => {
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const ask = readAsk(b.ask);
   if (ask === null) return c.json({ error: "ask は文字" }, 400);
-  return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, actorOf(b, "maker"), undefined, ask)), 201);
+  return c.json(cardView(await createCard(c.env.DB, c.var.tenant.id, card, whoOf(c, "maker"), undefined, ask)), 201);
 });
 
 /** 用語表に積む（036）。同じカードの同じ言葉は 1 行 */
@@ -164,6 +172,18 @@ cards.get("/glossary", async (c) => {
   return c.json({ terms: [...byJa.values()] });
 });
 
+// 用語表の確かめ済みの印（036）: ベトナム語の分かる人に確かめてもらった言葉に、監修者か作者が印を付ける（外すこともできる）。
+// 印は日本語ごと（その言葉を使う全部のカードの行）に付ける。/:id より先に置く（PUT /glossary を 1 枚の直しと取り違えない）
+cards.put("/glossary", async (c) => {
+  const p = (c.var as PeopleVars).person;
+  if (p?.role !== "supervisor" && p?.role !== "author") return c.json({ error: "確かめ済みの印は監修者か作者が付ける" }, 403);
+  const b = await c.req.json<{ ja?: unknown; checked?: unknown }>().catch(() => ({}) as { ja?: unknown; checked?: unknown });
+  if (typeof b.ja !== "string" || !b.ja || typeof b.checked !== "boolean") return c.json({ error: "ja（日本語）と checked（true か false）が要る" }, 400);
+  const res = await c.env.DB.prepare("UPDATE glossary SET checked = ? WHERE tenant_id = ? AND ja = ?").bind(b.checked ? 1 : 0, c.var.tenant.id, b.ja).run();
+  if (!res.meta.changes) return c.json({ error: "その言葉は用語表に無い" }, 404);
+  return c.json({ ja: b.ja, checked: b.checked, rows: res.meta.changes });
+});
+
 /** 今の版の確かめる AI の証拠（監査の記録 ③ の最後の 1 行）。無ければ null（確認待ち） */
 export async function currentEvidence(db: D1Database, tenantId: string, r: CardRow): Promise<Evidence | null> {
   const { results } = await db
@@ -176,6 +196,38 @@ export async function currentEvidence(db: D1Database, tenantId: string, r: CardR
     if (p.version === r.version) return hasEvidence(p.evidence, frames) ? p.evidence : null;
   }
   return null;
+}
+
+/**
+ * 何枚ものカードの今の版の証拠を、1 回の読み出しでまとめて引く（一覧・数字の画面で、1 枚ごとに読みに行かない）。
+ * 読み方は currentEvidence と同じ: 今の版の最後の ③ の行。本文が読めない枚は入れない
+ */
+export async function evidenceByCard(db: D1Database, tenantId: string, rows: CardRow[]): Promise<Map<string, Evidence>> {
+  const out = new Map<string, Evidence>();
+  if (!rows.length) return out;
+  const want = new Map(rows.map((r) => [r.id, r]));
+  const { results } = await db
+    .prepare("SELECT card_id, payload FROM audit_log WHERE tenant_id = ? AND kind = 'verify' ORDER BY created_at DESC, n DESC")
+    .bind(tenantId)
+    .all<{ card_id: string; payload: string }>();
+  const decided = new Set<string>();
+  for (const row of results) {
+    const r = want.get(row.card_id);
+    if (!r || decided.has(r.id)) continue;
+    let p: { version?: number; evidence?: unknown };
+    let frames: number;
+    try {
+      p = JSON.parse(row.payload) as typeof p;
+      frames = (JSON.parse(r.body) as CardBody).frames.length;
+    } catch {
+      decided.add(r.id);
+      continue;
+    }
+    if (p.version !== r.version) continue;
+    decided.add(r.id);
+    if (hasEvidence(p.evidence, frames)) out.set(r.id, p.evidence);
+  }
+  return out;
 }
 
 cards.get("/:id", async (c) => {
@@ -249,11 +301,12 @@ cards.post("/:id/verify", async (c) => {
 });
 
 /**
- * 署名済み・停止のカードを直したとき（11/5 作者「承認済みも全部編集できるように」）。新しい版は下書きに戻り、署名は外れる。
- * 状態が移った 1 行を監査に足し、署名済みだったなら、前の版を印刷した人が回収できるよう回収の知らせを出す（止めたときと同じ）
+ * 直して状態が移ったとき（11/5 作者「承認済みも全部編集できるように」）。新しい版は下書きに戻り、署名は外れる。
+ * 状態が移った 1 行を監査に足す（確認待ち・OK から下書きに戻ったときも）。署名済みだったなら、前の版を印刷した人が
+ * 回収できるよう回収の知らせを出す（止めたときと同じ）
  */
 async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string) {
-  if (r.status !== "signed" && r.status !== "stopped") return;
+  if (r.status === to) return;
   const reason = `直したため（版 ${r.version} → ${r.version + 1}）: ${why}`.slice(0, 200);
   await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason } });
   if (r.status === "signed") await createRecall(db, tenantId, r, by, reason);
@@ -266,14 +319,14 @@ cards.put("/:id", async (c) => {
   if (!r) return c.json({ error: "カードが無い" }, 404);
   const b = await readBody(c);
   const reason = typeof b.reason === "string" ? b.reason.trim().slice(0, 1000) : "";
-  return saveEdit(c, r, b.card as CardBody, reason, actorOf(b, "editor"));
+  return saveEdit(c, r, b.card as CardBody, reason);
 });
 
 /**
  * 直した中身を保存する（PUT と戻すで共通）。版を 1 つ上げ、④ に前と後・直した人・日時・理由を足す。
  * extra は記録の行に足す欄（戻すときの request・restored）
  */
-async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, fallbackBy: string, extra: Record<string, unknown> = {}) {
+async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extra: Record<string, unknown> = {}) {
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const before = JSON.parse(r.body) as CardBody;
@@ -281,22 +334,28 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, fall
   // 修正の差分（050）: 何も変わらない直しは記録も版も増やさない。理由の無い直しは受けない
   if (!changed.length) return c.json({ ...cardView(r), changed });
   if (!reason) return c.json({ error: "直した理由が要る" }, 400);
-  // 直した人は役割のしるしから取る（しるしの無い手元の呼び出しだけ、送られた名前を使う）
-  const person = (c.var as PeopleVars).person;
-  const by = person ? personActor(person) : fallbackBy;
-  await appendAudit(c.env.DB, c.var.tenant.id, {
+  // 直した人は役割のしるしから取る（しるしの無い練習用の呼び出しは anon）
+  const by = whoOf(c);
+  const reasons = aiDraftReasons(card);
+  const status = reasons.length ? "ai_draft" : "draft";
+  // 読んだ版のままのときだけ書き換え、④ の行と 1 つのトランザクションにする（同じ版からの 2 つの直しの後のほうは 409）
+  const update = c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?").bind(
+    JSON.stringify(card),
+    status,
+    r.id,
+    c.var.tenant.id,
+    r.version,
+  );
+  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, update, {
     card_id: r.id,
     kind: "edit",
     actor: by,
     payload: { ...extra, from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
   });
+  if (!entry) return c.json({ error: "ほかの直しと重なった。読み直して" }, 409);
   // 会社の言葉（085）: 直しの前と後から、言い換えと使わない言い方を積む
   await addEditWords(c.env.DB, c.var.tenant.id, r.id, before as unknown as Record<string, unknown>, card as unknown as Record<string, unknown>);
-  const reasons = aiDraftReasons(card);
-  await c.env.DB.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
-    .bind(JSON.stringify(card), reasons.length ? "ai_draft" : "draft", r.id, c.var.tenant.id)
-    .run();
-  await reopenOnEdit(c.env.DB, c.var.tenant.id, r, reasons.length ? "ai_draft" : "draft", by, reason);
+  await reopenOnEdit(c.env.DB, c.var.tenant.id, r, status, by, reason);
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 }
@@ -309,7 +368,7 @@ cards.post("/:id/undo", async (c) => {
   if (!r) return c.json({ error: "カードが無い" }, 404);
   const b = await readBody(c);
   const rows = (
-    await c.env.DB.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'edit' AND json_extract(payload, '$.to_version') IS NOT NULL ORDER BY created_at DESC")
+    await c.env.DB.prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'edit' AND json_extract(payload, '$.to_version') IS NOT NULL ORDER BY created_at DESC, n DESC")
       .bind(c.var.tenant.id, r.id)
       .all<{ payload: string }>()
   ).results.map((x) => JSON.parse(x.payload) as EditRow);
@@ -329,7 +388,7 @@ cards.post("/:id/undo", async (c) => {
   }
   const why = typeof b.reason === "string" && b.reason.trim() ? b.reason.trim().slice(0, 1000) : "";
   const reason = `元に戻す（版 ${r.version} → 版 ${target} の中身）${why ? `: ${why}` : ""}`;
-  return saveEdit(c, r, body, reason, actorOf(b, "supervisor"), { request: "undo", restored: target });
+  return saveEdit(c, r, body, reason, { request: "undo", restored: target });
 });
 
 // 枠と指示（044a）: 直したい部分の枠と「ここをこうしたい」を ④ 人の直しの 1 行として残す。作り直すのは 044b。
@@ -337,12 +396,12 @@ cards.post("/:id/undo", async (c) => {
 cards.post("/:id/fix", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  const b = await c.req.json<Partial<FixRequest> & { actor?: string }>().catch(() => null);
+  const b = await c.req.json<Partial<FixRequest>>().catch(() => null);
   const body = JSON.parse(r.body) as CardBody;
   const errs = validateFix(b, body.frames.length);
   if (errs.length) return c.json({ error: "枠か文が足りない", errors: errs }, 400);
   const req = { frame: b!.frame!, t: body.frames[b!.frame!].t, box: b!.box!, text: b!.text!.trim() };
-  const e = await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "edit", actor: actorOf(b as Payload, "supervisor"), payload: { request: "redo", version: r.version, ...req } });
+  const e = await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "edit", actor: whoOf(c), payload: { request: "redo", version: r.version, ...req } });
   return c.json({ n: e.n, version: r.version, ...req }, 202);
 });
 
@@ -371,20 +430,20 @@ cards.post("/:id/redo", async (c) => {
   }
   const errs = validateCard(out.body);
   if (errs.length) return c.json({ error: "作り直したカードの形か経路が足りない", errors: errs }, 502);
-  const res = await db.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?")
-    .bind(JSON.stringify(out.body), aiDraftReasons(out.body).length ? "ai_draft" : "draft", r.id, tid, r.version)
-    .run();
-  if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
-  // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5）
-  await reopenOnEdit(db, tid, r, aiDraftReasons(out.body).length ? "ai_draft" : "draft", "maker", ask.text);
+  const status = aiDraftReasons(out.body).length ? "ai_draft" : "draft";
   const count = (done?.n ?? 0) + 1;
   const key = (body: CardBody) => (body.motion.kind === "keyframes" ? body.motion.json.keyframes[out.keyIndex] : null);
-  await appendAudit(db, tid, {
+  // 書き換えと ④ の「作り直した」の行を 1 つのトランザクションで（読んだ版のままのときだけ）
+  const update = db.prepare("UPDATE cards SET body = ?, status = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?").bind(JSON.stringify(out.body), status, r.id, tid, r.version);
+  const entry = await appendAuditIf(db, tid, update, {
     card_id: r.id,
     kind: "edit",
     actor: "maker",
     payload: { request: "redone", from_n: b.n, from_version: r.version, to_version: r.version + 1, frame: ask.frame, parts: out.targets.parts, figures: out.targets.figures, props: out.targets.props, before: key(before), after: key(out.body), count },
   });
+  if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
+  // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5）
+  await reopenOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text);
   return c.json({ ...cardView((await getCard(db, tid, r.id))!), redo: { ...out.targets, count, left: REDO_MAX - count } });
 });
 
@@ -395,7 +454,7 @@ cards.post("/:id/rework", async (c) => {
   const tid = c.var.tenant.id;
   const r = await getCard(db, tid, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  const b = await c.req.json<{ text?: unknown; frame?: unknown; actor?: string }>().catch(() => ({}) as { text?: unknown; frame?: unknown; actor?: string });
+  const b = await c.req.json<{ text?: unknown; frame?: unknown }>().catch(() => ({}) as { text?: unknown; frame?: unknown });
   const text = typeof b.text === "string" ? b.text.trim().slice(0, REWORK_TEXT_MAX) : "";
   if (!text) return c.json({ error: "頼み（text）が空" }, 400);
   const before = JSON.parse(r.body) as CardBody;
@@ -411,7 +470,7 @@ cards.post("/:id/rework", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, e instanceof ReworkError ? e.status : 502);
   }
-  const res = await saveEdit(c, r, out.body, `言葉で直した: ${text}`.slice(0, 1000), actorOf({ actor: b.actor }, "supervisor"), { request: "rework", frame, text });
+  const res = await saveEdit(c, r, out.body, `言葉で直した: ${text}`.slice(0, 1000), { request: "rework", frame, text });
   if (res.status !== 200) return res;
   const view = (await res.json()) as { changed?: unknown };
   // 何も変わらなかったときは版も記録も増えないので、回数にも数えない
@@ -422,7 +481,7 @@ cards.post("/:id/rework", async (c) => {
 cards.post("/:id/status", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
-  const b = await c.req.json<{ to?: CardStatus; actor?: string; reason?: string }>().catch(() => ({}) as { to?: CardStatus; actor?: string; reason?: string });
+  const b = await c.req.json<{ to?: CardStatus; reason?: string }>().catch(() => ({}) as { to?: CardStatus; reason?: string });
   const to = b.to;
   // 停止の理由（088）。署名済みを止めると回収の知らせに載る。書くなら 200 字まで
   const reason = readReason(b.reason);
@@ -437,10 +496,12 @@ cards.post("/:id/status", async (c) => {
     // 危険の印（048）: 危ない行為をしてよいと読める絵は、直して確かめ直すまで OK にしない
     if (ev.dangerous) return c.json({ error: "危険の印: 危ない行為をしてよいと読める絵なので、直して確かめ直すまで OK できない" }, 409);
   }
-  const res = await c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status).run();
-  if (!res.meta.changes) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "status", actor: actorOf(b, "system"), payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } });
+  // 状態を移す文と、移った 1 行を 1 つのトランザクションで書く。「誰が」は役割のしるしから（止めた監修者が残る）
+  const move = c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status);
+  const by = whoOf(c);
+  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, move, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } });
+  if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
   // 署名済みを止めたら、印刷したカードを回収できるよう、版と署名の日付つきの知らせを教育担当に出す（088）
-  if (r.status === "signed" && to === "stopped") await createRecall(c.env.DB, c.var.tenant.id, r, personActor((c.var as PeopleVars).person), reason);
+  if (r.status === "signed" && to === "stopped") await createRecall(c.env.DB, c.var.tenant.id, r, by, reason);
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 });
