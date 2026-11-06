@@ -4,7 +4,8 @@
 import type { Context, Next } from "hono";
 import { Hono } from "hono";
 import type { Env } from "./env";
-import { SESSION_SEC, type TenantVars, verifyPin } from "./tenant";
+import { clientIp, hitRateLimit, overRateLimit, PIN_RATE_LIMIT, pinKey } from "./rate-limit";
+import { SESSION_SEC, sameText, type TenantVars, verifyPin } from "./tenant";
 
 export const ROLES = ["author", "supervisor", "trainer", "newhire"] as const;
 export type Role = (typeof ROLES)[number];
@@ -56,7 +57,7 @@ export async function verifyRole(secret: string, token: string, tenantId: string
   const tid = parts.join(".");
   if (tid !== tenantId || !ROLES.includes(role) || (slot !== 1 && slot !== 2) || !Number.isFinite(exp) || exp < nowSec) return null;
   if (student !== undefined && (role !== "newhire" || normalizeStudent(student) !== student)) return null;
-  if ((await hmac(secret, `${tid}.${role}.${slot}.${exp}${student ? `.s-${student}` : ""}`)) !== mac) return null;
+  if (!sameText(await hmac(secret, `${tid}.${role}.${slot}.${exp}${student ? `.s-${student}` : ""}`), mac)) return null;
   return student ? { role, slot, student } : { role, slot };
 }
 
@@ -80,7 +81,7 @@ export async function personGuard(c: Context<{ Bindings: Env; Variables: PeopleV
 }
 
 /** 役割のしるしの要らない口（052 の続き）。役割で入る・入った役割を見る・役割の一覧 */
-const OPEN_WITHOUT_ROLE = /\/(login|me|people)$/;
+const OPEN_WITHOUT_ROLE = /^\/api\/t\/[^/]+\/(login|me|people)$/;
 
 /** 会社のテナントの関所（052 の続き）。PIN の入室だけで役割のしるしが無いと、役割で入る口のほかは 403。
  *  練習用と架空の会社は誰でも役割を選べるので、ここでは止めない */
@@ -151,8 +152,14 @@ people.post("/login", async (c) => {
   const slot = (b.slot === undefined ? 1 : Number(b.slot)) as 1 | 2;
   if (!ROLES.includes(role) || (slot !== 1 && slot !== 2) || (role !== "supervisor" && slot !== 1)) return c.json({ error: "役割か番号が違う" }, 400);
   if (c.var.tenant.kind === "company") {
+    // 総当たりの歯止め: 会社の PIN と同じ数え方（同じ所・同じテナントの打ち間違い）
+    const limitKey = pinKey(clientIp(c), c.var.tenant.id);
+    if (await overRateLimit(c.env.DB, limitKey, PIN_RATE_LIMIT)) return c.json({ error: "PIN の打ち間違いが続いたので、しばらく待ってから入ってください" }, 429);
     const row = await c.env.DB.prepare("SELECT pin_hash FROM people WHERE tenant_id = ? AND role = ? AND slot = ?").bind(c.var.tenant.id, role, slot).first<{ pin_hash: string | null }>();
-    if (!row?.pin_hash || typeof b.pin !== "string" || !(await verifyPin(b.pin, row.pin_hash))) return c.json({ error: "PIN が違う" }, 401);
+    if (!row?.pin_hash || typeof b.pin !== "string" || !(await verifyPin(b.pin, row.pin_hash))) {
+      await hitRateLimit(c.env.DB, limitKey, PIN_RATE_LIMIT);
+      return c.json({ error: "PIN が違う" }, 401);
+    }
   }
   // 新入社員は ID を付けて入る（11/6 作者）。ID は前もって作らず、入ったときにその場で決まる（PIN は新入社員の役割で 1 つ）
   let student: string | undefined;

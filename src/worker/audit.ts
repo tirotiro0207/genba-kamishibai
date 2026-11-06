@@ -21,12 +21,21 @@ export async function currentChain(db: D1Database, tenantId: string): Promise<st
 
 /** 連鎖を新しく始める（025b のリセット）。古い連鎖は消さずに残り、確かめられる */
 export async function startNewChain(db: D1Database, tenantId: string): Promise<string> {
-  await currentChain(db, tenantId);
-  const row = await db.prepare("SELECT count(*) AS n FROM audit_chains WHERE tenant_id = ?").bind(tenantId).first<{ n: number }>();
-  const chain = `c${(row?.n ?? 0) + 1}`;
-  await db.prepare("INSERT INTO audit_chains (tenant_id, chain, started_at) VALUES (?, ?, ?)").bind(tenantId, chain, new Date().toISOString()).run();
+  const chain = await nextChainName(db, tenantId);
+  await newChainStatement(db, tenantId, chain).run();
   return chain;
 }
+
+/** 次に始める連鎖の名前（c と通し番号）。今の連鎖が無ければ先に作る */
+export async function nextChainName(db: D1Database, tenantId: string): Promise<string> {
+  await currentChain(db, tenantId);
+  const row = await db.prepare("SELECT count(*) AS n FROM audit_chains WHERE tenant_id = ?").bind(tenantId).first<{ n: number }>();
+  return `c${(row?.n ?? 0) + 1}`;
+}
+
+/** 連鎖を始める 1 文（ほかの文と 1 つのバッチにまとめるときに使う） */
+export const newChainStatement = (db: D1Database, tenantId: string, chain: string) =>
+  db.prepare("INSERT INTO audit_chains (tenant_id, chain, started_at) VALUES (?, ?, ?)").bind(tenantId, chain, new Date().toISOString());
 
 export interface AuditInput {
   card_id: string | null;
@@ -36,17 +45,38 @@ export interface AuditInput {
 }
 
 export async function appendAudit(db: D1Database, tenantId: string, input: AuditInput): Promise<AuditEntry> {
+  return (await appendAuditWith(db, tenantId, input, null))!;
+}
+
+/**
+ * 状態を移す 1 文（pre）と記録の 1 行を、1 つのバッチ（1 つのトランザクション）で書く。
+ * pre が 1 行も変えなければ記録は足さずに null を返す。記録が足せなければ pre も戻る（「移ったのに記録が無い」を作らない）
+ */
+export async function appendAuditIf(db: D1Database, tenantId: string, pre: D1PreparedStatement, input: AuditInput): Promise<AuditEntry | null> {
+  return appendAuditWith(db, tenantId, input, pre);
+}
+
+async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInput, pre: D1PreparedStatement | null): Promise<AuditEntry | null> {
   const chain = await currentChain(db, tenantId);
   const payload = JSON.parse(canonical(input.payload ?? null));
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await db.prepare("SELECT n, hash FROM audit_log WHERE tenant_id = ? AND chain = ? ORDER BY n DESC LIMIT 1").bind(tenantId, chain).first<{ n: number; hash: string }>();
     const draft = { tenant_id: tenantId, chain, n: (last?.n ?? 0) + 1, card_id: input.card_id, kind: input.kind, actor: input.actor, payload, created_at: new Date().toISOString(), prev_hash: last?.hash ?? GENESIS };
     const hash = await entryHash(draft);
+    const values = [tenantId, chain, draft.n, draft.card_id, draft.kind, draft.actor, canonical(payload), draft.created_at, draft.prev_hash, hash];
     try {
-      await db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(tenantId, chain, draft.n, draft.card_id, draft.kind, draft.actor, canonical(payload), draft.created_at, draft.prev_hash, hash)
-        .run();
-      return { ...draft, hash };
+      if (!pre) {
+        await db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(...values)
+          .run();
+        return { ...draft, hash };
+      }
+      // changes() は直前の文（pre）が変えた行の数。0 なら記録の行も足さない
+      const [moved] = await db.batch([
+        pre,
+        db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0").bind(...values),
+      ]);
+      return moved.meta.changes ? { ...draft, hash } : null;
     } catch (e) {
       if (!/UNIQUE|PRIMARY KEY/i.test(String(e))) throw e;
     }
@@ -73,7 +103,12 @@ audit.get("/verify", async (c) => c.json(await verifyTenant(c.env.DB, c.var.tena
 
 // 1 枚のカードの記録を ①〜⑤ の順に（同じ番号の中は書いた順）
 audit.get("/cards/:id", async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT * FROM audit_log WHERE tenant_id = ? AND card_id = ? ORDER BY chain, n").bind(c.var.tenant.id, c.req.param("id")).all<AuditRow>();
+  // 連鎖は始めた順（名前の文字の順だと c10 が c2 より前に来る）
+  const { results } = await c.env.DB.prepare(
+    "SELECT a.* FROM audit_log a JOIN audit_chains ch ON ch.tenant_id = a.tenant_id AND ch.chain = a.chain WHERE a.tenant_id = ? AND a.card_id = ? ORDER BY ch.started_at, ch.rowid, a.n",
+  )
+    .bind(c.var.tenant.id, c.req.param("id"))
+    .all<AuditRow>();
   const entries = results.map(parse).map((e) => ({ ...e, step: AUDIT_STEP[e.kind] ?? null }));
   const v = await verifyTenant(c.env.DB, c.var.tenant.id);
   return c.json({ entries, chain_ok: v.ok });

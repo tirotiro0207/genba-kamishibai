@@ -5,7 +5,7 @@
 // 同じ監修者が 1 日（日本時間の日付）に署名できるのは SIGN_DAILY_MAX 枚まで（052）。数えるのは ⑤ の署名の行。
 import { canonical, sha256Hex } from "../shared/audit";
 import type { CardBody } from "../shared/card";
-import { appendAudit } from "./audit";
+import { appendAuditIf } from "./audit";
 import { type CardRow, currentEvidence, getCard } from "./cards";
 import type { Person } from "./people";
 
@@ -104,17 +104,33 @@ export async function signCard(db: D1Database, tenantId: string, id: string, per
     minutes: open ? Math.max(1, Math.ceil((now.getTime() - Date.parse(open.opened_at)) / 60000)) : null,
     mark: m,
   };
-  // 先に状態を移す（同じ版・OK のときだけ）。重なったら記録を足さない
-  const res = await db.prepare("UPDATE cards SET status = 'signed', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = 'ok' AND version = ?").bind(r.id, tenantId, r.version).run();
-  if (!res.meta.changes) return { ok: false, status: 409, error: "ほかの操作と重なった。読み直して" };
-  await appendAudit(db, tenantId, { card_id: r.id, kind: "sign", actor, payload });
+  // 状態を移す文と署名の行を 1 つのトランザクションで書く（移ったのに署名の行が無い、を作らない）。
+  // 移すのは同じ版・OK のときで、その日の枚数がまだ上限に届いていないときだけ（数えると移すを 1 文にして、同時の署名で上限を超えない）
+  const { from, to } = jstDay(now);
+  const move = db
+    .prepare(
+      "UPDATE cards SET status = 'signed', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = 'ok' AND version = ? " +
+        "AND (SELECT count(*) FROM audit_log WHERE tenant_id = ? AND kind = 'sign' AND actor = ? AND json_extract(payload, '$.signed_at') >= ? AND json_extract(payload, '$.signed_at') < ?) < ?",
+    )
+    .bind(r.id, tenantId, r.version, tenantId, actor, from, to, SIGN_DAILY_MAX);
+  const entry = await appendAuditIf(db, tenantId, move, { card_id: r.id, kind: "sign", actor, payload });
+  if (!entry) {
+    const now2 = await signedToday(db, tenantId, actor, now);
+    if (now2 >= SIGN_DAILY_MAX) return { ok: false, status: 429, error: `1 日に署名できるのは ${SIGN_DAILY_MAX} 枚まで（今日は ${now2} 枚済み）。明日（日本時間）また署名できる` };
+    return { ok: false, status: 409, error: "ほかの操作と重なった。読み直して" };
+  }
   return { ok: true, payload };
 }
 
 /** 署名の行の中身（payload の JSON）が、今のカードの版と中身に合うか */
 export async function signIntact(r: Pick<CardRow, "body" | "version">, payloadJson: string): Promise<boolean> {
-  const p = JSON.parse(payloadJson) as SignPayload;
-  return p.content_sha256 === (await contentHash(r.body)) && p.version === r.version;
+  // 本文か記録が読めない 1 枚は「合わない」として扱う（一覧全体を 500 にしない）
+  try {
+    const p = JSON.parse(payloadJson) as SignPayload;
+    return p.content_sha256 === (await contentHash(r.body)) && p.version === r.version;
+  } catch {
+    return false;
+  }
 }
 
 /** 最後の署名と、今の中身のハッシュが合うか（署名のあとの書き換えが分かる） */

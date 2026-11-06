@@ -12,11 +12,12 @@ import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
 import { gatherExemplars, recordExemplars } from "./exemplars";
 import type { PeopleVars } from "./people";
+import { actorOf } from "./sign";
 
 export const MAX_INPUT_CHARS = 20_000;
 
 /** 入れたもの。資料なら資料の名前とページ（ページごとの行の数で、渡した行を元のページと行に戻す）、話した言葉なら speech */
-export type InputSource = { kind: "doc"; doc: string; pages: { page: number; lines: number }[] } | { kind: "speech" };
+export type InputSource = { kind: "doc"; doc: string; pages: { page: number; lines: number; doc?: string }[] } | { kind: "speech" };
 
 export const extract = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
@@ -29,15 +30,18 @@ function validSource(s: unknown, lines: number): s is InputSource {
   const x = s as InputSource;
   if (x?.kind === "speech") return true;
   if (x?.kind !== "doc" || typeof x.doc !== "string" || !x.doc || !Array.isArray(x.pages) || !x.pages.length) return false;
-  return x.pages.every((p) => Number.isInteger(p?.page) && p.page >= 1 && Number.isInteger(p?.lines) && p.lines >= 0) && x.pages.reduce((s, p) => s + p.lines, 0) === lines;
+  return (
+    x.pages.every((p) => Number.isInteger(p?.page) && p.page >= 1 && Number.isInteger(p?.lines) && p.lines >= 0 && (p.doc === undefined || (typeof p.doc === "string" && p.doc.length <= 200))) &&
+    x.pages.reduce((s, p) => s + p.lines, 0) === lines
+  );
 }
 
-/** 渡した行の番号 → 元のページと行 */
-export function whereIs(source: InputSource, n: number): { page: number | null; line: number } {
+/** 渡した行の番号 → 元のページと行（いくつもの資料をつないだときは、どの資料かも） */
+export function whereIs(source: InputSource, n: number): { page: number | null; line: number; doc?: string } {
   if (source.kind !== "doc") return { page: null, line: n };
   let rest = n;
   for (const p of source.pages) {
-    if (rest <= p.lines) return { page: p.page, line: rest };
+    if (rest <= p.lines) return { page: p.page, line: rest, ...(typeof p.doc === "string" && p.doc ? { doc: p.doc } : {}) };
     rest -= p.lines;
   }
   return { page: null, line: n };
@@ -96,7 +100,8 @@ extract.post("/:id/ok", async (c) => {
   const b = await c.req.json<{ items?: unknown }>().catch(() => ({}) as { items?: unknown });
   const items = b.items;
   if (!Array.isArray(items) || !items.every((i) => Number.isInteger(i) && i >= 0 && i < x.rules.length) || new Set(items).size !== items.length) return c.json({ error: "items は決まりの番号の並び" }, 400);
-  const actor = c.var.person ? `${c.var.person.role}${c.var.person.slot}` : "unknown";
+  // 誰が OK したかは、ほかの記録と同じ形（supervisor.1）で残す
+  const actor = actorOf(c.var.person);
   await c.env.DB.prepare("INSERT INTO extraction_oks (extraction_id, tenant_id, items, actor) VALUES (?, ?, ?, ?)").bind(x.id, c.var.tenant.id, JSON.stringify([...items].sort((a, b) => a - b)), actor).run();
   return c.json({ ok: [...items].sort((a, b) => a - b) }, 201);
 });
@@ -136,7 +141,7 @@ export function locator(extractionId: string, text: string, source: InputSource)
     if (source.kind === "doc") {
       const a = whereIs(source, f.line);
       const b = whereIs(source, f.line_end);
-      return { kind: "doc", doc: source.doc, page: a.page ?? 1, line: a.line, ...(b.page === a.page && b.line > a.line ? { line_end: b.line } : {}) };
+      return { kind: "doc", doc: a.doc ?? source.doc, page: a.page ?? 1, line: a.line, ...(b.page === a.page && b.doc === a.doc && b.line > a.line ? { line_end: b.line } : {}) };
     }
     const start = starts[f.line - 1] ?? 0;
     const end = (starts[f.line_end - 1] ?? start) + (lines[f.line_end - 1]?.length ?? 1);

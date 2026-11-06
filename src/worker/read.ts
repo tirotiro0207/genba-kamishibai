@@ -22,6 +22,7 @@ interface Row {
   updated_at: string;
 }
 
+/** 本文が読めない枚は intactOnly（signIntact）で先に外れる。ここでは読めたものだけを形にする */
 const view = (r: Row) => {
   const b = JSON.parse(r.body) as CardBody;
   // 言葉はやさしい日本語だけを渡す（11/5 作者）。監修者が確かめられない訳は、新入社員に届けない。vi はデータに残す

@@ -9,6 +9,8 @@ import { signSession, type TenantRow } from "./tenant";
 
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 export const MAX_CARDS = 5;
+/** doc_to_cards・extract_rules に渡せるページの数の上限 */
+export const MAX_PAGES = 50;
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 export const hashKey = async (key: string) => hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)));
@@ -30,6 +32,10 @@ type Inner = { fetch: (req: Request, env: Env) => Response | Promise<Response> }
 type Api = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
 class ToolError extends Error {}
+
+/** 書き込む道具（取り出しの記録とカードの下書きを作る） */
+const WRITE_TOOLS = new Set(["doc_to_cards", "extract_rules", "make_drafts"]);
+const READ_ONLY_NOTE = "\n公開の置き場のこのテナントは見るだけです。使えるのは list_documents と get_card で、取り出し・カードの作成は会社のテナントの鍵で呼んでください。";
 
 const TOOLS = [
   {
@@ -108,6 +114,8 @@ async function input(api: Api, a: Record<string, unknown>) {
   const pages = a.pages;
   if (typeof a.doc !== "string" || !Array.isArray(pages) || !pages.length || !pages.every((p) => Number.isInteger(p) && p >= 1))
     throw new ToolError("text か、doc と pages を渡してください");
+  // ページは一度に MAX_PAGES まで（置き場の読み出しを一斉に出しすぎない）
+  if (pages.length > MAX_PAGES) throw new ToolError(`pages は一度に ${MAX_PAGES} ページまで`);
   const got = await Promise.all(pages.map((p: number) => api<{ lines: { text: string }[] }>("GET", `/files/pdf/${a.doc}/p${String(p).padStart(3, "0")}.json`)));
   return {
     text: got.flatMap((g) => g.lines.map((l) => l.text)).join("\n"),
@@ -212,6 +220,8 @@ export function mcpApp(inner: Inner) {
     // 通知（id が無い）は受けるだけ
     if (m.id === undefined) return c.body(null, 202);
 
+    // 本番の公開の置き場の練習用・架空の会社は見るだけ（取り出しと作成は公開の関所で断られる）。呼ぶ前に分かるように告げる
+    const readOnly = !!c.env.PUBLIC_DEMO && t.kind !== "company";
     if (m.method === "initialize") {
       const want = m.params?.protocolVersion;
       return c.json(
@@ -219,7 +229,7 @@ export function mcpApp(inner: Inner) {
           protocolVersion: typeof want === "string" && PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0],
           capabilities: { tools: {} },
           serverInfo: { name: "genba-kamishibai", version: "0.1.0" },
-          instructions: `安全の決まりの文や資料から、文字を読まなくても分かる 3〜4 コマの絵のカードを作ります。作れるのは未承認の下書きまでで、署名は監修者が画面でします。テナント: ${t.name}`,
+          instructions: `安全の決まりの文や資料から、文字を読まなくても分かる 3〜4 コマの絵のカードを作ります。作れるのは未承認の下書きまでで、署名は監修者が画面でします。テナント: ${t.name}${readOnly ? READ_ONLY_NOTE : ""}`,
         }),
       );
     }
@@ -230,6 +240,7 @@ export function mcpApp(inner: Inner) {
     const name = m.params?.name;
     const args = (m.params?.arguments ?? {}) as Record<string, unknown>;
     if (typeof name !== "string") return c.json(rpcError(m.id, -32602, "name が無い"));
+    if (readOnly && WRITE_TOOLS.has(name)) return c.json(rpc(m.id, { content: [{ type: "text", text: READ_ONLY_NOTE.trim() }], isError: true }));
     if (!c.env.SESSION_SECRET) return c.json(rpcError(m.id, -32603, "入ったしるしの鍵が無い"), 503);
 
     // 画面と同じ API を、このテナントの作者の役として呼ぶ

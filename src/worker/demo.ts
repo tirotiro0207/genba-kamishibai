@@ -57,11 +57,13 @@ demo.post("/make", async (c) => {
 
 /**
  * 本番（PUBLIC_DEMO）では、会社でないテナント（練習用・架空の会社）は見るだけにする。
- * API を呼ぶ口と書き込みは /api/demo/make だけ。カードを開いた印（/cards/:id/open）は通す
+ * API を呼ぶ口と書き込みは /api/demo/make だけ。カードを開いた印（/cards/:id/open）・役割で入る（/login。しるしを作るだけ）・
+ * 新入社員が見た印（/read/cards/:id/seen）は通す。試しの回（/trials）の書き込みは本番の公開の置き場では受けない
  */
+const PUBLIC_POSTS = /^\/api\/t\/[^/]+\/(cards\/[^/]+\/open|login|read\/cards\/[^/]+\/seen)$/;
 export async function publicGate(c: Context<{ Bindings: Env; Variables: TenantVars }>, next: Next) {
   if (!c.env.PUBLIC_DEMO || c.var.tenant.kind === "company") return next();
   const m = c.req.method;
-  if (m === "GET" || m === "HEAD" || (m === "POST" && /\/cards\/[^/]+\/open$/.test(c.req.path))) return next();
+  if (m === "GET" || m === "HEAD" || (m === "POST" && PUBLIC_POSTS.test(c.req.path))) return next();
   return c.json({ error: "公開の置き場では見るだけです。作るのは「その場で作る」から" }, 403);
 }
