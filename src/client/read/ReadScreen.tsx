@@ -7,6 +7,7 @@ import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame } from "../../shared/picto/scene";
 import { Slide } from "../motion/Slide";
 import { needsPin, PinGate, roleKey, TenantPin, tokenKey } from "../pin/TenantPin";
+import { Ruby } from "../Ruby";
 
 const NEWHIRE = [{ value: "newhire.1", label: "新入社員" }] as const;
 
@@ -123,7 +124,9 @@ function ReadCards({ tenant }: { tenant: string }) {
           <p className="read-rule">{c.rule}</p>
           <p className="read-why">なぜ: {c.why}</p>
           {c.words && (
-            <p className="read-words">{c.words.ja}</p>
+            <p className="read-words">
+              <Ruby text={c.words.ja} />
+            </p>
           )}
         </section>
       </Slide>

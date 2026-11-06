@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Frames } from "../read/ReadScreen";
 import { fileUrl, type MaterialItem, type Shown } from "./api";
+import { Ruby } from "../Ruby";
 
 const nextPaint = (f: () => void) => requestAnimationFrame(() => f());
 
@@ -38,7 +39,9 @@ export function Material({ shown, item, tenant, content, src: given, onShown }: 
     return (
       <div className="material card filled" data-testid="material" data-shown="card">
         {/* やさしい日本語を上に、絵は横 1 列の 4 コマで下に（11/6 作者「4 コマ漫画として」） */}
-        {content.card.words && <p className="read-words">{content.card.words.ja}</p>}
+        {content.card.words && <p className="read-words">
+            <Ruby text={content.card.words.ja} />
+          </p>}
         <Frames motion={content.card.motion} />
       </div>
     );

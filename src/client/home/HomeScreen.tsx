@@ -15,6 +15,7 @@ import type { SourceRef, Statement } from "../../shared/card";
 import { Original } from "./Original";
 import { ENTRY, logout, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
+import { Ruby } from "../Ruby";
 
 interface Card {
   id: string;
@@ -177,7 +178,9 @@ function CardBodyView({ tenant, card, labels }: { tenant: string; card: Card; la
       {b.words?.ja && (
         <>
           <dt>やさしい日本語</dt>
-          <dd data-testid="home-body-words">{b.words.ja}</dd>
+          <dd data-testid="home-body-words">
+            <Ruby text={b.words.ja} />
+          </dd>
         </>
       )}
       <dt>決まり（やること・やらないこと）</dt>

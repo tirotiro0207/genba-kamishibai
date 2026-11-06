@@ -7,6 +7,7 @@ import { AnswerBoxes } from "./AnswerBoxes";
 import { useOutbox } from "./outbox";
 import { getMyPictures, getPictures, listTenantCards, type PictureCard, type PicturesView, postForecast, postPictureAnswer, setPictureCards } from "./api";
 import "./pictures.css";
+import { Ruby } from "../Ruby";
 
 const MAX = 8;
 
@@ -199,7 +200,7 @@ export function PictureAnswerScreen({ tenant, id, participant }: { tenant: strin
       </p>
       {next.words && (
         <p className="read-words pic-words" data-testid="pic-words">
-          {next.words}
+          <Ruby text={next.words} />
         </p>
       )}
       <Frames key={next.id} motion={next.motion} />

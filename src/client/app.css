@@ -81,3 +81,8 @@ main[data-testid="app"] { position: relative; }
 @media (min-width: 1000px) {
   .back-bar.over { position: absolute; top: 0; left: 0; border-bottom: 0; z-index: 2; }
 }
+
+/* やさしい日本語のふりがな（docs/yasashii-nihongo.md）。行の間を空けて、ふりがなが上の行に重ならないように */
+ruby { ruby-position: over; }
+ruby rt { font-size: 0.55em; font-weight: 400; letter-spacing: 0; }
+:where(.read-words, .card-words p, .card-lead-row.lead-words dd, [data-testid="home-body-words"]):has(ruby) { line-height: 2.1; }

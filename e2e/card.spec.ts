@@ -88,7 +88,7 @@ test("絵の上にやさしい日本語・決まり・なぜが出て、文を�
   // 文を直して保存する
   await page.getByTestId("card-lead-edit").click();
   await page.getByTestId("card-lead-input-why").fill("手で触ると感電するおそれがあるから");
-  await page.getByTestId("card-lead-input-words").fill("さわる まえに たしかめます。");
+  await page.getByTestId("card-lead-input-words").fill("さわる まえに ｜検電器《けんでんき》で たしかめます。");
   await page.waitForTimeout(600);
   await page.getByTestId("card-lead-save").click();
   await expect(page.getByTestId("card-lead-why")).toHaveText("手で触ると感電するおそれがあるから");
@@ -96,6 +96,12 @@ test("絵の上にやさしい日本語・決まり・なぜが出て、文を�
   expect(saved!.card.why).toBe("手で触ると感電するおそれがあるから");
   expect(saved!.card.statements.filter((s) => s.field === "why").map((s) => s.text)).toEqual(["手で触ると感電するおそれがあるから"]);
   expect(saved!.card.words?.vi).toContain("tủ điện");
+  // ふりがなは漢字の上に出る（docs/yasashii-nihongo.md）
+  const rb = page.getByTestId("card-lead-words").locator("ruby");
+  await expect(rb).toHaveCount(1);
+  await expect(rb.locator("rt")).toHaveText("けんでんき");
+  const [kb, rtb] = [await rb.boundingBox(), await rb.locator("rt").boundingBox()];
+  expect(rtb!.y).toBeLessThan(kb!.y + kb!.height / 2);
   await expect(lead).toBeVisible();
   await page.waitForTimeout(800);
 });

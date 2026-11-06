@@ -7,7 +7,7 @@ import { setClientFactory } from "./claude-client";
 const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
 const json = (method: string, body?: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 
-const WORDS = { ja: "盤に さわる 前に 検電を します。", vi: "Kiểm tra điện trước khi chạm vào tủ điện.", terms: [{ ja: "検電", vi: "kiểm tra điện" }, { ja: "盤", vi: "tủ điện" }] };
+const WORDS = { ja: "｜盤《ばん》に さわる まえに ｜検電《けんでん》を します。", vi: "Kiểm tra điện trước khi chạm vào tủ điện.", terms: [{ ja: "検電", vi: "kiểm tra điện" }, { ja: "盤", vi: "tủ điện" }] };
 const reply = (obj: unknown) => ({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(obj) }], usage: { input_tokens: 10, output_tokens: 10 } }) as unknown as Anthropic.Message;
 
 describe("正式な流れの作成の API（034a）", () => {

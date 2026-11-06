@@ -15,6 +15,7 @@ import { Check, type CheckedCard } from "./Check";
 import { Frames } from "../read/ReadScreen";
 import { TextEdit } from "./TextEdit";
 import "./card.css";
+import { Ruby } from "../Ruby";
 
 type CardView = CheckedCard;
 
@@ -242,7 +243,9 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
             <div className="card-words" data-testid="card-words">
               <span>言葉</span>
               {/* やさしい日本語だけを出す（11/5 作者）。監修者が確かめられない訳は出さない。vi はデータに残す */}
-              <p>{b.words.ja}</p>
+              <p>
+                <Ruby text={b.words.ja} />
+              </p>
             </div>
           )}
           <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/route/${encodeURIComponent(card.id)}`} data-testid="card-route">

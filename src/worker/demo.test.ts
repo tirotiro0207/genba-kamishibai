@@ -15,7 +15,7 @@ const stub = () =>
     messages: {
       create: async (p: Anthropic.MessageCreateParamsNonStreaming) => {
         if (isScriptCall(p.system)) return reply(scriptReply(p.system));
-        if (String(p.system).includes("言葉」の欄")) return reply({ ja: "盤に さわる 前に 検電を します。", vi: "Kiểm tra điện trước khi chạm vào tủ điện.", terms: [{ ja: "検電", vi: "kiểm tra điện" }] });
+        if (String(p.system).includes("言葉」の欄")) return reply({ ja: "｜盤《ばん》に さわる まえに ｜検電《けんでん》を します。", vi: "Kiểm tra điện trước khi chạm vào tủ điện.", terms: [{ ja: "検電", vi: "kiểm tra điện" }] });
         if (String(p.system).includes("カードの下ごしらえ")) return reply({ rules: [rule("盤に触る前に検電する", 2), rule("感電のおそれ", 3)] });
         return reply({ motion: MOTION, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s2", reason: "盤" }], why: null });
       },

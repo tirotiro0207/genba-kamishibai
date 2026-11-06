@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { CardBody, Statement } from "../../shared/card";
 import { req } from "../make/MakeScreen";
 import type { CheckedCard } from "./Check";
+import { Ruby } from "../Ruby";
 
 /** 決まりかなぜの文を差し替えた中身。変わっていなければ同じ中身を返す */
 export function withText(body: CardBody, field: "rule" | "why", text: string): CardBody {
@@ -78,7 +79,7 @@ export function TextEdit({ tenant, card, onSaved }: { tenant: string; card: Chec
                 {edit ? (
                   <textarea value={draft[key]} rows={key === "words" ? 3 : 2} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} data-testid={`card-lead-input-${key}`} />
                 ) : (
-                  <span data-testid={`card-lead-${key}`}>{text}</span>
+                  <span data-testid={`card-lead-${key}`}>{key === "words" && text ? <Ruby text={text} /> : text}</span>
                 )}
               </dd>
             </div>
@@ -94,7 +95,7 @@ export function TextEdit({ tenant, card, onSaved }: { tenant: string; card: Chec
             <button className="pick" disabled={busy} onClick={() => setEdit(false)} data-testid="card-lead-cancel">
               やめる
             </button>
-            <small>保存すると版が 1 つ上がり、下書きに戻ります（確認待ち・署名済みのカードも）。</small>
+            <small>保存すると版が 1 つ上がり、下書きに戻ります（確認待ち・署名済みのカードも）。ふりがなは「｜漢字《よみ》」と書きます。</small>
           </>
         ) : (
           <button className="pick" onClick={open} data-testid="card-lead-edit">

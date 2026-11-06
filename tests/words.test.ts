@@ -52,6 +52,24 @@ describe("言葉の欄（036）", () => {
     expect(out.terms).toEqual([{ ja: "検電器", vi: "bút thử điện" }]);
   });
 
+  it("やさしい日本語の決まり（国のガイドラインの 3 つのステップとふりがな）を渡す", () => {
+    const sys = String(wordsParams(sampleCard()).system);
+    expect(sys).toContain("やさしい日本語ガイドライン");
+    expect(sys).toContain("二重否定は使わない");
+    expect(sys).toContain("｜漢字《よみ》");
+  });
+
+  it("ふりがなの無い漢字が残ったら 1 回だけ書き直させる", async () => {
+    const client = fake([
+      { ja: "検電器を　もって　しごとを　してください。", vi: "Mang bút thử điện.", terms: [] },
+      { ja: "｜検電器《けんでんき》を　もって　しごとを　してください。", vi: "Mang bút thử điện.", terms: [] },
+    ]);
+    const out = await makeWords({ client, log: new MemoryCallLog() }, "measure", sampleCard());
+    expect(client.sent).toHaveLength(2);
+    expect(JSON.stringify(client.sent[1].messages)).toContain("ふりがなの無い漢字");
+    expect(out.words.ja).toBe("｜検電器《けんでんき》を　もって　しごとを　してください。");
+  });
+
   it("2 回とも足したら止める", async () => {
     const bad = { ja: "9 回", vi: "9 lần", terms: [] };
     await expect(makeWords({ client: fake([bad, bad]), log: new MemoryCallLog() }, "measure", sampleCard())).rejects.toThrow("2 回とも");
