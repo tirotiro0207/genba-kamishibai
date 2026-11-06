@@ -41,8 +41,17 @@ export function textLines(page: mupdf.Page): PdfLine[] {
   const [w, h] = [x1 - x0, y1 - y0];
   const st = JSON.parse(page.toStructuredText("preserve-whitespace").asJSON()) as { blocks: { type: string; lines?: StLine[] }[] };
   const raw = st.blocks.flatMap((b) => (b.type === "text" ? (b.lines ?? []) : [])).filter((l) => l.text.trim());
-  raw.sort((a, b) => (Math.abs(a.bbox.y - b.bbox.y) > a.bbox.h / 2 ? a.bbox.y - b.bbox.y : a.bbox.x - b.bbox.x));
-  return raw.map((l, i) => ({ n: i + 1, text: l.text.trim(), box: [r4((l.bbox.x - x0) / w), r4((l.bbox.y - y0) / h), r4(l.bbox.w / w), r4(l.bbox.h / h)] }));
+  // 2 つずつ比べる並べ方は、行の高さで「同じ高さ」が決まるので推移的でなく、入力の順で並びが揺れる。
+  // 先に上から並べて、行の頭から高さの半分までを 1 つの段にまとめ、段の中を左から並べる（入力の順に依らない）
+  const byY = [...raw].sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x || a.text.localeCompare(b.text));
+  const rows: StLine[][] = [];
+  for (const l of byY) {
+    const row = rows.at(-1);
+    if (row && l.bbox.y - row[0].bbox.y <= row[0].bbox.h / 2) row.push(l);
+    else rows.push([l]);
+  }
+  const lines = rows.flatMap((row) => row.sort((a, b) => a.bbox.x - b.bbox.x || a.bbox.y - b.bbox.y));
+  return lines.map((l, i) => ({ n: i + 1, text: l.text.trim(), box: [r4((l.bbox.x - x0) / w), r4((l.bbox.y - y0) / h), r4(l.bbox.w / w), r4(l.bbox.h / h)] }));
 }
 
 export function renderPage(page: mupdf.Page, px = PAGE_PX): Uint8Array {

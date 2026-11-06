@@ -9,8 +9,11 @@ export const TABLES = ["cards", "audit_chains", "audit_log", "card_pairs", "glos
 
 export const d1 = (where: string, args: string) => execSync(`npx wrangler d1 execute DB ${where} ${args}`, { cwd: ROOT, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 });
 
+/** wrangler の --json の出力を読む。JSON の前に案内の行が付くことがあるので、最初の [ から読む */
+export const parseJson = (out: string): unknown => JSON.parse(out.slice(Math.max(0, out.indexOf("["))));
+
 export function rows(table: string): Record<string, unknown>[] {
-  const out = JSON.parse(d1("--local", `--json --command "SELECT * FROM ${table} WHERE tenant_id = '${TENANT}'"`)) as { results: Record<string, unknown>[] }[];
+  const out = parseJson(d1("--local", `--json --command "SELECT * FROM ${table} WHERE tenant_id = '${TENANT}'"`)) as { results: Record<string, unknown>[] }[];
   return out[0].results;
 }
 

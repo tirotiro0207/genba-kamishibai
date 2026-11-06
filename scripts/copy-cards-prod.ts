@@ -1,5 +1,6 @@
 // 手元の D1 の、決めたテナントのカードを何枚か、本番の D1 の同じテナントに写す（11/6 の現場の確認のため）。
 // 写すのは cards の行と、そのカードの監査の記録の行。カードの行は上書きしない（INSERT OR IGNORE）。
+// 用語表（glossary・company_words）と対のカード（card_pairs）は写さない。本番で言葉の欄の用語表を出すなら別に写す。
 // 監査の記録はテナントごとに 1 本のハッシュの連鎖なので、そのまま写すと本番の連鎖が壊れる（番号がぶつかり、前の行のハッシュが合わない）。
 // そこで、行の中身（カード・種類・誰が・中身・時刻）は元のまま、本番の連鎖の最後の後ろに順につなぎ直す（番号・前の行のハッシュ・ハッシュだけ作り直す）。
 //
@@ -9,11 +10,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { canonical, entryHash, GENESIS } from "../src/shared/audit";
 import { privatePath } from "../src/node/private-dir";
-import { d1 } from "./demo-rows";
+import { d1, parseJson } from "./demo-rows";
 
 type Row = Record<string, unknown>;
 const lit = (v: unknown) => (v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : `'${String(v).replaceAll("'", "''")}'`);
-const q = (where: string, sql: string, env = "") => (JSON.parse(d1(`${where}${env}`, `--json --command ${JSON.stringify(sql)}`)) as { results: Row[] }[])[0].results;
+const q = (where: string, sql: string, env = "") => (parseJson(d1(`${where}${env}`, `--json --command ${JSON.stringify(sql)}`)) as { results: Row[] }[])[0].results;
 const REMOTE = "--remote --env production";
 
 /** 写す行を、本番の連鎖の最後（n・ハッシュ）の後ろにつなぎ直す */
@@ -43,7 +44,7 @@ async function main() {
   const inList = ids.map(lit).join(", ");
   const cards = q("--local", `SELECT * FROM cards WHERE tenant_id = ${lit(tenant)} AND id IN (${inList})`);
   if (cards.length !== ids.length) throw new Error(`手元に無いカードがある（${cards.length} / ${ids.length}）`);
-  const audits = q("--local", `SELECT card_id, kind, actor, payload, created_at FROM audit_log WHERE tenant_id = ${lit(tenant)} AND card_id IN (${inList}) ORDER BY chain, n`);
+  const audits = q("--local", `SELECT card_id, kind, actor, payload, created_at FROM audit_log WHERE tenant_id = ${lit(tenant)} AND card_id IN (${inList}) ORDER BY CAST(substr(chain, 2) AS INTEGER), n`);
   const t = q("", `SELECT id, kind FROM tenants WHERE id = ${lit(tenant)}`, REMOTE);
   if (!t.length) throw new Error("本番にそのテナントが無い");
   const already = q("", `SELECT id FROM cards WHERE id IN (${inList})`, REMOTE);
