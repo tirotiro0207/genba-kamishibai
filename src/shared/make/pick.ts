@@ -7,6 +7,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { type GuardedDeps, guardedCall, type Purpose } from "../claude";
 import type { Rule } from "../extract/rules";
+import { INNER_KINDS, PROP_KINDS } from "../picto/props";
+import { PROP_JA } from "./script";
 
 export const PICK_MODEL = "claude-opus-5-5";
 
@@ -14,9 +16,15 @@ export const CLASSES = ["動き", "物の名前", "書類・教育・資格", "�
 export type PickClass = (typeof CLASSES)[number];
 export const WEIGHTS = ["高", "中", "低"] as const;
 
+// 描ける物の一覧は、絵の部品（PROP_KINDS）の日本語の名前から作る（手で書くと、部品を足したときに古いまま残り、
+// 描けるのに「物の名前」に落ちる。脚本の係（script.ts）と同じ名前を使う）
+const DRAWABLE_JA = [...new Set(PROP_KINDS.map((k) => PROP_JA[k]))].join("・");
+const INNER_JA = [...new Set(INNER_KINDS.map((k) => PROP_JA[k]))].join("・");
+
 export const PICK_SYSTEM = `あなたは、工事の現場の新入社員に向けた「文字の無い人形の絵のカード」を作る前に、どの決まりをカードにするかを分ける係です。
 カードの絵は、棒の人形（新入社員・先輩・作業員の 3 役）が 3〜4 コマで動くだけです。文字は入りません。
-描ける物は次のものだけです: ヘルメット・安全帯・検電器・電線・分電盤・コンセント・吊り荷・ほうき・ごみ箱・箱・工具箱・鍵・札・時計・チェック表と ✓・禁止の印・○ と ×・高い所の縁・親綱・幅を示す矢印・具合が悪い印・話す吹き出しと考える吹き出し（中に分電盤・検電器・コンセント・電線・安全帯・鍵・札・箱・工具箱・チェック表・吊り荷・ほうき・時計を描ける）。
+描ける物は次のものだけです: ${DRAWABLE_JA}。
+吹き出しの中には次の物を描けます: ${INNER_JA}。
 
 渡すのは、1 ページから取り出した決まりの番号つきの一覧です。決まりごとに次を返してください。
 - class: 次の 5 つのどれか
