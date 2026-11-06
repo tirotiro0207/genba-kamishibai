@@ -98,8 +98,6 @@ export const Stick: React.FC<{ x: number; g: number; h: number; hair?: "dad" | "
 };
 
 // ---- 小物（線だけ。塗らない） ----
-const JAPAN = "M60 10Q70 22 64 34Q56 46 44 54Q30 62 18 72Q8 78 4 86M26 66Q22 74 14 78M52 14Q58 6 66 4";
-const VIETNAM = "M30 0Q46 4 50 16Q40 26 34 40Q46 58 54 80Q60 104 50 122Q38 136 24 140Q30 128 36 116Q40 98 30 80Q20 64 22 48Q24 30 14 16Q20 6 30 0Z";
 /** 考える吹き出し（小さな丸 2 つ＋雲） */
 const Thought: React.FC<{ x: number; y: number; rx?: number; ry?: number; tail: -1 | 1 }> = ({ x, y, rx = 70, ry = 52, tail }) => (
   <g fill="none" stroke={PEN} strokeWidth={3.5}>
@@ -108,6 +106,22 @@ const Thought: React.FC<{ x: number; y: number; rx?: number; ry?: number; tail: 
     <circle cx={x + tail * rx * 0.75} cy={y + ry + 32} r={5} />
   </g>
 );
+/** 国旗（w は横幅。真ん中が 0,0）。日本: 白地に赤い丸。ベトナム: 赤地に黄色い星 */
+const Flag: React.FC<{ kind: "jp" | "vn"; w: number }> = ({ kind, w }) => {
+  const h = (w * 2) / 3;
+  const r = h * 0.3;
+  const star = Array.from({ length: 10 }, (_, i) => {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const k = i % 2 ? r * 0.4 : r;
+    return `${(Math.cos(a) * k).toFixed(1)} ${(Math.sin(a) * k).toFixed(1)}`;
+  }).join("L");
+  return (
+    <g>
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={2} fill={kind === "jp" ? "#fffdf6" : "#da251d"} stroke={PEN} strokeWidth={3} strokeLinejoin="round" />
+      {kind === "jp" ? <circle r={r} fill={RED} /> : <path d={`M${star}Z`} fill="#ffcd00" />}
+    </g>
+  );
+};
 export const Heart: React.FC<{ s?: number }> = ({ s = 1 }) => <path d="M0 10C-18 -4 -14 -20 0 -10C14 -20 18 -4 0 10Z" transform={`scale(${s})`} fill="none" stroke={RED} strokeWidth={3.5} strokeLinejoin="round" />;
 export const Star: React.FC<{ r?: number; fill?: string }> = ({ r = 10, fill = "none" }) => (
   <path d={Array.from({ length: 10 }, (_, i) => { const a = (i * Math.PI) / 5 - Math.PI / 2; const rr = i % 2 ? r * 0.45 : r; return `${i ? "L" : "M"}${(Math.cos(a) * rr).toFixed(1)} ${(Math.sin(a) * rr).toFixed(1)}`; }).join("") + "Z"} fill={fill} stroke={ORANGE} strokeWidth={2} />
@@ -259,13 +273,13 @@ const Parents: React.FC<{ t: number }> = ({ t }) => {
       <Pop t={t} at={21.0} x={160 + tilt * 30} y={74}>
         <g transform={`rotate(${tilt * 12})`}>
           <Thought x={0} y={0} tail={1} />
-          <path d={JAPAN} transform="translate(-34 -46)" fill="none" stroke={PEN} strokeWidth={3.5} strokeLinecap="round" />
+          <g transform="translate(0 -4)"><Flag kind="jp" w={84} /></g>
         </g>
       </Pop>
       <Pop t={t} at={21.5} x={500 - tilt * 30} y={74}>
         <g transform={`rotate(${-tilt * 12})`}>
           <Thought x={0} y={0} tail={-1} />
-          <path d={VIETNAM} transform="translate(-14 -44) scale(0.62)" fill="none" stroke={PEN} strokeWidth={5} />
+          <g transform="translate(0 -4)"><Flag kind="vn" w={84} /></g>
         </g>
       </Pop>
       <Pop t={t} at={22.0} x={325} y={200}><Heart s={1.6} /></Pop>
@@ -279,10 +293,8 @@ const Birth: React.FC<{ t: number }> = ({ t }) => {
   const parentsO = 1 - prog(t, 24.0, 0.4);
   return (
     <g transform={`translate(${PANEL} 0)`}>
-      <g transform="translate(150 20) scale(2.05)">
-        <Draw t={t} at={22.5} d={VIETNAM} dur={0.45} w={2} />
-      </g>
-      <Pop t={t} at={23.0} x={214} y={268}><circle r={7} fill={RED} /></Pop>
+      {/* ベトナムの国旗（地図の代わり） */}
+      <Pop t={t} at={22.5} x={190} y={150}><Flag kind="vn" w={210} /></Pop>
       {/* 端のお父さんとお母さん（にっこり） */}
       {parentsO > 0 && t >= 23.5 && (
         <g opacity={parentsO} transform={`translate(${-grow * 60} 0)`}>
@@ -320,11 +332,10 @@ const School: React.FC<{ t: number }> = ({ t }) => {
   const a = jump * Math.PI;
   return (
     <g transform={`translate(${PANEL * 2} 0)`}>
-      {/* 小さな地図: 点が南から北へ点線の弧で跳ぶ */}
-      <g transform="translate(40 60) scale(1.3)">
-        <path d={VIETNAM} fill="none" stroke={PEN} strokeWidth={2.5} />
-        <path d="M28 122Q70 60 30 14" fill="none" stroke={RED} strokeWidth={2} strokeDasharray="4 5" opacity={jump} />
-        <circle cx={28 + Math.sin(a) * 30} cy={122 - jump * 108} r={5} fill={RED} />
+      {/* 小さな国旗（地図の代わり）。日本人学校なので、ベトナムの旗の上に日本の旗が跳んで重なる */}
+      <g transform="translate(110 120)">
+        <Flag kind="vn" w={120} />
+        <g transform={`translate(${30 - jump * 30} ${-70 + jump * 50 - Math.sin(a) * 30})`} opacity={jump}><Flag kind="jp" w={78} /></g>
       </g>
       {/* 黒板（字の代わりにうねった線）と机 */}
       <Pop t={t} at={26.5} x={0} y={0}>

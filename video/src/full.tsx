@@ -56,8 +56,7 @@ export interface FullProps { [key: string]: unknown; mark?: string }
 
 // ---- 字幕（冒頭からの秒。画面の下の帯に 1 行・34 字まで。1 字ずつ出す） ----
 const CUES: [number, number, string][] = [
-  [19, 20.8, "むかしむかし、日本人のお父さんと、"],
-  [20.8, 22.5, "ベトナム人のお母さんが出会いました。"],
+  [19, 22.5, "昔々、あるところにパパ郎（父）とママ郎（母）がいました。"],
   [22.5, 24.4, "長男のイチローは、ベトナムのホーチミンで生まれました。"],
   [24.4, 26, "英語の幼稚園、それからベトナムの学校へ。"],
   [26, 28.5, "七歳で、ハノイの日本人学校へ。日本語が分からず、黙っていました。"],
@@ -66,10 +65,10 @@ const CUES: [number, number, string][] = [
   [33, 36, "よい UI・UX は、ことばの壁を越える。"],
   [36, 39, "スキルの巻物をリュックに詰めて、赤い相棒と冒険へ。"],
   [39, 42, "行き先は、電気業界。"],
-  [53.5, 56, "光の粒が集まって、電気工事の案内人が現れました。"],
+  [53.5, 56, "光の粒が集まって、電気工事士の妖精 TOMO が現れました。"],
   [56, 58, "現場は、ヘルメットがないと入れません。"],
   [58, 59.5, "ヘルメットをかぶって、現場に入ります。"],
-  [59.5, 64.5, "案内人と、現場で働く人に話を聞きました。"],
+  [59.5, 64.5, "TOMO と、現場で働く人に話を聞きました。"],
   [64.5, 69.5, "安全の決まりは、文字の資料と貼り紙で回っています。"],
   [69.5, 71, "文字が読めなければ、決まりは届きません。"],
   [71, 72.5, "届かなかった決まりは、けがになります。"],
@@ -119,7 +118,10 @@ const Draft: React.FC = () => <div style={{ position: "absolute", right: 16, top
 const G = 670; // 床の人の足元（1080 では 1005）
 const HH = 133; // 床の人の背（1080 では 200）
 const CRH = 140; // 職人さん（1080 では 210）
-const PULL = 0.4;
+/** 紙芝居の抜き: 前の紙を左へしっかり抜き切る秒（PULL）と、次の紙を上から差し込む秒（DROP）。差し込みは抜き始めて DROP_AT 秒あとから */
+const PULL = 0.55;
+const DROP = 0.45;
+const DROP_AT = 0.4;
 const PAPER = "#fffdf6";
 // 紙の中は 660 幅の座標で描く（むかしむかしの巻紙と同じ）。下の 39（1080 では 70 px）は吹き出しのために空ける
 const VW = 660;
@@ -449,8 +451,8 @@ const VoiceKari2: React.FC<{ t: number }> = ({ t }) => (
   </svg>
 );
 
-// ---- 枠の中の紙の並び（紙芝居の抜き: 前の紙を右へ抜くと、次の紙が見える。noPull は白く光る・粒にほどける替わり方） ----
-interface Sheet { from: number; to: number; body: (lt: number, t: number) => React.ReactNode; noPull?: boolean }
+// ---- 枠の中の紙の並び（紙芝居の抜き: 前の紙を左へ抜き切り、次の紙を上から差し込む。noPull は白く光る・粒にほどける替わり方） ----
+interface Sheet { from: number; to: number; body: (lt: number, t: number) => React.ReactNode; noPull?: boolean; dropIn?: boolean }
 const SHEETS: Sheet[] = (() => {
   const s: Sheet[] = [];
   s.push({ from: 19, to: 52.75, noPull: true, body: (_lt, t) => (
@@ -474,6 +476,8 @@ const SHEETS: Sheet[] = (() => {
   s.push({ from: 140, to: 153, body: () => <KariPaper text="職人さんと、壁に貼ったカードの写真（11/6）" /> });
   s.push({ from: 153, to: 166, noPull: true, body: (_lt, t) => <VoiceKari2 t={t} /> });
   s.push({ from: 165, to: 180, noPull: true, body: (_lt, t) => (<svg width={WIN.w} height={WIN.h} viewBox={VB}><IndustriesPic t={t} /></svg>) });
+  // 前の紙が抜かれる紙なら、次の紙は上から差し込む
+  for (let i = 1; i < s.length; i++) if (!s[i - 1].noPull) s[i].dropIn = true;
   return s;
 })();
 const SheetSlot: React.FC<{ sheet: Sheet }> = ({ sheet }) => {
@@ -481,9 +485,13 @@ const SheetSlot: React.FC<{ sheet: Sheet }> = ({ sheet }) => {
   const lt = f / FPS;
   const t = sheet.from + lt;
   const len = sheet.to - sheet.from;
-  const out = sheet.noPull ? 0 : interpolate(lt, [len, len + PULL], [0, 1], { ...clamp, easing: Easing.in(Easing.quad) });
+  // 抜く: 観客から見て左へ抜き切る（本物の紙芝居も右手で抜き、次の場面は向かって右から見え始める）
+  const out = sheet.noPull ? 0 : interpolate(lt, [len, len + PULL], [0, 1], { ...clamp, easing: Easing.inOut(Easing.quad) });
+  // 差す: 前の紙が抜かれる紙なら、上から差し込んで、すとんと止まる
+  const drop = sheet.dropIn ? 1 - interpolate(lt, [DROP_AT, DROP_AT + DROP], [0, 1], { ...clamp, easing: Easing.out(Easing.quad) }) : 0;
+  const lift = out > 0 ? Math.sin(out * Math.PI) * 1.5 : 0;
   return (
-    <div style={{ position: "absolute", inset: 0, transform: `translateX(${out * 104}%) rotate(${out * 2}deg)`, boxShadow: out > 0 ? "-8px 0 14px rgba(0,0,0,0.35)" : undefined, overflow: "hidden" }}>
+    <div style={{ position: "absolute", inset: 0, transform: `translate(${-out * 106}%, ${-drop * 104 - lift}%) rotate(${-out * 1.5}deg)`, boxShadow: out > 0 || drop > 0 ? "0 6px 16px rgba(0,0,0,0.35)" : undefined, overflow: "hidden" }}>
       {sheet.body(lt, t)}
     </div>
   );
@@ -552,7 +560,7 @@ const supSvg = (angles: Angles) => characterSvg({ angles, x: 0, groundY: 0, heig
 
 /** 吹き出し（1920×1080 で y 720〜800・字は 24 px。出るとき 0.3 秒で 10 px 下りる） */
 const BUBBLES: [number, number, "hero" | "guide" | "craft" | "senpai", string][] = [
-  [54.0, 55.0, "guide", "ようこそ、電気の現場へ。"],
+  [54.0, 55.0, "guide", "電気工事士の妖精 TOMOだよ。"],
   [54.5, 55.4, "hero", "…こんにちは！"],
   [55.0, 56.0, "guide", "とりあえず、これかぶりなよ。"],
   [61.0, 62.3, "guide", "ここが、電気の現場。"],
@@ -723,7 +731,7 @@ const FloorActors: React.FC<{ t: number; f: number }> = ({ t, f }) => {
         return <path key={i} d={`M${-40 + i * 50 + p * 300} ${470 + i * 40}l120 60`} stroke="#ffd36a" strokeWidth={4 - i} strokeLinecap="round" opacity={1 - p} />;
       })}
       {/* 門（0:57.5 に下から立ち上がり、0:58 に遮断の棒が上がる。1:15 まで左に残る） */}
-      <Gate t={t} />
+      <Gate t={t} part="back" />
       {/* 粒: 0:46 に 8 つが飛び込み、0:46.5 に 40 が散る → 漂う → 0:49.5 に x 400 へ流れて案内人になる → 残りは左手のヘルメットに */}
       {t >= 46.0 && t < 52.6 && Array.from({ length: 40 }, (_, i) => {
         const early = i < 8;
@@ -769,6 +777,8 @@ const FloorActors: React.FC<{ t: number; f: number }> = ({ t, f }) => {
       {/* 監修者（灰色の作業服・白いヘルメット・腕章。2:34） */}
       <PopUp id="pop-v" t={t} at={154.0} x={320} h={HH}><Person svg={supSvg(sAngles)} x={320} /></PopUp>
       {heroNode}
+      {/* 門の右の柱は人より手前に描く（左の柱の前を通り、右の柱の後ろを抜けて、門をくぐって見える） */}
+      <Gate t={t} part="front" />
       {hel && <HelmetIcon x={hel[0]} y={hel[1]} s={h / 120} />}
       {/* わっ（0:53）・ストン（0:56） */}
       {t >= 53.0 && t < 53.6 && (
@@ -787,7 +797,7 @@ const FloorActors: React.FC<{ t: number; f: number }> = ({ t, f }) => {
   );
 };
 /** 現場の門（柱は 1080 で x 760 と 900、足元 1005 から 800 まで。上に横木と、安全帽と ✓ の札。左の柱を軸にした黄色と黒の遮断の棒） */
-const Gate: React.FC<{ t: number }> = ({ t }) => {
+const Gate: React.FC<{ t: number; part: "back" | "front" }> = ({ t, part }) => {
   const rise = interpolate(t, [57.5, 57.8], [0, 1], { ...clamp, easing: Easing.out(Easing.back(1.4)) });
   const gone = prog(t, 75.0, 0.3);
   if (rise <= 0 || gone >= 1) return null;
@@ -795,12 +805,21 @@ const Gate: React.FC<{ t: number }> = ({ t }) => {
   const l = 507;
   const r = 600;
   const top = 533;
+  const pole = (x: number) => <rect x={x - 4} y={top} width={8} height={G - top} fill="#9a9aa6" stroke={INK} strokeWidth={2} />;
+  if (part === "front") {
+    return (
+      <g opacity={1 - gone}>
+        <clipPath id="gate-clip-f"><rect x={0} y={0} width={W} height={G + 2} /></clipPath>
+        <g clipPath="url(#gate-clip-f)"><g transform={`translate(0 ${(1 - rise) * 150})`}>{pole(r)}</g></g>
+      </g>
+    );
+  }
   return (
     <g opacity={1 - gone}>
       <clipPath id="gate-clip"><rect x={0} y={0} width={W} height={G + 2} /></clipPath>
       <g clipPath="url(#gate-clip)">
         <g transform={`translate(0 ${(1 - rise) * 150})`}>
-          {[l, r].map((x) => <rect key={x} x={x - 4} y={top} width={8} height={G - top} fill="#9a9aa6" stroke={INK} strokeWidth={2} />)}
+          {pole(l)}
           <rect x={l - 10} y={top - 6} width={r - l + 20} height={10} rx={3} fill="#b9b9c4" stroke={INK} strokeWidth={2} />
           <rect x={(l + r) / 2 - 26} y={top - 44} width={52} height={36} rx={4} fill="#fff" stroke={INK} strokeWidth={2.5} />
           <HelmetIcon x={(l + r) / 2 - 8} y={top - 16} s={0.75} />
@@ -859,6 +878,8 @@ const Stage: React.FC = () => {
         {/* 枠の窓（L3）。2:54 に扉が閉じるときは、扉がかぶった所を切り取る（扉は下の L2 にあるため） */}
         <L n={3}>
           <div style={{ position: "absolute", left: WIN.x, top: WIN.y, width: WIN.w, height: WIN.h, overflow: "hidden", clipPath: endPhase ? `inset(0 ${doorCover(closeDeg)}px 0 ${doorCover(closeDeg)}px)` : undefined }}>
+            {/* 舞台の奥の板（紙を抜いてから次の紙を差すまでの間だけ見える） */}
+            {t >= 19 && <div style={{ position: "absolute", inset: 0, background: "#6b4f33", boxShadow: "inset 0 0 40px rgba(0,0,0,0.45)" }} />}
             {[...SHEETS].reverse().map((s, i) => (
               <Sequence key={i} from={sec(s.from) - TOTAL} durationInFrames={Math.max(1, sec(s.to - s.from) + (s.noPull ? 0 : sec(PULL)))} layout="none">
                 <SheetSlot sheet={s} />
