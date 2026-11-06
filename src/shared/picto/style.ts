@@ -39,7 +39,11 @@ export const isRed = (c: string) => {
   return r >= 160 && g <= 80 && b <= 80;
 };
 
-/** 決まりに合わないところの一覧（空なら通る） */
+/**
+ * 決まりに合わないところの一覧（空なら通る）。
+ * 本体の作る流れ（maker.ts・worker）では呼ばない: 確かめる AI に渡す前の門ではなく、絵柄の決まりは描く側の作り（色と線の決まった部品）で守る。
+ * これはテストと scripts で、描く側が決まりを破っていないかを確かめる道具
+ */
 export function checkStyle(svg: string): string[] {
   const errs: string[] = [];
   const parts: (string | null)[] = []; // 開いている要素ごとの data-part

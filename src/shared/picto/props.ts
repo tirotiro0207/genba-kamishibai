@@ -4,7 +4,7 @@
 // 印（○・×・✓・禁止・矢印）だけは、大きさに合わせて太さを変える。
 // 置き場所は数字で決める: 人形の関節に付ける（関節と、背の高さに対するずれ）か、キャンバスの上の位置。
 // 吹き出しは、考える（点線と小さい丸）と話す（しっぽ）の 2 つ。中に道具の絵と「？」か「✓」を描く。
-import { type Joint, type Posed, PROPORTION, type Pt } from "./skeleton";
+import { type Joint, JOINTS, type Posed, PROPORTION, type Pt } from "./skeleton";
 // 11/5: 電気の現場の道具と保護具 17 個を足し、安全帯（置いたとき）と保護めがね（持つ・置くとき）を写真に合わせて描き直した。
 // クレーンの先の近くに置いた吊り荷は、先の真下へ寄せてワイヤーでつなぐ
 
@@ -253,7 +253,12 @@ const n = (v: number) => {
 
 export function validateProps(props: PropSpec[], figures: number): string[] {
   const errs: string[] = [];
+  if (!Array.isArray(props)) return ["props は並び"];
   props.forEach((p, i) => {
+    if (!p || typeof p !== "object" || !p.at || typeof p.at !== "object") {
+      errs.push(`props[${i}] に kind・at・size の形が要る`);
+      return;
+    }
     if (!(PROP_KINDS as readonly string[]).includes(p.kind)) errs.push(`props[${i}].kind: ${p.kind}`);
     if (!(p.size >= 0.04 && p.size <= 0.5)) errs.push(`props[${i}].size が範囲の外: ${p.size}`);
     if (p.inner !== undefined && !(BUBBLES.has(p.kind) && (INNER_KINDS as readonly string[]).includes(p.inner))) errs.push(`props[${i}].inner は吹き出しの中の道具だけ: ${p.inner}`);
@@ -270,8 +275,11 @@ export function validateProps(props: PropSpec[], figures: number): string[] {
     if (p.icons !== undefined && !(Array.isArray(p.icons) && p.icons.length <= rows && p.icons.every((k) => k === "fall" || k === "none" || (INNER_KINDS as readonly string[]).includes(k))))
       errs.push(`props[${i}].icons は行の数（${rows}）までの、fall・none・吹き出しの中の道具の並び`);
     if ("figure" in p.at) {
-      if (p.at.figure < 0 || p.at.figure >= figures) errs.push(`props[${i}].at.figure が人物の番号の外`);
-      if (Math.abs(p.at.dx ?? 0) > 1 || Math.abs(p.at.dy ?? 0) > 1) errs.push(`props[${i}].at のずれが範囲の外`);
+      // NaN は大小の比べで通ってしまうので、有限の数か・整数かを先に見る
+      if (!(Number.isInteger(p.at.figure) && p.at.figure >= 0 && p.at.figure < figures)) errs.push(`props[${i}].at.figure が人物の番号の外: ${p.at.figure}`);
+      if (!(JOINTS as readonly string[]).includes(p.at.joint)) errs.push(`props[${i}].at.joint: ${p.at.joint}`);
+      const off = (v: number | undefined) => v === undefined || (Number.isFinite(v) && Math.abs(v) <= 1);
+      if (!off(p.at.dx) || !off(p.at.dy)) errs.push(`props[${i}].at のずれが範囲の外`);
     } else if (!(p.at.x >= 0 && p.at.x <= 1 && p.at.y >= 0 && p.at.y <= 1)) errs.push(`props[${i}].at が範囲の外`);
   });
   return errs;
@@ -287,7 +295,7 @@ export function anchorPoint(at: PropAnchor, posed: Posed[], size: number): { c: 
   return { c: [at.x * size, at.y * size], d: 1 };
 }
 
-/** 描き方の付け足し。W は縁の太さ、icon は吹き出しの中の小さい絵、worn は人の頭や手に着けたとき */
+/** 描き方の付け足し。W は縁の太さ、icon は吹き出しの中の小さい絵、worn は人の頭や手に着けたとき（propsSvg を直接呼ぶときだけ。場面の絵では服になる） */
 interface Opt {
   W: number;
   icon?: boolean;
@@ -1669,25 +1677,51 @@ function bubbleSvg(kind: PropKind, [cx0, cy0]: Pt, s: number, to: Pt | null, inn
   return `<g data-part="bubble">${tail}${box}${icon}${mark}</g>`;
 }
 
-export function propsSvg(props: PropSpec[], posed: Posed[], size: number): string {
-  const W = lineWidth(size);
-  // クレーンと吊り荷をつなぐ（11/5）: 吊り荷がクレーンの先の近く（横に吊り荷の大きさの 0.8 倍まで）で先より下にあれば、
-  // 吊り荷を先の真下へ寄せ、ワイヤーを先から垂らす。クレーンは自分のワイヤーとフックを描かない
+/**
+ * 小物を描く。場面の絵（scene.ts の renderFrame）は、人に着ける小物（頭・手・足・体。WORN）を先に服とかぶり物に置き換えて、ここへは渡さない。
+ * そのため着けたときの描き方（worn の分かれ・人に付けた安全帯の body の分かれ・harnessStraps）は、propsSvg を直接呼ぶとき（scripts/export-props.ts とテスト）だけ使う
+ */
+/**
+ * クレーンと吊り荷をつなぐ（11/5）: 吊り荷がクレーンの先の近く（横に吊り荷の大きさの 0.8 倍まで）で先より下にあれば、
+ * 吊り荷を先の真下へ寄せ、ワイヤーを先から垂らす。クレーンは自分のワイヤーとフックを描かない。
+ * tips はクレーンの先（クレーンでなければ null）、link は吊り荷の番号 → クレーンの番号
+ */
+function craneLinks(props: PropSpec[], posed: Posed[], size: number): { tips: (Pt | null)[]; link: Map<number, number> } {
   const tips = props.map((p) => (p.kind === "crane" ? (() => { const a = anchorPoint(p.at, posed, size); return craneTip(a.c, p.size * size, a.d); })() : null));
-  const link = new Map<number, number>(); // 吊り荷の番号 → クレーンの番号
+  const link = new Map<number, number>();
   props.forEach((p, i) => {
     if (p.kind !== "suspended_load") return;
     const { c } = anchorPoint(p.at, posed, size);
     const j = tips.findIndex((t) => t !== null && Math.abs(t[0] - c[0]) <= p.size * size * 0.8 && t[1] < c[1]);
     if (j >= 0) link.set(i, j);
   });
+  return { tips, link };
+}
+
+/**
+ * 小物を描く真ん中の点（px）。ふつうは置き場所の点（anchorPoint）で、クレーンにつながった吊り荷だけ先の真下へ寄せる。
+ * 絵と同じ点で箱（タップの範囲）を作るときに使う。props は propsSvg に渡すのと同じ並び（同じ組で描く小物）
+ */
+export function propCenters(props: PropSpec[], posed: Posed[], size: number): Pt[] {
+  const { tips, link } = craneLinks(props, posed, size);
+  return props.map((p, i) => {
+    const { c } = anchorPoint(p.at, posed, size);
+    const j = link.get(i);
+    return j === undefined ? c : [tips[j]![0], c[1]];
+  });
+}
+
+export function propsSvg(props: PropSpec[], posed: Posed[], size: number): string {
+  const W = lineWidth(size);
+  const { tips, link } = craneLinks(props, posed, size);
+  const centers = propCenters(props, posed, size);
   const linkedCranes = new Set(link.values());
   return props
     .map((p, i) => {
       const a = anchorPoint(p.at, posed, size);
       const d = a.d;
       const j = link.get(i);
-      const c: Pt = j === undefined ? a.c : [tips[j]![0], a.c[1]];
+      const c = centers[i];
       if (BUBBLES.has(p.kind)) {
         let to: Pt | null = null;
         if ("figure" in p.at) {
@@ -1706,9 +1740,11 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
       // 背もたれが背中のすぐ後ろ（腰から背の高さ × 0.13 後ろ）に立ち、体に隠れずに見えるよう、椅子を後ろへずらす
       if (p.kind === "chair" && "figure" in p.at) {
         const f = posed[p.at.figure];
+        // 高い所に立つ人（lift）の椅子は、その人の立つ面に置く（床に残さない）
+        const floor = (FLOOR_Y - (f.lift ?? 0)) * size;
         const seatY = c[1] + f.h * 0.03;
-        const sc = Math.max(f.h * 0.1, (FLOOR_Y * size - seatY) / (SEAT_TOP.chair ?? 0.46));
-        return `<g data-part="prop">${shape("chair", [c[0] - d * (f.h * 0.13 - sc * 0.22), FLOOR_Y * size], sc, d, { W })}</g>`;
+        const sc = Math.max(f.h * 0.1, (floor - seatY) / (SEAT_TOP.chair ?? 0.46));
+        return `<g data-part="prop">${shape("chair", [c[0] - d * (f.h * 0.13 - sc * 0.22), floor], sc, d, { W })}</g>`;
       }
       // 人に付けた安全帯は、腰のベルトに加えて肩のベルトともものベルトを体に沿って描く（058）
       const onBody = "figure" in p.at;
@@ -1737,7 +1773,7 @@ function anchorLine([cx, cy]: Pt, s: number, d: number, size: number, W: number)
     `<rect x="${n(tx - s * 0.2)}" y="${n(top)}" width="${n(s * 0.64)}" height="${n(s * 0.12)}" rx="${n(s * 0.03)}" fill="${STEEL}" stroke="${INK}" stroke-width="${n(W)}" stroke-linejoin="round"/>`;
 }
 
-/** 安全帯の肩とももをつなぐベルト（フルハーネス）。肩から腰へ 2 本、胸に横の 1 本、ももに 1 本ずつ。縁の黒の上に濃い灰を重ねる */
+/** 安全帯の肩とももをつなぐベルト（フルハーネス）。肩から腰へ 2 本、胸に横の 1 本、ももに 1 本ずつ。縁の黒の上に濃い灰を重ねる（propsSvg を直接呼ぶときだけ。場面の絵では服の fullHarness が描く） */
 function harnessStraps(p: Posed, W: number): string {
   const j = p.joints;
   const tw = p.h * PROPORTION.torsoWidth * 0.32;

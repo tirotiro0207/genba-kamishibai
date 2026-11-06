@@ -77,7 +77,8 @@ export const POSE_NAMES = Object.keys(POSES) as PoseName[];
  * キャラクターを作る画面の見本の姿勢（A ポーズ。製品仕様 §14）。腕はまっすぐ下ろして体から少し開き、足も少し開く。
  * 正面は左右で同じ角度に開く（rig が正面の奥の手足の向きを裏返すので、角度は同じ数でよい）。
  * 斜めと真横は向きを裏返さないので、外へ開く向きが奥と手前で逆になる。真横はほぼまっすぐ下ろす。
- * POSES には入れない（カードの姿勢の名前の一覧に混ぜない）
+ * POSES には入れない（カードの姿勢の名前の一覧に混ぜない）。
+ * 今のキャラクターを作る画面はまっすぐ立つ形（STANDING）で描くので、本体からは使わない（見本の一覧を作る scripts とテストが使う）
  */
 export const A_POSE: Record<View, Angles> = {
   front: pose({ arm_near_upper: 16, arm_far_upper: 16, leg_near_upper: 6, leg_far_upper: 6 }),
@@ -392,7 +393,8 @@ export function stickJoints(p: ViewPose, view: View): StickJoints {
 
 /**
  * 骨だけの棒人間（g 1 つ）。姿勢が人として自然か（体の軸・ひじとひざの向き・左右の手足）を見るための絵。
- * いちばん低い足首（靴底の分 L.sole を足す）を y 0 に、腰を x 0 に置く。奥の手足は灰色、手前は黒
+ * いちばん低い足首（靴底の分 L.sole を足す）を y 0 に、腰を x 0 に置く。奥の手足は灰色、手前は黒。
+ * 本体の画面からは呼ばない（姿勢を見直すテストの道具）
  */
 export function stickSvg(p: ViewPose, view: View): string {
   const j = stickJoints(p, view);

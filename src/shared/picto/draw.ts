@@ -68,7 +68,10 @@ export interface Drawn {
   messages: Anthropic.Message[];
 }
 
-/** 数字を決めさせる。範囲の外なら、その中身を渡して 1 回だけ呼び直す */
+/**
+ * 数字を決めさせる。範囲の外なら、その中身を渡して 1 回だけ呼び直す。
+ * 本体の作る流れ（maker.ts）からは呼ばない（maker.ts は drawParams だけを使う）。作り方を比べる測りの道具（scripts/measure）とテストのために残す
+ */
 export async function drawCard(deps: GuardedDeps, purpose: Purpose, model: string, mode: DrawMode, rule: string, why?: string): Promise<Drawn> {
   const messages: Anthropic.Message[] = [];
   let fix: string | undefined;

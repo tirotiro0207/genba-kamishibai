@@ -4,12 +4,11 @@
 import { EXPRESSIONS, type Expression } from "./avatar";
 import { type ChecklistIcon, INNER_KINDS, INNER_MARKS, type InnerKind, type InnerMark, type PropKind, PROP_KINDS, type PropSpec } from "./props";
 import { type Frame, type FrameFigure, renderFrame, type Role, ROLES, validateFrame } from "./scene";
-import { BONES, type Bone, type Joint, validateFigure } from "./skeleton";
+import { BONES, type Bone, type Joint, JOINTS, validateFigure } from "./skeleton";
 
 export const MARKS_MIN = 3;
 export const MARKS_MAX = 4;
 export const MAX_DURATION = 10;
-const JOINTS: Joint[] = ["hip", "shoulder", "neck", "head", "elbow_near", "elbow_far", "hand_near", "hand_far", "knee_near", "knee_far", "foot_near", "foot_far"];
 
 /** AI が書く形（構造化出力のスキーマと 1 対 1）。小物の figure が -1 ならキャンバスの位置 x・y に置く */
 export interface MotionJson {
@@ -73,7 +72,7 @@ export const MOTION_JSON_SCHEMA = {
                 kind: { type: "string", enum: [...PROP_KINDS] },
                 show: { type: "boolean" },
                 figure: { type: "integer" },
-                joint: { type: "string", enum: JOINTS },
+                joint: { type: "string", enum: [...JOINTS] },
                 dx: num, dy: num, x: num, y: num, size: num,
                 inner: { type: "string", enum: ["none", ...INNER_KINDS] },
                 inner2: { type: "string", enum: ["none", ...INNER_KINDS] },
@@ -104,6 +103,28 @@ export const FRAME_JSON_SCHEMA = {
   properties: { figures: KEY_ITEMS.properties.figures, props: KEY_ITEMS.properties.props },
 } as const;
 
+type KeyProp = Key["props"][number];
+
+/**
+ * 吹き出しの中の道具。inner が "none" なら inner2 も、inner2 が "none" なら inner_marks も捨てる
+ * （AI が「無し」と一緒に書いた残りの欄で、検査に落ちて作り直しを 1 回使わないように）
+ */
+function innerOf(p: KeyProp): Pick<PropSpec, "inner" | "inner2" | "inner_marks"> {
+  if (!p.inner || p.inner === "none") return {};
+  if (!p.inner2 || p.inner2 === "none") return { inner: p.inner };
+  return { inner: p.inner, inner2: p.inner2, ...(p.inner_marks ? { inner_marks: p.inner_marks } : {}) };
+}
+
+/** チェック表の欄（チェック表のときだけ使う。ほかの小物に書かれた欄は捨てる） */
+function listOf(p: KeyProp): Pick<PropSpec, "rows" | "checks" | "numbered" | "icons"> {
+  return {
+    ...(p.rows !== undefined ? { rows: p.rows } : {}),
+    ...(p.checks !== undefined ? { checks: p.checks } : {}),
+    ...(p.numbered !== undefined ? { numbered: p.numbered } : {}),
+    ...(p.icons ? { icons: [...p.icons] } : {}),
+  };
+}
+
 export function keyToFrame(k: FrameJson): Frame {
   return {
     figures: k.figures.map((f) => ({
@@ -115,13 +136,8 @@ export function keyToFrame(k: FrameJson): Frame {
       kind: p.kind,
       size: p.size,
       at: p.figure < 0 ? { x: p.x, y: p.y } : { figure: p.figure, joint: p.joint, dx: p.dx, dy: p.dy },
-      ...(p.inner && p.inner !== "none" ? { inner: p.inner } : {}),
-      ...(p.inner2 && p.inner2 !== "none" ? { inner2: p.inner2 } : {}),
-      ...(p.inner_marks ? { inner_marks: p.inner_marks } : {}),
-      ...(p.rows !== undefined ? { rows: p.rows } : {}),
-      ...(p.checks !== undefined ? { checks: p.checks } : {}),
-      ...(p.numbered !== undefined ? { numbered: p.numbered } : {}),
-      ...(p.icons ? { icons: [...p.icons] } : {}),
+      ...innerOf(p),
+      ...(p.kind === "checklist" ? listOf(p) : {}),
     })),
   };
 }
@@ -130,6 +146,8 @@ export function keyToFrame(k: FrameJson): Frame {
 export function validateFrameJson(k: FrameJson): string[] {
   const errs: string[] = [];
   if (!Array.isArray(k?.figures) || !Array.isArray(k?.props)) return ["figures と props が要る"];
+  const notObj = (v: unknown) => !v || typeof v !== "object";
+  if (k.figures.some(notObj) || k.props.some(notObj)) return ["figures と props の中身は形（オブジェクト）"];
   k.figures.forEach((f, j) => { for (const e of validateFigure(f)) errs.push(`figures[${j}]: ${e}`); });
   for (const e of validateFrame(keyToFrame(k))) errs.push(e);
   return errs;
@@ -140,6 +158,9 @@ export function validateMotion(m: MotionJson): string[] {
   const errs: string[] = [];
   const ks = m?.keyframes;
   if (!Array.isArray(ks) || ks.length < 2) return ["キーフレームは 2 つ以上"];
+  // 形の壊れたキーフレーム（figures・props が並びでない）は、先に文字で返す（中を読むと例外になる）
+  const broken = ks.findIndex((k) => !k || typeof k !== "object" || !Array.isArray(k.figures) || !Array.isArray(k.props) || [...k.figures, ...k.props].some((v) => !v || typeof v !== "object"));
+  if (broken >= 0) return [`keyframes[${broken}] に figures と props の並び（中身はオブジェクト）が要る`];
   if (ks[0].t !== 0) errs.push("最初のキーフレームの時刻は 0");
   ks.forEach((k, i) => {
     if (!(typeof k.t === "number" && k.t >= 0 && k.t <= MAX_DURATION)) errs.push(`keyframes[${i}].t が範囲の外（0〜${MAX_DURATION} 秒）`);
@@ -192,7 +213,7 @@ export function cutFrames(m: MotionJson): { t: number; frame: Frame }[] {
   return m.keyframes.filter((k) => k.mark).map((k) => ({ t: k.t, frame: frameAt(m, k.t) }));
 }
 
-/** 再生用: fps で刻んだ各時刻の SVG */
+/** 再生用: fps で刻んだ各時刻の SVG（本体の画面からは呼ばない。テストで動きを確かめる道具） */
 export function playSvgs(m: MotionJson, fps = 12): string[] {
   const end = m.keyframes[m.keyframes.length - 1].t;
   const out: string[] = [];
