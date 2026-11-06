@@ -105,6 +105,22 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // 役割の名前（11/6 作者「監修者 1・2 に名前を」）。役割を選ぶ段で GET /people から読み、「監修者 1（名前さん）」にする。名前が無ければ今までどおり
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (step !== "role") return;
+    let live = true;
+    fetch(`/api/t/${encodeURIComponent(tenant)}/people`, { headers: authHeaders(tenant) })
+      .then((r) => (r.ok ? (r.json() as Promise<{ people?: { role: string; slot: number; name: string }[] }>) : { people: [] }))
+      .then((b) => {
+        if (live) setNames(Object.fromEntries((b.people ?? []).filter((p) => p.name).map((p) => [`${p.role}.${p.slot}`, p.name])));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [step, tenant]);
+  const shown = roles.map((r) => (r.value.startsWith("supervisor") && names[r.value] ? { ...r, label: `${r.label}（${names[r.value]}さん）` } : r));
 
   async function enter(e: FormEvent) {
     e.preventDefault();
@@ -167,7 +183,7 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
       {step === "role" && roles.length > 1 && (
         <div className="pin-field">
           <span className="pin-cap">役割</span>
-          <RolePicker roles={roles} value={who} onChange={setWho} />
+          <RolePicker roles={shown} value={who} onChange={setWho} />
         </div>
       )}
       {step === "student" && (
@@ -178,7 +194,7 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
       )}
       {!(step === "role" && isStudent) && (
         <label>
-          {step === "tenant" ? "PIN" : step === "student" ? "PIN" : `${roles.find((r) => r.value === who)?.label ?? ""}の PIN`}
+          {step === "tenant" ? "PIN" : step === "student" ? "PIN" : `${shown.find((r) => r.value === who)?.label ?? ""}の PIN`}
           <input value={pin} onChange={(e) => setPin(e.target.value)} type="password" inputMode="numeric" autoComplete="off" data-testid="tenant-pin-input" />
         </label>
       )}
