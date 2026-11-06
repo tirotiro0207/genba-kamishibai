@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
 import { type UsedExemplar, usedLine } from "../../shared/exemplars";
 import { cutFrames, frameAt, type MotionJson } from "../../shared/picto/motion";
-import { type Frame, renderFrame } from "../../shared/picto/scene";
+import { type Frame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 import { req } from "../make/MakeScreen";
 import { reducedMotion, SLIDE_MS } from "../motion/Slide";
 import { needsPin, TenantPin } from "../pin/TenantPin";
@@ -62,13 +63,28 @@ function NoScript({ card }: { card: CardView }) {
 /** 手本にしたもの（087・§5 L7）。この下書きを作るときに渡した、同じ会社の前の修正か署名済みのカードの日付と誰（役割） */
 function Used({ tenant, card }: { tenant: string; card: CardView }) {
   const [used, setUsed] = useState<UsedExemplar[]>([]);
+  // 読めなかったとき（403・500・回線）は、手本が無いのと見分けられるように小さく出す
+  const [fail, setFail] = useState("");
   useEffect(() => {
     req<{ used: UsedExemplar[] }>(tenant, `/cards/${encodeURIComponent(card.id)}/exemplars`)
-      .then((r) => setUsed(Array.isArray(r.used) ? r.used : []))
-      .catch(() => setUsed([]));
+      .then((r) => {
+        setUsed(Array.isArray(r.used) ? r.used : []);
+        setFail("");
+      })
+      .catch((e: Error) => {
+        setUsed([]);
+        setFail(e.message);
+      });
   }, [tenant, card.id]);
   const line = usedLine(used);
-  if (!line || card.status === "signed" || card.status === "stopped") return null;
+  if (card.status === "signed" || card.status === "stopped") return null;
+  if (fail)
+    return (
+      <p className="card-note" data-testid="card-used-fail">
+        手本にしたものを読めませんでした（{fail}）
+      </p>
+    );
+  if (!line) return null;
   return (
     <p className="card-ask" data-testid="card-used" data-count={used.length}>
       <span>{line}</span>
@@ -184,7 +200,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
       ) : b.motion.kind === "keyframes" ? (
         // 絵の面。ここには文字を置かない（番号は下の点で示す）
         <button className="card-face" onClick={() => setOpen((o) => !o)} aria-label="絵（タップで文を出す）" data-testid="card-face" data-frame={at} data-moving={play.moving ? "1" : undefined}>
-          <span dangerouslySetInnerHTML={{ __html: renderFrame(play.frame ?? frames[at].frame).svg }} />
+          <span dangerouslySetInnerHTML={{ __html: frameSvg(play.frame ?? frames[at]?.frame) }} />
         </button>
       ) : (
         // AI が書いた動きの HTML は、スクリプトを動かさない枠の中で見せる
@@ -222,8 +238,19 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
         <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/pose/${encodeURIComponent(card.id)}`} data-testid="card-fix-pose">
           つまみで角度まで動かす
         </a>
+        {/* 折りたたみ（元のページが 1 枚・0 字にたたまれる）へも、カードから行けるように（前はホームからだけ） */}
+        <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fold/${encodeURIComponent(card.id)}`} data-testid="card-to-fold">
+          折りたたみを見る
+        </a>
       </nav>
-      <Check tenant={tenant} card={card} onChange={setCard} />
+      {/* 公開デモのカードは見るだけ（置き場が確かめ・確認を 403 で断る）。押せないボタンは出さない */}
+      {tenant === "demo" ? (
+        <p className="card-note" data-testid="card-check-demo">
+          公開デモのカードは見るだけです。確かめる AI に見せる・確認に回すのは、会社のテナントの中で行います
+        </p>
+      ) : (
+        <Check tenant={tenant} card={card} onChange={setCard} />
+      )}
       {!open && (
         <button className="card-show" onClick={() => setOpen(true)} data-testid="card-show">
           文を見る

@@ -233,26 +233,31 @@ function Board({ tenant, me }: { tenant: string; me: { role: string } }) {
   const [cards, setCards] = useState<SignedCard[] | null>(null);
   const [recalls, setRecalls] = useState<Recall[]>([]);
   const [sample, setSample] = useState<Sample | null>(null);
+  // 抜き取りは POST なので、見るだけの置き場（公開デモの練習用・架空の会社）では 403 になる。一覧と回収の知らせは出したまま、ここだけ一言にする
+  const [sampleErr, setSampleErr] = useState("");
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
+    const s = req<Sample>(tenant, "/issue/sample", { method: "POST", body: "{}" }).then(
+      (x) => {
+        setSample(x);
+        setSampleErr("");
+      },
+      (e: Error) => setSampleErr(e.message),
+    );
     try {
-      const [c, r, s] = await Promise.all([
-        req<{ cards: SignedCard[] }>(tenant, "/issue/cards"),
-        req<{ recalls: Recall[] }>(tenant, "/issue/recalls"),
-        req<Sample>(tenant, "/issue/sample", { method: "POST", body: "{}" }),
-      ]);
+      const [c, r] = await Promise.all([req<{ cards: SignedCard[] }>(tenant, "/issue/cards"), req<{ recalls: Recall[] }>(tenant, "/issue/recalls")]);
       setCards(c.cards);
       setRecalls(r.recalls);
-      setSample(s);
     } catch (e) {
       setErr((e as Error).message);
     }
+    await s;
   }, [tenant]);
   useEffect(() => {
     void load();
   }, [load]);
   if (err) return <p className="err">{err}</p>;
-  if (!cards || !sample) return <p>読み込み中…</p>;
+  if (!cards || (!sample && !sampleErr)) return <p>読み込み中…</p>;
   const unread = recalls.filter((x) => !x.read_at).length;
   return (
     <div className="issue" data-testid="issue">
@@ -281,7 +286,14 @@ function Board({ tenant, me }: { tenant: string; me: { role: string } }) {
           </>
         )}
       </section>
-      <SampleBox sample={sample} />
+      {sample ? (
+        <SampleBox sample={sample} />
+      ) : (
+        <section className="issue-box" data-testid="issue-sample-fail">
+          <h2>今週の抜き取り</h2>
+          <p className="done">抜き取りを出せませんでした（{sampleErr}）</p>
+        </section>
+      )}
       <section className="issue-box issue-noprint-box">
         <h2>署名済みのカード（{cards.length} 枚）</h2>
         {cards.length === 0 ? (

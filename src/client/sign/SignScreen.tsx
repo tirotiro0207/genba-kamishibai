@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+import { frameSvg } from "../Safe";
 import { req } from "../make/MakeScreen";
 import { SUPERVISORS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./sign.css";
@@ -46,7 +46,11 @@ function SupervisorPick({ tenant, onDone }: { tenant: string; onDone: () => void
     setErr("");
     try {
       const { token } = await req<{ token: string }>(tenant, "/login", { method: "POST", body: JSON.stringify({ role: "supervisor", slot, pin: pin || undefined }) });
-      sessionStorage.setItem(`role:${tenant}`, token);
+      try {
+        sessionStorage.setItem(`role:${tenant}`, token);
+      } catch {
+        throw new Error("この端末では入ったしるしを残せない");
+      }
       onDone();
     } catch (e) {
       setErr((e as Error).message);
@@ -244,7 +248,7 @@ export function SignScreen({ tenant, cardId }: { tenant: string; cardId: string 
       </header>
       <ol className="sign-frames">
         {frames.map(({ t, frame }) => (
-          <li key={t} dangerouslySetInnerHTML={{ __html: renderFrame(frame).svg }} />
+          <li key={t} dangerouslySetInnerHTML={{ __html: frameSvg(frame) }} />
         ))}
       </ol>
       {done ? (
