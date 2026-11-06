@@ -36,4 +36,21 @@ describe("職場の服と役の印（下絵）", () => {
     expect(headMarks("helmet", "quarter", { leaf: true }, "#fff")).toContain("part_leaf");
     expect(headMarks("chef", "quarter", { leaf: true, stripes: 2 }, "#fff")).toBe("");
   });
+
+  it("会社員（11/7）: 3 人がいて、社員証と名札は白紙（中に線を描かない）。役員はチーフとバッジ、三つ揃いはベストの V を描く", () => {
+    const office = INDUSTRY_DRAFTS.find((d) => d.id === "41")!;
+    expect(office.roles.map((r) => r.name)).toEqual(["役員", "社員", "OL・受付"]);
+    for (const view of VIEWS) {
+      for (const tag of ["idCard", "nameplate"] as const) {
+        const t = outfitTorso(view, { tag }).match(/<g id="part_tag">(.*?)<\/g>/)![1];
+        // 白い札の中に文字の代わりの線（stroke-width 2.5 の横線）を入れない
+        expect(t, `${tag} ${view}`).not.toMatch(/<path d="M[-\d.]+ -\d+H/);
+      }
+      const exec = outfitTorso(view, office.roles[0].outfit);
+      expect(exec, view).toContain("part_suitVest");
+      expect(exec, view).toContain("part_lapel");
+      if (view !== "side") expect(exec, view).toContain('fill="#999999"');
+      expect(outfitTorso(view, office.roles[2].outfit), view).toContain("part_skirt");
+    }
+  });
 });

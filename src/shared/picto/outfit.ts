@@ -24,7 +24,10 @@ export type Garment =
   | "lifeJacket" // 救命胴衣
   | "checked" // チェックのシャツ
   | "fanJacket" // 空調服（作業着の上着と、腰の後ろの丸いファン 2 つ）
-  | "fullHarness"; // フルハーネス（肩と胸のベルトに、腰のベルトと背中の D の環）
+  | "fullHarness" // フルハーネス（肩と胸のベルトに、腰のベルトと背中の D の環）
+  // 11/7 会社員の服: 三つ揃い（上着の V の中にベスト）と、ひざ丈のスカート（上着より先に並べ、上着の裾の下から出す）
+  | "suitVest"
+  | "skirt";
 
 export interface Outfit {
   /** 胴に重ねる服。tone は灰色の明るさ（初めの値は部品ごと） */
@@ -34,7 +37,16 @@ export interface Outfit {
   pants?: string;
   boots?: string;
   neck?: "tie" | "scarf" | "towel";
-  tag?: "clip" | "lanyard";
+  /** ネクタイ・スカーフの明るさ。無ければ #222（11/7） */
+  neckTone?: string;
+  /** 上着（suit・suitVest）の V の中のシャツ・ブラウスの明るさ。無ければ白（11/7） */
+  shirt?: string;
+  /** 名札。clip・lanyard は小さな線入り、idCard は首から下げた白紙の社員証、nameplate は胸の白紙の名札（11/7。文字もロゴも入れない） */
+  tag?: "clip" | "lanyard" | "idCard" | "nameplate";
+  /** 胸のポケットの白いチーフ（11/7） */
+  chief?: boolean;
+  /** 襟のバッジ（模様の無い丸。11/7） */
+  pin?: boolean;
   toolBelt?: boolean;
   /** 腕章（手前の腕の二の腕） */
   armband?: boolean | "cross";
@@ -123,7 +135,7 @@ const lineTop = (v: View, y: number) => (v === "side" ? Math.max(y, -120) : y);
 const fullTop = (w: number, tone: string, bottom = 20) =>
   `<rect x="${-w}" y="-142" width="${w * 2}" height="${bottom + 142}" rx="${w === 30 ? 20 : 30}" fill="${tone}" ${S(6)}/>`;
 
-const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) => string }> = {
+const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string, o: Outfit) => string }> = {
   uniform: {
     tone: "#333",
     draw: (v, t) => {
@@ -215,12 +227,36 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
   },
   suit: {
     tone: "#222",
-    draw: (v, t) => {
+    draw: (v, t, o) => {
       const w = W(v), c = CX[v];
       const x = (d: number) => n(c + d * SPAN[v]);
-      return fullTop(w, t, 30) + (v === "side" ? "" : `<path d="M${x(-16)} -142L${x(0)} -96L${x(16)} -142Z" fill="#fff" ${S(4)}/>` +
+      return fullTop(w, t, 30) + (v === "side" ? "" : `<path d="M${x(-16)} -142L${x(0)} -96L${x(16)} -142Z" fill="${o.shirt ?? "#fff"}" ${S(4)}/>` +
         `<path d="M${x(-26)} -142L${x(-4)} -90M${x(26)} -142L${x(4)} -90" stroke="#777" stroke-width="3"/>`) +
         `<circle cx="${x(0)}" cy="-60" r="3.5" fill="#777"/><circle cx="${x(0)}" cy="-36" r="3.5" fill="#777"/>`;
+    },
+  },
+  // 三つ揃い（11/7）: 上着の V を深く広く開け、その中にベスト（上着より 1 段明るい）、さらに内側にシャツの V をのぞかせる。
+  // 本物はベストも上着と同じ生地だが、灰色だけだと見分けられないので明るさを変える。ベストのボタンはネクタイに隠れるので描かない。
+  // 上着のボタンは 1 つ。真横は V を開けない（suit と同じ）
+  suitVest: {
+    tone: "#555",
+    draw: (v, t, o) => {
+      const w = W(v), c = CX[v];
+      const x = (d: number) => n(c + d * SPAN[v]);
+      const l = Math.min(0xee, lum(t) + 0x44).toString(16).padStart(2, "0");
+      const vest = `#${l}${l}${l}`;
+      return fullTop(w, t, 30) + (v === "side" ? "" : `<path d="M${x(-30)} -142L${x(0)} -60L${x(30)} -142Z" fill="${vest}" ${S(4)}/>` +
+        `<path d="M${x(-14)} -142L${x(0)} -106L${x(14)} -142Z" fill="${o.shirt ?? "#fff"}" ${S(3.5)}/>` +
+        `<path d="M${x(-34)} -140L${x(-5)} -60M${x(34)} -140L${x(5)} -60" stroke="${ink(t) === "#fff" ? "#999" : "#555"}" stroke-width="3"/>`) +
+        `<circle cx="${x(0)}" cy="-44" r="3.5" fill="#999"/>`;
+    },
+  },
+  // ひざ丈のスカート（11/7）: 腰の下から、ひざ（もも 85 の下の端）の少し上まで、裾へ少し広がる台形。上着より先に描き、上着の裾の下から出す
+  skirt: {
+    tone: "#333",
+    draw: (v, t) => {
+      const w = W(v);
+      return `<path d="M${-w} -10H${w}L${w + 10} 80Q${w + 10} 86 ${w + 4} 86H${-w - 4}Q${-w - 10} 86 ${-w - 10} 80Z" fill="${t}" ${S(5)}/>`;
     },
   },
   waiterVest: {
@@ -259,7 +295,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
       const w = W(v);
       const fan = (x: number, r: number) => `<circle cx="${n(x)}" cy="-28" r="${r}" fill="#333" ${S(5)}/><circle cx="${n(x)}" cy="-28" r="${n(r * 0.42)}" fill="#777" ${S(3)}/>`;
       const fans = v === "front" ? fan(-w - 6, 11) + fan(w + 6, 11) : fan(-w - 2, 15);
-      return GARMENT.jacket.draw(v, t) + fans;
+      return GARMENT.jacket.draw(v, t, {}) + fans;
     },
   },
   // フルハーネス（11/5）: 今の安全帯の肩と胸のベルトに、腰のベルトと留め具、背中の D の環を足す
@@ -268,7 +304,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
     draw: (v, t) => {
       const w = W(v);
       const ring = v === "front" ? "" : `<circle cx="${-w + 8}" cy="-128" r="7" fill="none" stroke="#000" stroke-width="7"/><circle cx="${-w + 8}" cy="-128" r="7" fill="none" stroke="#999" stroke-width="3"/>`;
-      return GARMENT.harness.draw(v, t) + `<path d="M${-w + 2} -30H${w - 2}" stroke="#000" stroke-width="14"/><path d="M${-w + 4} -30H${w - 4}" stroke="${t}" stroke-width="8"/>` +
+      return GARMENT.harness.draw(v, t, {}) + `<path d="M${-w + 2} -30H${w - 2}" stroke="#000" stroke-width="14"/><path d="M${-w + 4} -30H${w - 4}" stroke="${t}" stroke-width="8"/>` +
         `<rect x="${CX[v] - 8}" y="-38" width="16" height="16" rx="3" fill="#999" ${S(3)}/>` + ring;
     },
   },
@@ -301,7 +337,7 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string) 
 };
 
 /** 首まわり・胸・腰の小物 */
-const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
+const neckSvg = (view: View, kind: "tie" | "scarf" | "towel", tone = "#222") => {
   const c = CX[view], w = W(view);
   const x = (d: number) => n(c + d * SPAN[view]);
   // 真横は首の真下に縦の線を出さない: 手ぬぐいの垂れは前の端に 1 本、ネクタイは胸の前の端、スカーフは首を巻く帯と前の結び目。
@@ -309,19 +345,33 @@ const neckSvg = (view: View, kind: "tie" | "scarf" | "towel") => {
   if (view === "side") {
     if (kind === "towel")
       return `<path d="M${-w + 6} -142Q${c} -124 ${w - 6} -142V-130Q${c} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/><path d="M${w - 12} -130V-86H${w - 2}V-134Z" fill="#fff" ${S(4)}/>`;
-    if (kind === "tie") return `<path d="M${w - 12} -134H${w - 6}L${w - 5} -74L${w - 9} -64L${w - 13} -74Z" fill="#222" ${S(3)}/>`;
-    return `<path d="M-8 -145H20Q23 -139 20 -133H-8Q-11 -139 -8 -145Z" fill="#222" ${S(4)}/><path d="M21 -140L24 -118L31 -135Z" fill="#222" ${S(4)}/>`;
+    if (kind === "tie") return `<path d="M${w - 12} -134H${w - 6}L${w - 5} -74L${w - 9} -64L${w - 13} -74Z" fill="${tone}" ${S(3)}/>`;
+    return `<path d="M-8 -145H20Q23 -139 20 -133H-8Q-11 -139 -8 -145Z" fill="${tone}" ${S(4)}/><path d="M21 -140L24 -118L31 -135Z" fill="${tone}" ${S(4)}/>`;
   }
   if (kind === "towel")
     return `<path d="M${-w + 6} -142Q${x(0)} -124 ${w - 6} -142V-130Q${x(0)} -112 ${-w + 6} -130Z" fill="#fff" ${S(4)}/>` +
       `<path d="M${x(-22)} -132V-86H${x(-10)}V-128ZM${x(10)} -128V-86H${x(22)}V-132Z" fill="#fff" ${S(4)}/>`;
   return kind === "tie"
-    ? `<path d="M${x(-5)} -132H${x(5)}L${x(7)} -74L${x(0)} -64L${x(-7)} -74Z" fill="#222" ${S(3)}/><rect x="${x(-6)}" y="-140" width="12" height="9" fill="#222" ${S(3)}/>`
-    : `<path d="M${x(-24)} -142H${x(24)}L${x(2)} -112Z" fill="#222" ${S(4)}/><path d="M${x(0)} -116L${x(-12)} -90L${x(8)} -94Z" fill="#222" ${S(4)}/>`;
+    ? `<path d="M${x(-5)} -132H${x(5)}L${x(7)} -74L${x(0)} -64L${x(-7)} -74Z" fill="${tone}" ${S(3)}/><rect x="${x(-6)}" y="-140" width="12" height="9" fill="${tone}" ${S(3)}/>`
+    : `<path d="M${x(-24)} -142H${x(24)}L${x(2)} -112Z" fill="${tone}" ${S(4)}/><path d="M${x(0)} -116L${x(-12)} -90L${x(8)} -94Z" fill="${tone}" ${S(4)}/>`;
 };
-const tagSvg = (view: View, kind: "clip" | "lanyard") => {
+const tagSvg = (view: View, kind: NonNullable<Outfit["tag"]>) => {
   const c = CX[view];
   const x = (d: number) => n(c + d * SPAN[view]);
+  // 11/7 白紙の社員証と名札（文字もロゴも入れない）。社員証は紐を首の両側から下ろし、ネクタイの上に縦長のカードを下げる。
+  // 名札は胸（着る人の左。正面は画面の右、斜め・真横は手前）に横長の白い札。真横の紐は、今の紐（lanyard）と同じく首の後ろから 1 本
+  if (kind === "idCard") {
+    // 真横は手前の腕（x −12〜20）に隠れないよう、カードを胸の前の端（x 21〜33）へ揺らして細く見せる
+    if (view === "side")
+      return `<path d="M-18 -137L27 -102" stroke="#444" stroke-width="4" fill="none"/><rect x="21" y="-102" width="12" height="34" rx="3" fill="#fff" ${S(3.5)}/>`;
+    return `<path d="M${x(-18)} -140L${x(-6)} -100M${x(18)} -140L${x(6)} -100" stroke="#444" stroke-width="4" fill="none"/><rect x="${x(-14)}" y="-102" width="28" height="36" rx="3" fill="#fff" ${S(3.5)}/>` +
+      `<rect x="${x(-5)}" y="-106" width="10" height="7" rx="2" fill="#777" ${S(2.5)}/>`;
+  }
+  if (kind === "nameplate") {
+    // 真横は手前の腕（x −12〜20）に隠れないよう、胸の前の端に細く
+    if (view === "side") return `<rect x="18" y="-110" width="13" height="12" rx="2" fill="#fff" ${S(3)}/>`;
+    return `<rect x="${n(c + (view === "front" ? 16 : -40))}" y="-112" width="26" height="12" rx="2" fill="#fff" ${S(3)}/>`;
+  }
   if (kind === "clip") {
     const x = view === "side" ? c - 4 : c + 14;
     return `<rect x="${x}" y="-114" width="22" height="14" fill="#fff" ${S(3)}/><path d="M${x + 5} -107H${x + 17}" stroke="#000" stroke-width="2.5"/>`;
@@ -337,6 +387,23 @@ const toolBeltSvg = (view: View) => {
   return `<rect x="${x - 12}" y="-44" width="24" height="34" rx="3" fill="#333" ${S(4)}/><path d="M${x - 6} -44V-58M${x + 5} -44V-54" stroke="#000" stroke-width="5" stroke-linecap="round"/>`;
 };
 
+/**
+ * 胸のチーフと襟のバッジ（11/7）。どちらも着る人の左の胸（正面は画面の右、斜めは手前の画面の左）。
+ * チーフは胸のポケットからのぞく白い山 2 つ、バッジは襟の上の模様の無い明るい丸。真横はチーフが手前の腕とネクタイに重なるので描かず、バッジだけ胴の前の端に小さく
+ */
+const lapelSvg = (view: View, chief: boolean, pin: boolean) => {
+  const c = CX[view];
+  const x = (d: number) => n(c + d * SPAN[view]);
+  const s = view === "front" ? 1 : -1;
+  const px = view === "side" ? 25 : Number(x(29 * s)), py = view === "side" ? -126 : -104;
+  const hw = view === "side" ? 4 : 8;
+  const sq = !chief || view === "side" ? "" : `<path d="M${n(px - hw)} ${py}L${n(px - hw)} ${py - 7}L${n(px - hw / 2)} ${py - 3}L${n(px)} ${py - 9}L${n(px + hw / 2)} ${py - 3}L${n(px + hw)} ${py - 7}L${n(px + hw)} ${py}Z" fill="#fff" ${S(2.5)}/>` +
+    (view === "side" ? "" : `<path d="M${n(px - hw - 3)} ${py}H${n(px + hw + 3)}" stroke="#000" stroke-width="3"/>`);
+  const [bx, by] = view === "side" ? [26, -136] : [Number(x(19 * s)), -124];
+  const badge = !pin ? "" : `<circle cx="${n(bx)}" cy="${by}" r="${view === "side" ? 3 : 4}" fill="#bbb" ${S(2.5)}/>`;
+  return sq + badge;
+};
+
 /** 肩章（肩の上の板と線） */
 const rankSvg = (view: View, bars: number) => {
   const w = W(view);
@@ -347,8 +414,9 @@ const rankSvg = (view: View, bars: number) => {
 
 /** 胴の部品（胴の上に重ねる。手前の腕より先に描く） */
 export function outfitTorso(view: View, o: Outfit): string {
-  const wear = (o.wear ?? []).map((g) => part(g.kind, GARMENT[g.kind].draw(view, g.tone ?? GARMENT[g.kind].tone))).join("");
-  return wear + part("neck", o.neck ? neckSvg(view, o.neck) : "") + part("tag", o.tag ? tagSvg(view, o.tag) : "") +
+  const wear = (o.wear ?? []).map((g) => part(g.kind, GARMENT[g.kind].draw(view, g.tone ?? GARMENT[g.kind].tone, o))).join("");
+  return wear + part("neck", o.neck ? neckSvg(view, o.neck, o.neckTone) : "") + part("tag", o.tag ? tagSvg(view, o.tag) : "") +
+    part("lapel", o.chief || o.pin ? lapelSvg(view, !!o.chief, !!o.pin) : "") +
     part("toolbelt", o.toolBelt ? toolBeltSvg(view) : "") + part("rank", o.rank ? rankSvg(view, o.rank) : "");
 }
 

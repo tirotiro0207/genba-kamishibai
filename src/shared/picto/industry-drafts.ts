@@ -217,3 +217,14 @@ INDUSTRY_DRAFTS.push(
   ] },
 );
 INDUSTRY_DRAFTS.sort((a, b) => a.id.localeCompare(b.id));
+
+/**
+ * 会社員（11/7 作者）。事務所の 3 人。色は灰色の明るさに置き換え、小さく描いても分かる印を残す:
+ * 役員＝濃いグレーの三つ揃い・明るいベスト・えんじのネクタイ（濃い灰）・胸の白いチーフ・襟のバッジ／社員＝紺の背広（ベストなし）・水色のシャツ（明るい灰）・紺のネクタイ・白紙の社員証／
+ * OL・受付＝紺の上着とひざ丈のスカート・白いブラウス・水色のスカーフ（明るい灰）・白紙の名札
+ */
+INDUSTRY_DRAFTS.push({ id: "41", name: "会社員（事務所）", roles: [
+  r("役員", "lead", "none", top("suitVest", "#555", { neck: "tie", neckTone: "#333", chief: true, pin: true, pants: "#555" })),
+  r("社員", "worker", "none", top("suit", "#333", { shirt: "#ccc", neck: "tie", neckTone: "#111", tag: "idCard", pants: "#333" })),
+  r("OL・受付", "new", "none", { wear: [{ kind: "skirt", tone: "#333" }, { kind: "suit", tone: "#333" }], shirt: "#fff", neck: "scarf", neckTone: "#ccc", tag: "nameplate", sleeve: "#333", pants: "#fff" }),
+] });
