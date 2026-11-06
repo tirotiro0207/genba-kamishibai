@@ -13,6 +13,8 @@ export interface Env {
   AUTHOR_NAME?: string;
   /** 監修者に見てもらうカードの番号（11/6 作者）。, か空白で区切り、この順でホームのタブに出す。本番は wrangler secret。無ければタブを出さない */
   REVIEW_CARDS?: string;
+  /** 資料の見せる名前（11/6 作者）。{"資料の鍵": "名前"} の JSON。本番は wrangler secret。無ければ「資料」と出す */
+  DOC_LABELS?: string;
   /** 本番の公開の置き場だけ "1"（wrangler.jsonc の env.production の vars）。会社でないテナントを見るだけにし、架空の会社の MCP にも鍵を要る（093b） */
   PUBLIC_DEMO?: string;
 }

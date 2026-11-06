@@ -36,3 +36,19 @@
 .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .card-actions > * { flex: 1; }
 .card-note { margin: 0; font-size: 14px; color: var(--muted); border-left: 3px solid #d9a400; padding-left: 8px; }
+/* 絵の上の文（11/6 作者）。やさしい日本語・決まり・なぜを、見出しを左に小さく、中身を右に */
+.card-lead { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.card-lead dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.card-lead-row { display: grid; grid-template-columns: 12em 1fr; gap: 12px; align-items: baseline; }
+.card-lead dt { font-size: 13px; color: var(--muted); }
+.card-lead dd { margin: 0; font-size: 17px; line-height: 1.6; }
+.card-lead textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; line-height: 1.6; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; resize: vertical; }
+.card-lead-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card-lead-actions small { color: var(--muted); font-size: 12px; }
+/* 4 コマ（横 1 列）。カードの幅を広げ、コマを等分に並べる */
+.card.card-wide { max-width: 1200px; }
+.card-layout { align-self: flex-start; }
+.card-strip .read-frames { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.card-strip .read-frame { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; position: relative; }
+.card-strip .read-frame svg { display: block; width: 100%; height: auto; }
+@media (max-width: 640px) { .card-lead-row { grid-template-columns: 1fr; gap: 2px; } }

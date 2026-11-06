@@ -54,3 +54,48 @@ test("コマを 1 つずつ送り、絵の面は 0 字、タップで文が出�
   await expect(page.getByTestId("card")).toHaveAttribute("data-status", "signed");
   await expect(page.getByTestId("card-band")).toHaveCount(0);
 });
+
+test("絵の上にやさしい日本語・決まり・なぜが出て、文を直して保存でき、4 コマ（横 1 列）でも見られる（11/6 作者）", async ({ page }) => {
+  let saved: { card: { rule: string; why: string; words?: { ja: string; vi: string }; statements: { field: string; text: string }[] }; reason: string } | null = null;
+  await page.route("**/api/t/practice/cards/card-*", (route) => {
+    if (route.request().method() === "PUT") {
+      saved = route.request().postDataJSON();
+      return route.fulfill({ json: { ...view("draft", false), version: 2, body: saved!.card } });
+    }
+    const v = view("pending", false);
+    return route.fulfill({ json: saved ? { ...v, status: "draft", version: 2, body: saved.card } : v });
+  });
+  await page.route("**/api/t/practice/cards/card-*/exemplars", (route) => route.fulfill({ json: { used: [] } }));
+
+  await page.goto("/#/t/practice/card/card-pending");
+  const lead = page.getByTestId("card-lead");
+  await expect(page.getByTestId("card-lead-words")).toContainText("けんでんきで");
+  await expect(page.getByTestId("card-lead-rule")).toContainText("盤に触る前に");
+  await expect(page.getByTestId("card-lead-why")).toContainText("感電する");
+  // 絵より上にある
+  const top = async (id: string) => (await page.getByTestId(id).boundingBox())!.y;
+  expect(await top("card-lead")).toBeLessThan(await top("card-face"));
+
+  // 4 コマ（横 1 列）に切り替える
+  await page.getByTestId("card-layout-strip").click();
+  const frames = page.getByTestId("card-strip").locator(".read-frame");
+  expect(await frames.count()).toBeGreaterThanOrEqual(3);
+  const ys = await frames.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().y)));
+  expect(new Set(ys).size).toBe(1);
+  await expect(page.getByTestId("card-nav")).toHaveCount(0);
+  await page.waitForTimeout(800);
+
+  // 文を直して保存する
+  await page.getByTestId("card-lead-edit").click();
+  await page.getByTestId("card-lead-input-why").fill("手で触ると感電するおそれがあるから");
+  await page.getByTestId("card-lead-input-words").fill("さわる まえに たしかめます。");
+  await page.waitForTimeout(600);
+  await page.getByTestId("card-lead-save").click();
+  await expect(page.getByTestId("card-lead-why")).toHaveText("手で触ると感電するおそれがあるから");
+  expect(saved!.reason).toContain("なぜ");
+  expect(saved!.card.why).toBe("手で触ると感電するおそれがあるから");
+  expect(saved!.card.statements.filter((s) => s.field === "why").map((s) => s.text)).toEqual(["手で触ると感電するおそれがあるから"]);
+  expect(saved!.card.words?.vi).toContain("tủ điện");
+  await expect(lead).toBeVisible();
+  await page.waitForTimeout(800);
+});

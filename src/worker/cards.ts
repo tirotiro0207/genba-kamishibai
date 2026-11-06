@@ -73,6 +73,17 @@ function signerOf(env: Env, actor: string) {
   return { role, slot, name: role === "supervisor" ? personName(env, { role: "supervisor", slot }) : "" };
 }
 
+/** 資料の名前（11/6 作者）。環境変数 DOC_LABELS（{"資料の鍵": "見せる名前"} の JSON）から。読めなければ空 */
+export function docLabels(env: Env): Record<string, string> {
+  try {
+    const o = JSON.parse(env.DOC_LABELS ?? "{}") as unknown;
+    if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+    return Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => [k, (v as string).trim()]));
+  } catch {
+    return {};
+  }
+}
+
 cards.get("/", async (c) => {
   const db = c.env.DB;
   const tid = c.var.tenant.id;
@@ -92,6 +103,7 @@ cards.get("/", async (c) => {
       return { ...cardView(r), signed: s ? { ...signerOf(c.env, s.actor), at: s.at } : null };
     }),
     review,
+    docs: docLabels(c.env),
   });
 });
 

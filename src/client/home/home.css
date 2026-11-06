@@ -83,3 +83,16 @@
 .home-review > li { border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
 .home-review .home-row { cursor: default; }
 @media (max-width: 640px) { .home-body { grid-template-columns: 1fr; } .home-body dt { padding-top: 6px; } }
+/* 原文（11/6 作者「見た目と文をきれいに」）。資料の名前とページを見出しに、文は引用の帯で 1 つにつないで出す */
+.orig { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.orig-item { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; gap: 6px; }
+.orig-where { margin: 0; font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.orig-where strong { color: var(--fg); font-size: 14px; font-weight: 600; }
+.orig-head { margin: 0; font-size: 13px; color: var(--muted); }
+.orig-text { margin: 0; padding: 4px 0 4px 14px; border-left: 3px solid color-mix(in srgb, var(--fg) 45%, transparent); font-size: 16px; line-height: 1.8; }
+.orig-text p { margin: 0; }
+.orig-text ul { margin: 0; padding-left: 1.2em; }
+.orig-text li + li { margin-top: 4px; }
+.orig-item .route-src { margin: 6px 0 0; }
+.orig-item .make-lines { font-size: 14px; max-height: none; }
+.orig-more { align-self: flex-start; background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 0; }

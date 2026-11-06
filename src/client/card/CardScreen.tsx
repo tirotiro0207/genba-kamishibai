@@ -12,6 +12,8 @@ import { req } from "../make/MakeScreen";
 import { reducedMotion, SLIDE_MS } from "../motion/Slide";
 import { needsPin, TenantPin } from "../pin/TenantPin";
 import { Check, type CheckedCard } from "./Check";
+import { Frames } from "../read/ReadScreen";
+import { TextEdit } from "./TextEdit";
 import "./card.css";
 
 type CardView = CheckedCard;
@@ -108,6 +110,22 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
   const [tries, setTries] = useState(0);
+  // 見せ方（11/6 作者「横一列の紙芝居 4 コマでも見られるように」）。スライド（1 コマずつ送る）と 4 コマ（横 1 列）を切り替える
+  const [layout, setLayout] = useState<"slide" | "strip">(() => {
+    try {
+      return localStorage.getItem("card-layout") === "strip" ? "strip" : "slide";
+    } catch {
+      return "slide";
+    }
+  });
+  const pickLayout = (v: "slide" | "strip") => {
+    setLayout(v);
+    try {
+      localStorage.setItem("card-layout", v);
+    } catch {
+      // 残せない端末は、開くたびにスライドから
+    }
+  };
   useEffect(() => {
     // 入ったしるし（会社のテナント）と役割のしるしを付けて読む（038）
     setErr("");
@@ -135,7 +153,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   if (!card) return <p>読み込み中…</p>;
   const b = card.body;
   return (
-    <article className="card" data-testid="card" data-card={card.id} data-status={card.status}>
+    <article className={`card${layout === "strip" ? " card-wide" : ""}`} data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
       <Ask card={card} />
       <Used tenant={tenant} card={card} />
@@ -147,7 +165,22 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           <span>危ない行為をしてよいと読める絵です。直して確かめ直すまで OK できません</span>
         </p>
       )}
-      {b.motion.kind === "keyframes" ? (
+      <TextEdit tenant={tenant} card={card} onSaved={setCard} />
+      {b.motion.kind === "keyframes" && (
+        <div className="av-seg card-layout" role="tablist" aria-label="見せ方">
+          <button role="tab" aria-selected={layout === "slide"} className={layout === "slide" ? "on" : ""} onClick={() => pickLayout("slide")} data-testid="card-layout-slide">
+            スライド（1 コマずつ）
+          </button>
+          <button role="tab" aria-selected={layout === "strip"} className={layout === "strip" ? "on" : ""} onClick={() => pickLayout("strip")} data-testid="card-layout-strip">
+            4 コマ（横 1 列）
+          </button>
+        </div>
+      )}
+      {layout === "strip" && b.motion.kind === "keyframes" ? (
+        <div className="card-strip" data-testid="card-strip">
+          <Frames motion={b.motion} />
+        </div>
+      ) : b.motion.kind === "keyframes" ? (
         // 絵の面。ここには文字を置かない（番号は下の点で示す）
         <button className="card-face" onClick={() => setOpen((o) => !o)} aria-label="絵（タップで文を出す）" data-testid="card-face" data-frame={at} data-moving={play.moving ? "1" : undefined}>
           <span dangerouslySetInnerHTML={{ __html: renderFrame(play.frame ?? frames[at].frame).svg }} />
@@ -156,8 +189,8 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
         // AI が書いた動きの HTML は、スクリプトを動かさない枠の中で見せる
         <iframe className="card-html" sandbox="" srcDoc={b.motion.html} title="動き" data-testid="card-face" />
       )}
-      {n > 0 && (
-        <nav className="card-nav">
+      {n > 0 && layout === "slide" && (
+        <nav className="card-nav" data-testid="card-nav">
           <button className="big" disabled={at === 0} onClick={() => setI(at - 1)} data-testid="card-prev" aria-label="まえのコマ">
             ←
           </button>

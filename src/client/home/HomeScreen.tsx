@@ -10,8 +10,9 @@ import { STANDING } from "../../shared/picto/skeleton";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
-import { loadTexts, Source, type Texts } from "../route/RouteScreen";
+import { loadTexts, type Texts } from "../route/RouteScreen";
 import type { SourceRef, Statement } from "../../shared/card";
+import { Original } from "./Original";
 import { ENTRY, logout, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
 
@@ -161,7 +162,7 @@ const uniqueSources = (sts: Statement[]) => [...new Map(sts.flatMap((x) => x.sou
  * カードの中身（11/6 作者「やさしい日本語・やること／やらないこと・なぜ・補足と、見ようと思えば原文も」）。
  * 原文は押したときだけ読む（資料のページの行を、前後 3 行を添えて光らせる。経路の画面と同じ見せ方）
  */
-function CardBodyView({ tenant, card }: { tenant: string; card: Card }) {
+function CardBodyView({ tenant, card, labels }: { tenant: string; card: Card; labels: Record<string, string> }) {
   const [texts, setTexts] = useState<Texts | null>(null);
   const [showSrc, setShowSrc] = useState(false);
   const b = card.body;
@@ -203,11 +204,7 @@ function CardBodyView({ tenant, card }: { tenant: string; card: Card }) {
           </button>
           {showSrc &&
             (texts ? (
-              <div data-testid="home-src">
-                {uniqueSources(sts).map((r, i) => (
-                  <Source key={i} r={r} texts={texts} />
-                ))}
-              </div>
+              <Original refs={uniqueSources(sts)} texts={texts} labels={labels} />
             ) : (
               <p>読み込み中…</p>
             ))}
@@ -217,7 +214,7 @@ function CardBodyView({ tenant, card }: { tenant: string; card: Card }) {
   );
 }
 
-function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: Card; role: string; onChanged: () => void }) {
+function CardDetail({ tenant, card, role, labels, onChanged }: { tenant: string; card: Card; role: string; labels: Record<string, string>; onChanged: () => void }) {
   const [stopping, setStopping] = useState(false);
   const [err, setErr] = useState("");
   const move = async (to: CardStatus, why?: string) => {
@@ -241,7 +238,7 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
           署名: {signer(card.signed)}（{day(card.signed.at)}）{s === "stopped" ? " ・ そのあと止めた" : ""}
         </p>
       )}
-      <CardBodyView tenant={tenant} card={card} />
+      <CardBodyView tenant={tenant} card={card} labels={labels} />
       <p className="home-meta">
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
@@ -296,11 +293,14 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
   // 監修者に見てもらう組（11/6 作者）。あればそのタブを先に開く
   const [review, setReview] = useState<string[]>([]);
   const [view, setView] = useState<"review" | "all" | null>(null);
+  // 資料の名前（11/6 作者「安全のしおりの何ページか」）。環境変数 DOC_LABELS から
+  const [labels, setLabels] = useState<Record<string, string>>({});
   const load = useCallback(() => {
-    Promise.all([req<{ cards: Card[]; review?: string[] }>(tenant, "/cards"), req<{ chats: ChatSummary[] }>(tenant, "/chats").catch(() => ({ chats: [] }))]).then(
+    Promise.all([req<{ cards: Card[]; review?: string[]; docs?: Record<string, string> }>(tenant, "/cards"), req<{ chats: ChatSummary[] }>(tenant, "/chats").catch(() => ({ chats: [] }))]).then(
       ([c, ch]) => {
         setCards([...c.cards].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)));
         setReview(c.review ?? []);
+        setLabels(c.docs ?? {});
         setView((v) => v ?? ((c.review ?? []).length ? "review" : "all"));
         setChats(ch.chats);
       },
@@ -364,7 +364,7 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
                       {c.signed && <small className="home-signer">{signer(c.signed)}</small>}
                     </span>
                   </div>
-                  <CardDetail tenant={tenant} card={c} role={role} onChanged={load} />
+                  <CardDetail tenant={tenant} card={c} role={role} labels={labels} onChanged={load} />
                 </li>
               );
             })}
@@ -393,7 +393,7 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
                     )}
                   </span>
                 </button>
-                {open === c.id && <CardDetail tenant={tenant} card={c} role={role} onChanged={load} />}
+                {open === c.id && <CardDetail tenant={tenant} card={c} role={role} labels={labels} onChanged={load} />}
               </li>
             ))}
           </ul>
