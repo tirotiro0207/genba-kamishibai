@@ -72,3 +72,14 @@
 .home-more a { text-decoration: none; }
 .trials-new { display: block; text-decoration: none; }
 .home-logout { margin-left: auto; }
+/* カードの中身（11/6 作者「やさしい日本語・決まり・なぜ・補足と、原文」）。見出しは小さく薄く、中身はふつうの大きさ */
+.home-body { margin: 0; display: grid; grid-template-columns: 11em 1fr; gap: 6px 14px; font-size: 15px; }
+.home-body dt { color: var(--muted); font-size: 13px; padding-top: 2px; }
+.home-body dd { margin: 0; }
+.home-body dd p { margin: 0 0 4px; }
+.home-body .home-src { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.home-body .home-src > div { width: 100%; }
+.home-view { margin-top: 6px; }
+.home-review > li { border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
+.home-review .home-row { cursor: default; }
+@media (max-width: 640px) { .home-body { grid-template-columns: 1fr; } .home-body dt { padding-top: 6px; } }

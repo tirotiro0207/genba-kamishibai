@@ -167,3 +167,18 @@ describe("確かめる AI の正式版と確認待ちの関門（047）", () => 
     expect(res.status).toBe(405);
   });
 });
+
+describe("監修者に見てもらう組（11/6 作者）", () => {
+  it("REVIEW_CARDS の順で、このテナントにあるカードの番号だけを一覧に添える。無ければ空", async () => {
+    const a = await newCard();
+    const b = await newCard();
+    const e = env as unknown as { REVIEW_CARDS?: string };
+    expect(((await (await call(base)).json()) as { review: string[] }).review).toEqual([]);
+    e.REVIEW_CARDS = `${b.id}, no-such-card ${a.id}`;
+    try {
+      expect(((await (await call(base)).json()) as { review: string[] }).review).toEqual([b.id, a.id]);
+    } finally {
+      delete e.REVIEW_CARDS;
+    }
+  });
+});

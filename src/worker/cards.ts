@@ -83,11 +83,15 @@ cards.get("/", async (c) => {
     .bind(tid)
     .all<{ card_id: string; actor: string; at: string }>();
   const last = new Map(signs.results.map((r) => [r.card_id, r]));
+  // 監修者に見てもらう組（11/6 作者「見てもらう 20 枚のタブ」）。環境変数 REVIEW_CARDS の順で、このテナントにあるカードだけ
+  const have = new Set(results.map((r) => r.id));
+  const review = (c.env.REVIEW_CARDS ?? "").split(/[\s,]+/).filter((id) => id && have.has(id));
   return c.json({
     cards: results.map((r) => {
       const s = last.get(r.id);
       return { ...cardView(r), signed: s ? { ...signerOf(c.env, s.actor), at: s.at } : null };
     }),
+    review,
   });
 });
 

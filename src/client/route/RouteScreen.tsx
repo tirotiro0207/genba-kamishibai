@@ -16,11 +16,11 @@ interface CardView {
 }
 
 /** 元の文: 資料はページごとの行、話した言葉は入れた文 */
-type Texts = Record<string, string[] | string>;
+export type Texts = Record<string, string[] | string>;
 const docKey = (doc: string, page: number) => `doc:${doc}:${page}`;
 const speechKey = (input: string) => `speech:${input}`;
 
-async function loadTexts(tenant: string, body: CardBody): Promise<Texts> {
+export async function loadTexts(tenant: string, body: CardBody): Promise<Texts> {
   const out: Texts = {};
   const refs = body.statements.flatMap((s) => s.sources);
   await Promise.all(
@@ -44,7 +44,7 @@ async function loadTexts(tenant: string, body: CardBody): Promise<Texts> {
 const whereOf = (r: SourceRef) => (r.kind === "doc" ? `${r.doc} ${r.page} ページ ${r.line}${r.line_end ? `〜${r.line_end}` : ""} 行` : `話した言葉 ${r.start + 1}〜${r.end} 字`);
 
 /** 1 つの元の位置。資料は前後 3 行を添えて該当の行を光らせ、話した言葉は字の範囲を光らせる */
-function Source({ r, texts }: { r: SourceRef; texts: Texts }) {
+export function Source({ r, texts }: { r: SourceRef; texts: Texts }) {
   if (r.kind === "doc") {
     const lines = texts[docKey(r.doc, r.page)];
     const end = r.line_end ?? r.line;

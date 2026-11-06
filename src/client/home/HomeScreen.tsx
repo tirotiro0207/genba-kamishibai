@@ -10,6 +10,8 @@ import { STANDING } from "../../shared/picto/skeleton";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
+import { loadTexts, Source, type Texts } from "../route/RouteScreen";
+import type { SourceRef, Statement } from "../../shared/card";
 import { ENTRY, logout, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
 
@@ -20,7 +22,7 @@ interface Card {
   created_at: string;
   updated_at: string;
   ask: string | null;
-  body: { rule: string; why?: string; frames: unknown[] };
+  body: { rule: string; why?: string; frames: unknown[]; words?: { ja: string; vi: string }; statements?: Statement[] };
   /** 最後の署名（署名したことが無ければ null） */
   signed: { role: string; slot: number; name: string; at: string } | null;
 }
@@ -152,6 +154,69 @@ function StopDialog({ card, onCancel, onStop }: { card: Card; onCancel: () => vo
 }
 
 /** 押したカードの中身と操作 */
+/** 元の文の位置を 1 つずつに（同じ位置は 1 回） */
+const uniqueSources = (sts: Statement[]) => [...new Map(sts.flatMap((x) => x.sources).map((r) => [JSON.stringify(r), r])).values()] as SourceRef[];
+
+/**
+ * カードの中身（11/6 作者「やさしい日本語・やること／やらないこと・なぜ・補足と、見ようと思えば原文も」）。
+ * 原文は押したときだけ読む（資料のページの行を、前後 3 行を添えて光らせる。経路の画面と同じ見せ方）
+ */
+function CardBodyView({ tenant, card }: { tenant: string; card: Card }) {
+  const [texts, setTexts] = useState<Texts | null>(null);
+  const [showSrc, setShowSrc] = useState(false);
+  const b = card.body;
+  const sts = b.statements ?? [];
+  const added = sts.filter((x) => x.ai);
+  const toggle = () => {
+    if (!showSrc && !texts) void loadTexts(tenant, { ...b, statements: sts } as never).then(setTexts);
+    setShowSrc(!showSrc);
+  };
+  return (
+    <dl className="home-body" data-testid={`home-body-${card.id}`}>
+      {b.words?.ja && (
+        <>
+          <dt>やさしい日本語</dt>
+          <dd data-testid="home-body-words">{b.words.ja}</dd>
+        </>
+      )}
+      <dt>決まり（やること・やらないこと）</dt>
+      <dd>{b.rule}</dd>
+      {b.why && (
+        <>
+          <dt>なぜ</dt>
+          <dd>{b.why}</dd>
+        </>
+      )}
+      {(added.length > 0 || card.ask) && (
+        <>
+          <dt>補足</dt>
+          <dd>
+            {card.ask && <p className="home-ask">監修者に確認: {card.ask}</p>}
+            {added.length > 0 && <p className="home-meta">元の文に無く、AI が書き足した文: {added.map((x) => `「${x.text}」`).join("・")}</p>}
+          </dd>
+        </>
+      )}
+      {sts.length > 0 && (
+        <dd className="home-src">
+          <button type="button" className="pick" onClick={toggle} aria-expanded={showSrc} data-testid="home-src-toggle">
+            {showSrc ? "原文を閉じる" : "原文を見る"}
+          </button>
+          {showSrc &&
+            (texts ? (
+              <div data-testid="home-src">
+                {uniqueSources(sts).map((r, i) => (
+                  <Source key={i} r={r} texts={texts} />
+                ))}
+              </div>
+            ) : (
+              <p>読み込み中…</p>
+            ))}
+        </dd>
+      )}
+    </dl>
+  );
+}
+
 function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: Card; role: string; onChanged: () => void }) {
   const [stopping, setStopping] = useState(false);
   const [err, setErr] = useState("");
@@ -176,11 +241,10 @@ function CardDetail({ tenant, card, role, onChanged }: { tenant: string; card: C
           署名: {signer(card.signed)}（{day(card.signed.at)}）{s === "stopped" ? " ・ そのあと止めた" : ""}
         </p>
       )}
-      {card.body.why && <p className="home-why">理由: {card.body.why}</p>}
+      <CardBodyView tenant={tenant} card={card} />
       <p className="home-meta">
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
-      {card.ask && <p className="home-ask">監修者に確認: {card.ask}</p>}
       {s === "signed" && <p className="home-meta">署名済みのカードも直せます。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "署名済みのカードを止められるのは監修者だけです。" : ""}</p>}
       <div className="home-actions">
         <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
@@ -229,10 +293,15 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  // 監修者に見てもらう組（11/6 作者）。あればそのタブを先に開く
+  const [review, setReview] = useState<string[]>([]);
+  const [view, setView] = useState<"review" | "all" | null>(null);
   const load = useCallback(() => {
-    Promise.all([req<{ cards: Card[] }>(tenant, "/cards"), req<{ chats: ChatSummary[] }>(tenant, "/chats").catch(() => ({ chats: [] }))]).then(
+    Promise.all([req<{ cards: Card[]; review?: string[] }>(tenant, "/cards"), req<{ chats: ChatSummary[] }>(tenant, "/chats").catch(() => ({ chats: [] }))]).then(
       ([c, ch]) => {
         setCards([...c.cards].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)));
+        setReview(c.review ?? []);
+        setView((v) => v ?? ((c.review ?? []).length ? "review" : "all"));
         setChats(ch.chats);
       },
       (e: Error) => setErr(e.message),
@@ -267,6 +336,41 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
           </ul>
         </section>
       )}
+      {review.length > 0 && (
+        <div className="av-seg home-tabs home-view" role="tablist" aria-label="カードの見方">
+          <button role="tab" aria-selected={view === "review"} className={view === "review" ? "on" : ""} onClick={() => setView("review")} data-testid="home-view-review">
+            監修者に見てもらう {review.length} 枚
+          </button>
+          <button role="tab" aria-selected={view === "all"} className={view === "all" ? "on" : ""} onClick={() => setView("all")} data-testid="home-view-all">
+            今までのカード {cards.length} 枚
+          </button>
+        </div>
+      )}
+      {view === "review" && review.length > 0 ? (
+        <section>
+          <h2>監修者に見てもらう {review.length} 枚</h2>
+          <p className="home-meta">1 枚ずつ中身を確かめ、「確かめて OK にする」から絵のカードを開いて OK にしてください。OK のあと、監修者は「署名する」が出ます。</p>
+          <ul className="home-list home-review" data-testid="home-review">
+            {review.map((id, i) => {
+              const c = cards.find((x) => x.id === id);
+              if (!c) return null;
+              return (
+                <li key={id} className="open" data-testid={`home-review-${id}`}>
+                  <div className="home-row">
+                    <span className="home-date">{i + 1}</span>
+                    <span className="home-rule">{c.body.rule}</span>
+                    <span className="home-state">
+                      <span className={`home-chip st-${c.status}`}>{STATUS_LABEL[c.status]}</span>
+                      {c.signed && <small className="home-signer">{signer(c.signed)}</small>}
+                    </span>
+                  </div>
+                  <CardDetail tenant={tenant} card={c} role={role} onChanged={load} />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
       <section>
         <h2>今までのカード（{cards.length} 枚）</h2>
         {cards.length === 0 ? (
@@ -295,6 +399,7 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
           </ul>
         )}
       </section>
+      )}
     </div>
   );
 }
