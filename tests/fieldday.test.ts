@@ -26,7 +26,7 @@ const rows = (md: string) =>
     .slice(1)
     .map((l) => l.slice(1, -1).split("|").map((x) => x.trim()));
 
-describe.skipIf(!existsSync(FILE))("現場の確認の日の段取り表（042）", () => {
+describe.skipIf(!existsSync(FILE))("【手元限定】現場の確認の日の段取り表（042）", () => {
   const sec = sections(existsSync(FILE) ? readFileSync(FILE, "utf-8") : "");
 
   it("必要な項目が全部、順番どおりに中身つきで入っている", () => {

@@ -35,7 +35,7 @@ describe("Skills の下書き（080）", () => {
     for (const s of skills) expect(copiedRuns(s.body, answers), s.name).toEqual([]);
   });
 
-  it.skipIf(!manual.length)("マニュアルの文が、15 文字続けて入っていない（手元にあるときだけ）", () => {
+  it.skipIf(!manual.length)("【手元限定】マニュアルの文が、15 文字続けて入っていない（手元にあるときだけ）", () => {
     for (const s of skills) expect(copiedRuns(s.body, manual), s.name).toEqual([]);
   });
 
