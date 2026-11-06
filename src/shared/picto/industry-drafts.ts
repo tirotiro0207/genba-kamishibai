@@ -219,12 +219,11 @@ INDUSTRY_DRAFTS.push(
 INDUSTRY_DRAFTS.sort((a, b) => a.id.localeCompare(b.id));
 
 /**
- * 会社員（11/7 作者）。事務所の 3 人。色は灰色の明るさに置き換え、小さく描いても分かる印を残す:
- * 役員＝濃いグレーの三つ揃い・明るいベスト・えんじのネクタイ（濃い灰）・胸の白いチーフ・襟のバッジ／社員＝紺の背広（ベストなし）・水色のシャツ（明るい灰）・紺のネクタイ・白紙の社員証／
- * OL・受付＝紺の上着とひざ丈のスカート・白いブラウス・水色のスカーフ（明るい灰）・白紙の名札
+ * 会社員（11/7 作者）。事務所の 3 人。参考の画像の色を灰色の明るさに置き換えた（対応は docs/decisions.md の 11/7）。
+ * 小さく描いても残す印: 役員＝暗いベスト・明るめのネクタイ（えんじ）・白いチーフ／社員＝首の紐と白い社員証／OL・受付＝明るいスカーフとスカート
  */
 INDUSTRY_DRAFTS.push({ id: "41", name: "会社員（事務所）", roles: [
-  r("役員", "lead", "none", top("suitVest", "#555", { neck: "tie", neckTone: "#333", chief: true, pin: true, pants: "#555" })),
-  r("社員", "worker", "none", top("suit", "#333", { shirt: "#ccc", neck: "tie", neckTone: "#111", tag: "idCard", pants: "#333" })),
-  r("OL・受付", "new", "none", { wear: [{ kind: "skirt", tone: "#333" }, { kind: "suit", tone: "#333" }], shirt: "#fff", neck: "scarf", neckTone: "#ccc", tag: "nameplate", sleeve: "#333", pants: "#fff" }),
+  r("役員", "lead", "none", top("suitVest", "#444", { neck: "tie", neckTone: "#777", tieWidth: "wide", chief: true, pin: true, pants: "#444" })),
+  r("社員", "worker", "none", top("businessSuit", "#333", { shirt: "#bbb", neck: "tie", neckTone: "#333", tieWidth: "slim", tag: "idCard", pants: "#333" })),
+  r("OL・受付", "new", "none", { wear: [{ kind: "skirt", tone: "#222" }, { kind: "fittedJacket", tone: "#333" }], shirt: "#eee", neck: "scarfKnot", neckTone: "#bbb", tag: "nameplate", sleeve: "#333", pants: "#fff" }),
 ] });

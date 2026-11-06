@@ -37,7 +37,7 @@ describe("職場の服と役の印（下絵）", () => {
     expect(headMarks("chef", "quarter", { leaf: true, stripes: 2 }, "#fff")).toBe("");
   });
 
-  it("会社員（11/7）: 3 人がいて、社員証と名札は白紙（中に線を描かない）。役員はチーフとバッジ、三つ揃いはベストの V を描く", () => {
+  it("会社員（11/7）: 3 人がいて、社員証と名札は白紙（中に線を描かない）。役員はチーフとバッジとベスト、社員は背広、OL・受付は腰のくびれた上着とスカートとスカーフ", () => {
     const office = INDUSTRY_DRAFTS.find((d) => d.id === "41")!;
     expect(office.roles.map((r) => r.name)).toEqual(["役員", "社員", "OL・受付"]);
     for (const view of VIEWS) {
@@ -49,8 +49,12 @@ describe("職場の服と役の印（下絵）", () => {
       const exec = outfitTorso(view, office.roles[0].outfit);
       expect(exec, view).toContain("part_suitVest");
       expect(exec, view).toContain("part_lapel");
-      if (view !== "side") expect(exec, view).toContain('fill="#999999"');
-      expect(outfitTorso(view, office.roles[2].outfit), view).toContain("part_skirt");
+      // ベストは上着より暗い V（#222）で、ボタン 4 つ
+      if (view !== "side") expect((exec.match(/r="2.5" fill="#888"/g) ?? []).length, view).toBe(4);
+      expect(outfitTorso(view, office.roles[1].outfit), view).toContain("part_businessSuit");
+      const ol = outfitTorso(view, office.roles[2].outfit);
+      for (const k of ["part_skirt", "part_fittedJacket", "part_neck"]) expect(ol, view).toContain(k);
+
     }
   });
 });
