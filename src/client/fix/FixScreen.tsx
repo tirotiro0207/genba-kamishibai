@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { boxFrom, FIX_BOX_MIN, type FixBox } from "../../shared/fix";
 import { cutFrames, type MotionJson } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
 import { req } from "../make/MakeScreen";
+import { frameSvg } from "../Safe";
 import { Slide } from "../motion/Slide";
 import { TouchEdit } from "./TouchEdit";
 import { WordsEdit } from "./WordsEdit";
@@ -78,6 +78,10 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
   // 直し方（11/6）: なぞって AI に頼むか、指で部品を動かすか、言葉でカード全体か 1 コマを直すか
   const [mode, setMode] = useState<"ask" | "touch" | "words">(initial ?? "ask");
   const [note, setNote] = useState("");
+  // URL の直し方（/fix/x/words → /fix/x/touch）だけが変わっても、同じ画面のまま直し方を合わせる
+  useEffect(() => {
+    if (initial) setMode(initial);
+  }, [initial]);
   useEffect(() => {
     req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}`)
       .then(setCard)
@@ -89,14 +93,16 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
   const b = card.body;
   if (b.motion.kind !== "keyframes") return <p className="done">この絵は枠で直せない（動きの HTML）</p>;
   const frames = cutFrames(b.motion.json);
-  const svg = renderFrame(frames[at].frame).svg;
+  // 版を戻す・言葉で直すでコマが減っても、選んでいたコマが無くならないように丸める
+  const i = Math.max(0, Math.min(at, frames.length - 1));
+  const svg = frameSvg(frames[i]?.frame);
   const ready = box && text.trim();
 
   async function send() {
     setBusy(true);
     setErr("");
     try {
-      setSent(await req<{ n: number; version: number }>(tenant, `/cards/${encodeURIComponent(cardId)}/fix`, { method: "POST", body: JSON.stringify({ frame: at, box, text: text.trim() }) }));
+      setSent(await req<{ n: number; version: number }>(tenant, `/cards/${encodeURIComponent(cardId)}/fix`, { method: "POST", body: JSON.stringify({ frame: i, box, text: text.trim() }) }));
       setStep("sent");
     } catch (e) {
       setErr((e as Error).message);
@@ -144,8 +150,8 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
 
   // 1 つ前の版に戻す（11/6）。戻すのも直しの 1 つで、④ に理由・直した人・日時が残る（記録は消さない）。
   // to: 1 は「最初の版に戻す」（11/6 作者「元の状態に戻す（デフォルトリセット）」）
-  async function undo(to?: number) {
-    if (to && !confirm("最初の版（作ったときの絵と文）に戻します。今の版は記録に残り、あとで「1 つ前の版に戻す」で戻せます。")) return;
+  async function undo(to?: number): Promise<boolean> {
+    if (to && !confirm("最初の版（作ったときの絵と文）に戻します。今の版は記録に残り、あとで「1 つ前の版に戻す」で戻せます。")) return false;
     setBusy(true);
     setErr("");
     try {
@@ -154,8 +160,10 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
       setBox(null);
       setRedone(null);
       setNote(`${to ? "最初の版" : "1 つ前の版"}の中身に戻し、版 ${out.version} にしました（直しの記録 ④ に残りました）`);
+      return true;
     } catch (e) {
       setErr((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -206,7 +214,7 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
               {frames.map((f, j) => (
                 <button
                   key={f.t}
-                  className={`pick${j === at ? " on" : ""}`}
+                  className={`pick${j === i ? " on" : ""}`}
                   onClick={() => {
                     setAt(j);
                     setBox(null);
@@ -221,7 +229,7 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
             {mode === "words" ? (
               <WordsEdit body={b} version={card.version} busy={busy} setBusy={setBusy} onSend={sendWords} />
             ) : mode === "touch" ? (
-              <TouchEdit key={`${card.version}-${at}`} body={b} at={at} busy={busy} onSave={saveTouch} />
+              <TouchEdit key={`${card.version}-${i}`} body={b} at={i} busy={busy} onSave={saveTouch} />
             ) : (
             <div className="fix-main">
               <DrawBox svg={svg} box={box} onBox={setBox} />
@@ -249,7 +257,7 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
               </div>
               <div className="fix-side">
                 <p className="done">
-                  {at + 1} コマ目・枠の中（左から {Math.round(box.x * 100)}%、上から {Math.round(box.y * 100)}%）
+                  {i + 1} コマ目・枠の中（左から {Math.round(box.x * 100)}%、上から {Math.round(box.y * 100)}%）
                 </p>
                 <blockquote className="fix-quote" data-testid="fix-quote">
                   {text.trim()}
@@ -271,7 +279,7 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
           <section className="fix-step" data-testid="fix-sent">
             <h1>直しの依頼を残しました</h1>
             <p>
-              版 {sent.version} の {at + 1} コマ目への依頼を、監査の記録 ④ 人の直し（{sent.n} 行目）に残しました。
+              版 {sent.version} の {i + 1} コマ目への依頼を、監査の記録 ④ 人の直し（{sent.n} 行目）に残しました。
             </p>
             {redone ? (
               <>
@@ -288,8 +296,8 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
                   className="big"
                   disabled={busy}
                   onClick={async () => {
-                    await undo();
-                    setStep("draw");
+                    // 戻せなかった（409 など）ときは、作り直したままの絵で枠の段に戻らない。理由は下の赤字に出る
+                    if (await undo()) setStep("draw");
                   }}
                   data-testid="fix-redo-undo"
                 >

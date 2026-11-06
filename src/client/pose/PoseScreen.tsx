@@ -6,10 +6,11 @@ import { partBoxes } from "../../shared/boxes";
 import type { CardBody } from "../../shared/card";
 import { type FigurePatch, movePart, partJson, type PropPatch, SIZE_RANGE } from "../../shared/move";
 import { frameAt, type MotionJson } from "../../shared/picto/motion";
-import { renderFrame } from "../../shared/picto/scene";
+
 import { BONE_RANGE, BONES, type Bone } from "../../shared/picto/skeleton";
 import { keyIndexAt } from "../../shared/redo";
 import { req } from "../make/MakeScreen";
+import { frameSvg } from "../Safe";
 import "./pose.css";
 
 interface CardView {
@@ -34,10 +35,9 @@ const BONE_LABEL: Record<Bone, string> = {
 
 function Slider({ id, label, value, min, max, step, onChange }: { id: string; label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
   return (
-    <label className="pose-slider">
-      <span>
-        {label} <b>{Math.round(value * 100) / 100}</b>
-      </span>
+    // 監修者には言葉とつまみだけを見せる（指で動かす画面と同じ。数字は出さない）。値は data-value に置き、試験と開発のときに読む
+    <label className="pose-slider" data-value={Math.round(value * 100) / 100}>
+      <span>{label}</span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} data-testid={`pose-${id}`} />
     </label>
   );
@@ -143,7 +143,7 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
       </nav>
       <div className="pose-main">
         <div className="pose-face" onClick={tap} data-testid="pose-face">
-          <span dangerouslySetInnerHTML={{ __html: renderFrame(frameAt(json, t)).svg }} />
+          <span dangerouslySetInnerHTML={{ __html: frameSvg(frameAt(json, t)) }} />
           {boxes
             .filter((b) => b.part === part)
             .map((b) => (
@@ -181,7 +181,8 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
                   <Slider id="size" label="大きさ" value={num.size} min={SIZE_RANGE[0]} max={SIZE_RANGE[1]} step={0.01} onChange={(v) => move({ size: v })} />
                 </>
               )}
-              <pre className="pose-json" data-testid="pose-json">
+              {/* 数字の列は画面に出さない（指で動かす画面と同じ）。値は data-value に置く。中の文字は試験が読むので、見えないまま残す */}
+              <pre className="pose-json" data-testid="pose-json" data-value={JSON.stringify(now)} hidden aria-hidden="true">
                 {JSON.stringify(now)}
               </pre>
             </section>
