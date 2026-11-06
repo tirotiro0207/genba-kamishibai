@@ -52,6 +52,19 @@ describe("言葉で直す口", () => {
     expect(keys(await bodyOf(id))).toEqual(keys(sampleCard()));
   });
 
+  it("to: 1 で、何回直したあとでも最初の版の中身に戻せる（元の状態に戻す・11/6 作者）", async () => {
+    const id = await make();
+    expect((await post(`${base}/${id}/rework`, { text: "人を全部、手を出す姿勢にして", frame: null })).status).toBe(200);
+    expect((await post(`${base}/${id}/rework`, { text: "1 コマ目は手を下ろして", frame: 0 })).status).toBe(200);
+    const res = await post(`${base}/${id}/undo`, { to: 1 });
+    expect(res.status).toBe(200);
+    const v = ((await res.json()) as { version: number }).version;
+    expect(v).toBeGreaterThanOrEqual(3);
+    expect(keys(await bodyOf(id))).toEqual(keys(sampleCard()));
+    expect((await post(`${base}/${id}/undo`, { to: v })).status).toBe(409);
+    expect((await post(`${base}/${id}/undo`, { to: 0 })).status).toBe(400);
+  });
+
   it("1 コマだけ直すと、そのコマだけが変わる", async () => {
     const id = await make();
     const before = await bodyOf(id);

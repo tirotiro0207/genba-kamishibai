@@ -142,16 +142,18 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
     return out;
   }
 
-  // 1 つ前の版に戻す（11/6）。戻すのも直しの 1 つで、④ に理由・直した人・日時が残る（記録は消さない）
-  async function undo() {
+  // 1 つ前の版に戻す（11/6）。戻すのも直しの 1 つで、④ に理由・直した人・日時が残る（記録は消さない）。
+  // to: 1 は「最初の版に戻す」（11/6 作者「元の状態に戻す（デフォルトリセット）」）
+  async function undo(to?: number) {
+    if (to && !confirm("最初の版（作ったときの絵と文）に戻します。今の版は記録に残り、あとで「1 つ前の版に戻す」で戻せます。")) return;
     setBusy(true);
     setErr("");
     try {
-      const out = await req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}/undo`, { method: "POST", body: JSON.stringify({}) });
+      const out = await req<CardView>(tenant, `/cards/${encodeURIComponent(cardId)}/undo`, { method: "POST", body: JSON.stringify(to ? { to } : {}) });
       setCard(out);
       setBox(null);
       setRedone(null);
-      setNote(`1 つ前の版の中身に戻し、版 ${out.version} にしました（直しの記録 ④ に残りました）`);
+      setNote(`${to ? "最初の版" : "1 つ前の版"}の中身に戻し、版 ${out.version} にしました（直しの記録 ④ に残りました）`);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -164,8 +166,11 @@ export function FixScreen({ tenant, cardId, initial }: { tenant: string; cardId:
       <span className="done" data-testid="fix-version">
         今は版 {card.version}
       </span>
-      <button className="pick" disabled={busy || card.version <= 1} onClick={undo} data-testid="fix-undo">
+      <button className="pick" disabled={busy || card.version <= 1} onClick={() => void undo()} data-testid="fix-undo">
         ↶ 1 つ前の版に戻す
+      </button>
+      <button className="pick" disabled={busy || card.version <= 1} onClick={() => void undo(1)} data-testid="fix-reset">
+        ⟲ 元の状態に戻す（最初の版）
       </button>
     </div>
   );

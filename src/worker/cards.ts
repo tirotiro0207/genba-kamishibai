@@ -302,7 +302,8 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, fall
 }
 
 // 元に戻す（11/6）: 1 つ前の版の中身に戻す。戻すのも直しの 1 つで、版を 1 つ上げて ④ に理由・直した人・日時を残す（記録は消さない）。
-// 続けて押すと、さらに 1 つ前へ戻る。前の版が無い・記録から組み立てられないときは断る
+// 続けて押すと、さらに 1 つ前へ戻る。前の版が無い・記録から組み立てられないときは断る。
+// to（版の番号）を付けると、その版の中身に戻す（11/6 作者「元の状態に戻す（デフォルトリセット）」は to: 1）
 cards.post("/:id/undo", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
@@ -315,7 +316,12 @@ cards.post("/:id/undo", async (c) => {
   let target: number;
   let body: CardBody;
   try {
-    target = undoTarget(r.version, rows);
+    if ((b as { to?: unknown }).to !== undefined) {
+      const to = Number((b as { to?: unknown }).to);
+      if (!Number.isInteger(to) || to < 1) return c.json({ error: "to は 1 以上の版の番号" }, 400);
+      if (to >= r.version) return c.json({ error: "今の版か、それより後の版には戻せない" }, 409);
+      target = to;
+    } else target = undoTarget(r.version, rows);
     body = bodyAt(JSON.parse(r.body) as CardBody, r.version, rows, target);
   } catch (e) {
     if (e instanceof UndoError) return c.json({ error: e.message }, 409);

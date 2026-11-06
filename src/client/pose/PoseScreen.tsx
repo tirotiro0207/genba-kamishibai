@@ -102,8 +102,38 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
     }
   };
 
+  // 元に戻す（11/6 作者「元の状態に戻す（デフォルトリセット）」）。保存していない動きを取り消すのと、最初の版に戻すの 2 つ
+  const discard = () => {
+    if (card.body.motion.kind === "keyframes") setJson(card.body.motion.json);
+    setMoved(new Set());
+  };
+  const reset = async () => {
+    if (!confirm("最初の版（作ったときの絵と文）に戻します。今の版は記録に残ります。")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await req<CardView>(tenant, `${path}/undo`, { method: "POST", body: JSON.stringify({ to: 1 }) });
+      setCard(out);
+      if (out.body.motion.kind === "keyframes") setJson(out.body.motion.json);
+      setMoved(new Set());
+      setSaved(out.version);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <article className="pose" data-testid="pose" data-version={card.version}>
+      <div className="fix-undo pose-reset">
+        <button className="pick" disabled={!moved.size || busy} onClick={discard} data-testid="pose-discard">
+          ↶ 動かしたのを取り消す
+        </button>
+        <button className="pick" disabled={busy || card.version <= 1} onClick={() => void reset()} data-testid="pose-reset">
+          ⟲ 元の状態に戻す（最初の版）
+        </button>
+      </div>
       <nav className="pose-frames" aria-label="コマ">
         {card.body.frames.map((f, j) => (
           <button key={f.t} className={`pick${j === at ? " on" : ""}`} onClick={() => setAt(j)} data-testid={`pose-frame-${j}`}>
