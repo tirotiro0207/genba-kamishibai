@@ -23,7 +23,7 @@ export interface Steps {
   /** OK した 1 つの決まりから、カードの下書き（文・動き・部品）を作る */
   make(rule: OkRule, locate: ReturnType<typeof locator>): Promise<CardBody>;
   /** 言葉の欄（やさしい日本語とベトナム語）と、出てきた現場の言葉 */
-  words(card: CardBody): Promise<{ words: { ja: string; vi: string }; terms: Term[] }>;
+  words(card: CardBody): Promise<{ words: { ja: string; vi?: string }; terms: Term[] }>;
   /** コマを PNG にする（人形の絵） */
   render(card: CardBody): Uint8Array[];
   /** 確かめる AI（正式版・047）。絵だけを順に見せる */

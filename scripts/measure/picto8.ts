@@ -64,12 +64,12 @@ async function one(card: (typeof cards)[number], way: (typeof WAYS)[number]) {
     const m = await guardedCall(deps, { purpose: "measure", label: "照合", params: matchParams(card.rule, card.why, reading) });
     const match = parse<Match>(m);
     return {
-      card: card.id, way: way.key, ok: true, frames: d.frames.length, drawUsd: usd(d.messages), drawCalls: d.messages.length, drawSec,
+      card: card.id, way: way.key, ok: true as const, frames: d.frames.length, drawUsd: usd(d.messages), drawCalls: d.messages.length, drawSec,
       verifyUsd: usd([r, m]), score: match.score, dangerous: match.dangerous, red: isRed(match), style: style.length,
       meaning: reading.meaning, reason: match.reason, json: d.json,
     };
   } catch (e) {
-    return { card: card.id, way: way.key, ok: false, error: String(e).slice(0, 300), drawSec: (Date.now() - t0) / 1000 };
+    return { card: card.id, way: way.key, ok: false as const, error: String(e).slice(0, 300), drawSec: (Date.now() - t0) / 1000 };
   }
 }
 

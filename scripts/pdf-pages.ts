@@ -52,7 +52,7 @@ async function main() {
       }
     }
     for (const [path, body, type] of files) {
-      const r = await fetch(`${base}/api/t/${tenant}/files/${path}`, { method: "PUT", headers: { ...headers, "content-type": type }, body });
+      const r = await fetch(`${base}/api/t/${tenant}/files/${path}`, { method: "PUT", headers: { ...headers, "content-type": type }, body: body as BodyInit });
       if (!r.ok) throw new Error(`${path} を入れられない: ${r.status}`);
     }
   } else {

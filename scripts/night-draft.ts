@@ -19,7 +19,7 @@ import { FileCallLog } from "../src/node/file-log";
 import { readPages } from "../src/node/night";
 import { CARD_MAX_USD, runDrafts, type Steps } from "../src/node/night-draft";
 import { imageBlock, svgToPng } from "../src/node/png";
-import { dayBudgetUsd, MemoryCallLog, sumAllUsd } from "../src/shared/claude";
+import { dayBudgetUsd, MemoryCallLog, sumAllUsd, type MessagesClient } from "../src/shared/claude";
 import { extractRules, type Rule } from "../src/shared/extract/rules";
 import { addDrawExtra } from "../src/shared/make/lessons";
 import { makeCard } from "../src/shared/make/maker";
@@ -72,7 +72,7 @@ async function main() {
   console.log(`今日の費用（手元の記録・全部の用途）${today.toFixed(2)} USD・1 日の上限 ${dayBudgetUsd()} USD（.env の API_BUDGET_USD_PER_DAY）・1 枚の上限 ${opt("--card-max-usd") ?? CARD_MAX_USD} USD`);
   if (args.includes("--estimate")) return;
 
-  const base = sub ? claudePClient() : makeClient();
+  const base: MessagesClient = sub ? claudePClient() : makeClient();
   const drawExtra = opt("--draw-extra") ? readFileSync(opt("--draw-extra")!, "utf-8").trim() : "";
   // 角度と人形の呼び出し（指示が「人形の姿勢と小物を数字で決める係」で始まるもの）にだけ、足す決まりを付ける。
   // 教訓はもう作る係に入っているので、addDrawExtra が同じ行と教訓で置き換えた古い行を省いて足す

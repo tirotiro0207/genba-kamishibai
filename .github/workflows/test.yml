@@ -3,7 +3,9 @@
 name: test
 
 on:
+  # PR のブランチで同じテストが 2 回走らないよう、push は main だけ
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -19,8 +21,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            video/package-lock.json
+      # 書き出しの PNG に帯の日本語を描くので、日本語の字形を入れる（src/node/export.ts が読む）
+      - name: 日本語の字形
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - run: npm ci
       - name: 型
         run: npx tsc
+      - name: 動画の型
+        run: npm ci --prefix video && npx tsc -p video/tsconfig.json
       - name: 単体テスト
         run: npx vitest run
+        env:
+          EXPORT_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
