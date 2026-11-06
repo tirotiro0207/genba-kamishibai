@@ -23,10 +23,13 @@ export async function hashPin(pin: string): Promise<string> {
 export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   const [salt, want] = stored.split(":");
   if (!salt || !want) return false;
-  const got = await pbkdf2(pin, unhex(salt));
-  // 長さの同じ文字列を、早く抜けずに比べる
-  let diff = got.length ^ want.length;
-  for (let i = 0; i < Math.min(got.length, want.length); i++) diff |= got.charCodeAt(i) ^ want.charCodeAt(i);
+  return sameText(await pbkdf2(pin, unhex(salt)), want);
+}
+
+/** 2 つの文字列を、違う所で早く抜けずに比べる（PIN のハッシュとしるしの HMAC の比べ方。かかる時間から中身を当てられないように） */
+export function sameText(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
@@ -47,7 +50,7 @@ export async function verifySession(secret: string, token: string, tenantId: str
   const body = token.slice(0, i);
   const [tid, exp] = [body.slice(0, body.lastIndexOf(".")), Number(body.slice(body.lastIndexOf(".") + 1))];
   if (tid !== tenantId || !Number.isFinite(exp) || exp < nowSec) return false;
-  return (await hmac(secret, body)) === token.slice(i + 1);
+  return sameText(await hmac(secret, body), token.slice(i + 1));
 }
 
 export interface TenantRow {

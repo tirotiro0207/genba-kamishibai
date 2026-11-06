@@ -15,8 +15,18 @@ import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people
 import { issue } from "./issue";
 import { queue } from "./queue";
 import { read } from "./read";
+import { clientIp, hitRateLimit, overRateLimit, PIN_RATE_LIMIT, pinKey } from "./rate-limit";
+import { BudgetExceededError } from "../shared/claude";
 
 export const app = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
+
+// 費用の上限で止まったときは、素の 500 にせず理由を返す（画面に「なぜ止まったか」を出せるように）
+app.onError((e, c) => {
+  if (e instanceof BudgetExceededError) return c.json({ error: e.message, budget: { purpose: e.purpose, which: e.which } }, 429);
+  if ("getResponse" in e && typeof e.getResponse === "function") return e.getResponse() as Response;
+  console.error(e);
+  return c.json({ error: "サーバーで止まった" }, 500);
+});
 
 app.get("/api/health", async (c) => {
   const row = await c.env.DB.prepare("SELECT count(*) AS n FROM tenants").first<{ n: number }>();
@@ -37,8 +47,14 @@ app.get("/api/handle/:handle", async (c) => {
 app.post("/api/t/:tenant/session", async (c) => {
   const t = await c.env.DB.prepare("SELECT id, kind, name, pin_hash FROM tenants WHERE id = ?").bind(c.req.param("tenant")).first<TenantRow>();
   if (!t || t.kind !== "company" || !t.pin_hash) return c.json({ error: "PIN の要らないテナント" }, 400);
+  // 総当たりの歯止め: 同じ所・同じテナントの打ち間違いが続いたら、しばらく受け付けない
+  const limitKey = pinKey(clientIp(c), t.id);
+  if (await overRateLimit(c.env.DB, limitKey, PIN_RATE_LIMIT)) return c.json({ error: "PIN の打ち間違いが続いたので、しばらく待ってから入ってください" }, 429);
   const { pin } = await c.req.json<{ pin?: string }>().catch(() => ({ pin: undefined }));
-  if (typeof pin !== "string" || !(await verifyPin(pin, t.pin_hash))) return c.json({ error: "PIN が違う" }, 401);
+  if (typeof pin !== "string" || !(await verifyPin(pin, t.pin_hash))) {
+    await hitRateLimit(c.env.DB, limitKey, PIN_RATE_LIMIT);
+    return c.json({ error: "PIN が違う" }, 401);
+  }
   if (!c.env.SESSION_SECRET) return c.json({ error: NO_SECRET }, 503);
   return c.json({ token: await signSession(c.env.SESSION_SECRET, t.id) });
 });
