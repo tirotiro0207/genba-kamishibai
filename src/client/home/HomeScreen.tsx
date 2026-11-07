@@ -26,6 +26,7 @@ function KindTags({ body }: { body: Pick<CardBody, "weight" | "shape" | "bundle"
 }
 import { characterSvg } from "../../shared/picto/character";
 import { STANDING } from "../../shared/picto/skeleton";
+import { AssetsTab } from "../assets/AssetsTab";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
@@ -470,7 +471,7 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
 
 export function HomeScreen({ tenant }: { tenant: string }) {
   const [me, setMe] = useState<{ role: string | null } | undefined>(undefined);
-  const [tab, setTab] = useState<"cards" | "character">("cards");
+  const [tab, setTab] = useState<"cards" | "character" | "assets">("cards");
   const [avatar, setAvatar] = useState<Avatar | null>(null);
   const [saved, setSaved] = useState(false);
   const check = useCallback(() => {
@@ -520,8 +521,14 @@ export function HomeScreen({ tenant }: { tenant: string }) {
         <button role="tab" aria-selected={tab === "character"} className={tab === "character" ? "on" : ""} onClick={() => { setSaved(false); setTab("character"); }} data-testid="home-tab-character">
           キャラクターの管理
         </button>
+        {/* アセット（11/7 作者）。絵の部品を見て、プロンプトと画像で直す */}
+        <button role="tab" aria-selected={tab === "assets"} className={tab === "assets" ? "on" : ""} onClick={() => setTab("assets")} data-testid="home-tab-assets">
+          アセット
+        </button>
       </div>
-      {tab === "cards" ? (
+      {tab === "assets" ? (
+        <AssetsTab tenant={tenant} role={role} />
+      ) : tab === "cards" ? (
         <>
           {/* ほかの画面（11/6 作者）。ホームから押してたどり着けるように */}
           <nav className="home-more" aria-label="ほかの画面" data-testid="home-more">

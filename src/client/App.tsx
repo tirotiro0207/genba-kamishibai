@@ -21,6 +21,7 @@ import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
 import { StudentScreen } from "./student/StudentScreen";
 import { StatsBar } from "./stats/StatsBar";
+import { loadPropOverrides } from "./assets/overrides";
 import { PIN_LOST } from "./events";
 import { ENTRY, NEWHIRE, PinGate, REVIEWERS, roleKey, STAFF, SUPERVISORS, TenantPin } from "./pin/TenantPin";
 import { ScreenGuard } from "./Safe";
@@ -108,6 +109,13 @@ function useRoute() {
 
 export function App() {
   const r = useRoute();
+  // テナントのアセットの差し替え（11/7）を、テナントに入ったときに読む。役割が無いうちは読めず、元の絵で描く。
+  // 読めなかったときは、画面を移るたびに読み直す（読めたテナントは 1 回だけ）
+  const at = r.join("/");
+  useEffect(() => {
+    if (r[0] === "t" && r[1]) void loadPropOverrides(r[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at]);
   // 何も無い URL は入口の画面（11/5 作者）。@ のあとに会社の名前を入れて進むか、ゲストで始める（#/demo）
   let body = r[0] === "" || r[0] === "login" ? <LoginScreen /> : <DemoScreen />;
   // #/demo は、公開デモの入口（093b。架空の会社だけ）

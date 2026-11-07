@@ -9,6 +9,7 @@ import { files } from "./files";
 import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
+import { assets } from "./assets";
 import { guest, guestGate } from "./guest";
 import { scoring } from "./scores";
 import { trials } from "./trials";
@@ -113,6 +114,8 @@ app.route("/api/t/:tenant/chats", chats);
 // 試しの答えの 10 段階の採点（11/7。作者と監修者）
 app.route("/api/t/:tenant/trials", scoring);
 app.route("/api/t/:tenant/trials", trials);
+// アセット（11/7）。小物の絵をプロンプトと画像で直し、テナントの部品として差し替える。役割の判定は router の中
+app.route("/api/t/:tenant/assets", assets);
 // ○× の組（093a）
 app.route("/api/t/:tenant/pairs", pairs);
 // MCP サーバー（092）。会社ごとの鍵で入り、中で上の API を作者の役で呼ぶ
