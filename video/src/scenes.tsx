@@ -1,4 +1,5 @@
 // 冒頭の 8 場面。どの場面も「冒頭からのコマ g」で描くので、場面ごとに書き出しても 1 本につないでも同じ絵になる
+// 通しの v4（full.tsx）が使うのは s7-curtain と s8-title だけ。s1〜s6 は前の版（0:00〜0:13 は今は intro.tsx）で、書き出し直せるように残す
 import React from "react";
 import { L, useLayer } from "./layers";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";

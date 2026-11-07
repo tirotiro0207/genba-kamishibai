@@ -45,6 +45,8 @@ const tj = Date.now();
 // full.mp4 を重ね直す
 const DEST = path.join(here, "..", "private", "material", process.env.VIDEO_TAG ?? "2026-11-05-通し-v4");
 const tmp = path.join(here, "out", "full", "full.mp4");
+// 新しい VIDEO_TAG で最初に流しても落ちないように、置き場を作っておく
+for (const d of [DEST, path.dirname(tmp)]) fs.mkdirSync(d, { recursive: true });
 const tc = compose(tmp);
 fs.writeFileSync(path.join(DEST, "full.mp4"), fs.readFileSync(tmp));
 // つなぎ目の前後 1 コマずつ（s-1, s, e, e+1）を 1 枚に並べる

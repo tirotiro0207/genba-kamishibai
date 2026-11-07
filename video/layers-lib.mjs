@@ -17,10 +17,47 @@ export const FRAMES = 5400;
 fs.mkdirSync(LDIR, { recursive: true });
 
 export const movOf = (id) => path.join(LDIR, `${id}.mov`);
+const FULL_SRC = path.join(here, "src", "full.tsx");
+/**
+ * 録画の使う長さ（full.tsx の CLIPS の from + dur）が、out/pub の mp4 の長さに収まるかを確かめる。
+ * 撮り直しで録画が短くなると、最後のコマが範囲の外になって黙って崩れるため。
+ * 11/7 の out/pub の録画は、使う所が終わりを 1 コマ未満はみ出す物がある（書き出しは最後のコマに寄って通る）。1 コマ未満は知らせるだけ、1 コマを超えたら止める
+ */
+export function checkClips(src = fs.readFileSync(FULL_SRC, "utf8")) {
+  const clips = [...src.matchAll(/\{ src: "([\w-]+\.mp4)", dur: ([\d.]+)(?:, from: ([\d.]+))?, slot: [\d.]+ \}/g)].map((m) => ({ file: m[1], end: +(m[3] ?? 0) + +m[2] }));
+  if (clips.length === 0) throw new Error("full.tsx の CLIPS が読めない");
+  const bad = [];
+  for (const c of clips) {
+    const file = path.join(PUB, c.file);
+    if (!fs.existsSync(file)) { bad.push(`${c.file} が無い`); continue; }
+    const len = +execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString().trim();
+    const over = c.end - len;
+    const say = `${c.file} は ${len.toFixed(3)} 秒で、使う所は ${c.end.toFixed(3)} 秒まで`;
+    if (!(over <= 1 / 30)) bad.push(`${say}（1 コマを超えてはみ出す）`);
+    else if (over > 1e-6) console.warn(`録画の長さ: ${say}（1 コマ未満はみ出す。撮り直したら dur を確かめる）`);
+  }
+  if (bad.length) throw new Error(`録画の長さが足りない。撮り直したら full.tsx の CLIPS の dur を直す: ${bad.join(" / ")}`);
+  return clips.length;
+}
+/**
+ * VIDEO_FINAL=1 のとき、仮のまま残っている所（場面の「仮」の札・版の札・括弧で書いた仮の字幕）があれば止める。
+ * 仕上げの書き出しに仮の札を焼き込まないため
+ */
+export function assertFinal(src = fs.readFileSync(FULL_SRC, "utf8")) {
+  if (process.env.VIDEO_FINAL !== "1") return;
+  const left = [
+    ...[...src.matchAll(/\{ id: "([^"]+)",[^\n]*kari: "/g)].map((m) => `仮の札: ${m[1]}`),
+    ...(src.includes("<Draft />") ? ["版の札（Draft）"] : []),
+    ...[...src.matchAll(/\[[\d.]+, [\d.]+, "（([^"]*)"\]/g)].map((m) => `仮の字幕: （${m[1]}`),
+  ];
+  if (left.length) throw new Error(`VIDEO_FINAL=1 だが、仮のまま残っている: ${left.join(" / ")}`);
+}
 export async function bundleOnce() {
+  assertFinal();
   for (const f of ["fold.mp4", "card.mp4", "danger.mp4", "queue.mp4", "route.mp4", "fix.mp4", "sign.mp4", "read.mp4"]) {
     if (!fs.existsSync(path.join(PUB, f))) throw new Error(`素材が無い: ${f}（先に node render-full.mjs --stills を 1 度流す）`);
   }
+  checkClips();
   return bundle({ entryPoint: path.join(here, "src", "index.ts"), publicDir: PUB });
 }
 /** id のレイヤーを書き出す。range を渡すと、そのコマだけ（両端を含む） */

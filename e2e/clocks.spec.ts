@@ -74,12 +74,12 @@ test("時計 2 つ: 交差の回は /summary の中央値で、項目 A・B の 
   await expect(page.getByTestId("clocks")).not.toContainText("ベトナム");
 });
 
-// 60 秒を超えたら周ごとに塗りを濃くする（11/5 作者）。待つと 400 秒かかるので、ページの時計を進めて見る。静止画は private/shots/clock-laps（git に入らない）
+// 60 秒を超えたら周ごとに塗りを濃くする（11/5 作者）。待つと 400 秒かかるので、ページの時計を進めて見る。静止画は private/shots/clock-laps/<日時>/（git に入らない。流すたびに新しい置き場にして、前の回の静止画を上書きしない）
 test("時計 2 つ: 30・90・200・400 秒で、周ごとの塗りと針の見え方と秒の形が崩れない", async ({ browser, request }) => {
   test.setTimeout(120_000);
   const { contrast, dialPaint, formatSec, LAP_FILLS } = await import("../src/shared/clock-laps");
   const { privatePath } = await import("../src/node/private-dir");
-  const out = privatePath("shots/clock-laps");
+  const out = privatePath(`shots/clock-laps/${new Date().toISOString().replace(/[:.]/g, "-")}`);
   for (const [card, text] of [[30_000, 90_000], [200_000, 400_000]]) {
     const t = await request.post("/api/t/practice/trials", { data: { participants: ["p1"], seed: `laps-${card}-${Date.now()}` } });
     expect(t.status()).toBe(201);
