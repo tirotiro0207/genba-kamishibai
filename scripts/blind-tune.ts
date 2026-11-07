@@ -247,6 +247,16 @@ async function main() {
     return;
   }
   const items = (final ? (JSON.parse(readFileSync(holdoutFile(), "utf-8")) as Item[]) : tune).filter((i) => !only || only.includes(i.no));
+  // 最後の確認のときだけ、確認用の項目にも漏れの検査を当てる。語句は出さず、数だけ出す
+  if (final) {
+    const n = leaks(prompt, items).length;
+    console.log(`確認用の項目への漏れ: ${n} 個`);
+    if (n) {
+      console.log("無効: プロンプトに確認用の正解の語句が入っている");
+      process.exitCode = 2;
+      return;
+    }
+  }
   const dir = privatePath("tune", final ? `${round}-final` : `${round}-${rep}`);
   mkdirSync(dir, { recursive: true });
   // 取り出す側も採点する側も、リポジトリの外の空のフォルダで動かす（リポジトリの指示や正解のファイルを読ませない）
