@@ -46,6 +46,18 @@ describe("試しの答えの 10 段階の採点（11/7）", () => {
     await expect(env.DB.prepare("DELETE FROM scores WHERE trial_id = ?").bind(t.id).run()).rejects.toThrow(/append only/);
   });
 
+  it("公開の置き場（練習・デモ）の採点の表には、同意の無い名前を出さない", async () => {
+    const { default: app } = await import("./index");
+    const e = { ...env, AUTHOR_NAME: "作者の名前", SUPERVISOR_1_NAME: "監修者の名前", PUBLIC_NAMES: "supervisor.1" } as typeof env;
+    const t = await answered();
+    const a = await role("author");
+    const names = async (ev: typeof env) => ((await (await app.request(`${base}/${t.id}/scoring`, json("GET", a), ev)).json()) as { names: { author: string; supervisor: string } }).names;
+    // 同意した枠（監修者 1）だけ名前が出て、作者は空欄
+    expect(await names(e)).toEqual({ author: "", supervisor: "監修者の名前" });
+    // 同意の枠が無ければ、どちらも空欄
+    expect(await names({ ...e, PUBLIC_NAMES: "" } as typeof env)).toEqual({ author: "", supervisor: "" });
+  });
+
   it("latest で答えのある新しい回を開く", async () => {
     const t = await answered();
     const b = (await (await call(`${base}/latest/scoring`, json("GET", await role("supervisor")))).json()) as { trial: { id: string } };

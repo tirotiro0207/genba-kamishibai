@@ -101,7 +101,8 @@ scoring.get("/:id/scoring", async (c) => {
   return c.json({
     trial: { id: t.id, created_at: t.created_at },
     me,
-    names: scoreNames(c.env),
+    // 会社のテナントは PIN の内側なので全部出す。公開の置き場（練習・デモ）は同意した枠の名前だけ
+    names: c.var.tenant.kind === "company" ? scoreNames(c.env) : publicScoreNames(c.env),
     items,
     responses: responses.map((r) => ({ target: `r:${r.seq}`, ...person(r.participant), item: r.item, shown: r.shown, ms: r.ms, answer: unpackAnswer(r.answer) ?? { ja: "", own: "" } })),
     cards: cards.map((x) => ({ target: `c:${x.id}`, id: x.id, pos: x.pos, rule: x.rule, motion: x.motion, words: x.words })),
