@@ -27,6 +27,8 @@ interface Finding {
 }
 const found: Finding[] = [];
 const out = privatePath("audit");
+// 結果のファイルの名前に日時を付け、前の回の結果を上書きしない（e2e/clocks.spec.ts と同じ形）
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 
 type Kind = "practice" | "demo" | "company";
 
@@ -190,7 +192,7 @@ async function sweepScreen(page: Page, label: string, hash: string) {
 
 function save() {
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, "122-sweep.json"), JSON.stringify(found, null, 1));
+  writeFileSync(join(out, `122-sweep-${stamp}.json`), JSON.stringify(found, null, 1));
 }
 
 test.use({ viewport: W });

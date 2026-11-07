@@ -13,6 +13,8 @@ const page1 = () => sharp({ create: { width: 1240, height: 1754, channels: 3, ba
 
 // FIT_PAGES に本物のページの画像を 2 つ（カンマ区切り）渡すと、その画像で確かめる（会社の資料なので手元だけ。リポジトリに入れない）
 const real = process.env.FIT_PAGES?.split(",");
+// FIT_SHOTS の静止画は、流すたびに日時つきの新しい置き場に書き、前の回を上書きしない（e2e/clocks.spec.ts と同じ形）
+const fitShots = process.env.FIT_SHOTS && `${process.env.FIT_SHOTS}/${new Date().toISOString().replace(/[:.]/g, "-")}`;
 
 async function crossTrial(request: APIRequestContext, people: string[]) {
   const ids: string[] = [];
@@ -121,7 +123,7 @@ for (const vp of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }, { 
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
         expect(await inView("self-got")).toBe(true);
       }
-      if (process.env.FIT_SHOTS) await page.screenshot({ path: `${process.env.FIT_SHOTS}/v2-${vp.width}x${vp.height}-${shown}${real ? "-real" : ""}.png` });
+      if (fitShots) await page.screenshot({ path: `${fitShots}/v2-${vp.width}x${vp.height}-${shown}${real ? "-real" : ""}.png` });
       await page.getByTestId("self-got").click();
       await page.getByTestId("self-text-ja").fill("x");
       await page.getByTestId("self-submit").click();

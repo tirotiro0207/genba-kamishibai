@@ -13,6 +13,9 @@ const FONT_FILES = [
   "C:/Windows/Fonts/meiryob.ttc",
   "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
   "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+  // Debian・Ubuntu のほかの置き場（Fedora は google-noto-cjk、Arch は noto-cjk）
+  "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc",
+  "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
 ].filter((f): f is string => !!f && existsSync(f)).slice(0, 1);
 const FONT = FONT_FILES.length ? { loadSystemFonts: false, fontFiles: FONT_FILES } : { loadSystemFonts: true };
 

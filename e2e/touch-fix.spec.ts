@@ -23,7 +23,8 @@ const boxIn = async (face: Locator) => {
 test("タブレット: 部品をタップで選び、指で動かし、2 本指で大きくして保存し、1 つ前の版に戻す", async ({ page, request }) => {
   const res = await request.post("/api/t/practice/cards", { data: { card: sampleCard() } });
   const { id } = (await res.json()) as { id: string };
-  const shots = process.env.TOUCH_SHOTS;
+  // 静止画は流すたびに日時つきの新しい置き場に書き、前の回を上書きしない（e2e/clocks.spec.ts と同じ形）
+  const shots = process.env.TOUCH_SHOTS && `${process.env.TOUCH_SHOTS}/${new Date().toISOString().replace(/[:.]/g, "-")}`;
   await page.goto(`/#/t/practice/fix/${id}`);
   await expect(page.getByTestId("fix-version")).toHaveText("今は版 1");
   await expect(page.getByTestId("fix-undo")).toBeDisabled();

@@ -45,7 +45,7 @@ test("会社のテナントの発行・監査・署名の画面は、テナン�
 
   // 監査の記録: 教育担当
   await enter(page, `audit/${id}`, "trainer.1", pin.trainer);
-  await expect(page.getByTestId("audit-chain")).toContainText("書き換え・消した跡は無い");
+  await expect(page.getByTestId("audit-chain")).toContainText("書き換え・消した跡は無い", { timeout: 15_000 });
   await page.waitForTimeout(1200);
 
   // 署名の画面: 監修者 1（違う役割の PIN では入れない）

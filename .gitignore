@@ -25,6 +25,8 @@ scratch/
 node_modules/
 dist/
 .next/
+# テストの結果の XML（CI が書く）
+test-results/
 __pycache__/
 
 # 最後の確認だけに使う 10 個（中身は入れず、ハッシュだけ入れる）

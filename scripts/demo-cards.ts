@@ -95,11 +95,12 @@ async function main() {
   for (const p of plan) {
     const t1 = Date.now();
     const card = await post<{ id: string; status: string; body: CardBody }>(`/extract/${x.id}/make`, { item: p.item, ...(p.scene ? { scene: p.scene } : {}) }, author);
-    await post(`/cards/${card.id}/status`, { to: "pending", actor: "author.1" }, author);
+    // 記録の「誰が」はサーバーが役割のしるし（x-role）から決める。本文に名前は送らない
+    await post(`/cards/${card.id}/status`, { to: "pending" }, author);
     const v = await post<{ evidence: { rate: number; band: string; dangerous: boolean } }>(`/cards/${card.id}/verify`, { frames: framePngs(card.body) }, author);
     let status = "pending";
     if (!v.evidence.dangerous) {
-      await post(`/cards/${card.id}/status`, { to: "ok", actor: "supervisor.1" }, supervisor);
+      await post(`/cards/${card.id}/status`, { to: "ok" }, supervisor);
       const { version } = await post<{ version: number }>(`/cards/${card.id}/open`, {}, supervisor);
       await post(`/cards/${card.id}/sign`, { version, mark: { kind: "stamp", png: stamp } }, supervisor);
       status = "signed";
