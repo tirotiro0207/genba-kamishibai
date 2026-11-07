@@ -6,6 +6,7 @@ import { type CardBody, type CardPart, routeOf, type SourceRef } from "../../sha
 import { cutFrames } from "../../shared/picto/motion";
 import { frameSvg } from "../Safe";
 import { req } from "../make/MakeScreen";
+import { lockedFor, useMyRole } from "../role";
 import { partBoxes } from "../../shared/boxes";
 import "./route.css";
 
@@ -222,6 +223,7 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
  * 何が起きたか・原因は、会社の資料や聞き取りから人が書く（AI に作らせない）
  */
 function AccidentForm({ tenant, card, onSaved }: { tenant: string; card: CardView; onSaved: (c: CardView) => void }) {
+  const role = useMyRole(tenant);
   const whys = card.body.statements.filter((s) => s.field === "why");
   const [open, setOpen] = useState(false);
   const [st, setSt] = useState(whys[0]?.id ?? "");
@@ -229,7 +231,8 @@ function AccidentForm({ tenant, card, onSaved }: { tenant: string; card: CardVie
   const [cause, setCause] = useState("");
   const [date, setDate] = useState("");
   const [err, setErr] = useState("");
-  if (!whys.length) return null;
+  // 署名済み・止めたカードに足せるのは監修者だけ。押せないボタンは出さない
+  if (!whys.length || lockedFor(card.status, role)) return null;
   if (!open)
     return (
       <button className="pick" onClick={() => setOpen(true)} data-testid="route-accident-open">

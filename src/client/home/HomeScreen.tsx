@@ -324,7 +324,7 @@ function CardDetail({ tenant, card, role, labels, onChanged }: { tenant: string;
             署名する
           </a>
         )}
-        {s === "stopped" && (
+        {s === "stopped" && role === "supervisor" && (
           <button className="pick" onClick={() => void move("draft")} data-testid="home-redraft">
             下書きに戻して直す
           </button>

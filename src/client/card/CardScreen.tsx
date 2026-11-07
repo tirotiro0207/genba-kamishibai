@@ -260,7 +260,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           公開デモのカードは見るだけです。確かめる AI に見せる・確認に回すのは、会社のテナントの中で行います
         </p>
       ) : (
-        <Check tenant={tenant} card={card} onChange={setCard} />
+        <Check tenant={tenant} card={card} role={role} onChange={setCard} />
       )}
       {!open && (
         <button className="card-show" onClick={() => setOpen(true)} data-testid="card-show">

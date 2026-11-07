@@ -10,6 +10,7 @@ import { frameAt, type MotionJson } from "../../shared/picto/motion";
 import { BONE_RANGE, BONES, type Bone } from "../../shared/picto/skeleton";
 import { keyIndexAt } from "../../shared/redo";
 import { req } from "../make/MakeScreen";
+import { lockedFor, useMyRole } from "../role";
 import { frameSvg } from "../Safe";
 import "./pose.css";
 
@@ -53,6 +54,7 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
   const [saved, setSaved] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const path = `/cards/${encodeURIComponent(cardId)}`;
+  const role = useMyRole(tenant);
 
   useEffect(() => {
     req<CardView>(tenant, path).then(
@@ -124,15 +126,24 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
     }
   };
 
+  // 署名済み・止めたカードを直せるのは監修者だけ。押せない保存と戻すは出さない
+  const locked = lockedFor(card.status, role);
   return (
     <article className="pose" data-testid="pose" data-version={card.version}>
+      {locked && (
+        <p className="card-note" data-testid="pose-locked-note">
+          {card.status === "signed" ? "署名済み" : "止めた"}のカードを直せるのは監修者です。ここでは見るだけです
+        </p>
+      )}
       <div className="fix-undo pose-reset">
         <button className="pick" disabled={!moved.size || busy} onClick={discard} data-testid="pose-discard">
           ↶ 動かしたのを取り消す
         </button>
-        <button className="pick" disabled={busy || card.version <= 1} onClick={() => void reset()} data-testid="pose-reset">
-          ⟲ 元の状態に戻す（最初の版）
-        </button>
+        {!locked && (
+          <button className="pick" disabled={busy || card.version <= 1} onClick={() => void reset()} data-testid="pose-reset">
+            ⟲ 元の状態に戻す（最初の版）
+          </button>
+        )}
       </div>
       <nav className="pose-frames" aria-label="コマ">
         {card.body.frames.map((f, j) => (
@@ -187,9 +198,11 @@ export function PoseScreen({ tenant, cardId }: { tenant: string; cardId: string 
               </pre>
             </section>
           )}
-          <button className="big go" disabled={!moved.size || busy} onClick={save} data-testid="pose-save">
-            {busy ? "保存しています…" : moved.size ? `動かした ${moved.size} つを保存する` : "部品を選んで動かす"}
-          </button>
+          {!locked && (
+            <button className="big go" disabled={!moved.size || busy} onClick={save} data-testid="pose-save">
+              {busy ? "保存しています…" : moved.size ? `動かした ${moved.size} つを保存する` : "部品を選んで動かす"}
+            </button>
+          )}
           {saved && (
             <p className="saved" data-testid="pose-saved">
               版 {saved} にしました。直しの記録 ④ に前後が残り、確かめる AI に見せ直すまで確認待ちです

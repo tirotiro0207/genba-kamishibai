@@ -44,9 +44,11 @@ async function toPng(svg: string): Promise<string> {
   }
 }
 
-export function Check({ tenant, card, onChange }: { tenant: string; card: CheckedCard; onChange: (c: CheckedCard) => void }) {
+/** role: 今の役割。重さと署名は監修者だけなので、ほかの役割にはボタンを出さない（サーバーも 403 で断る） */
+export function Check({ tenant, card, role, onChange }: { tenant: string; card: CheckedCard; role?: string | null; onChange: (c: CheckedCard) => void }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const supervisor = role === "supervisor";
   if (card.status === "signed" || card.status === "stopped") return null;
   const ev = card.verify ?? null;
   const path = `/cards/${encodeURIComponent(card.id)}`;
@@ -111,7 +113,12 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
           {ruleLine}
         </p>
       )}
-      {(card.status === "pending" || card.status === "ok") && (
+      {(card.status === "pending" || card.status === "ok") && !supervisor && (
+        <p className="card-note" data-testid="card-weight-note">
+          重さは監修者が決めます{weight ? `（今は「${WEIGHT_LABEL[weight]}」）` : ""}
+        </p>
+      )}
+      {(card.status === "pending" || card.status === "ok") && supervisor && (
         <fieldset className="card-weight" data-testid="card-weight" data-weight={weight ?? ""}>
           <legend>重さ（監修者が決める）{weight ? "" : "・まだ決めていない（それ以外として出る）"}</legend>
           {WEIGHTS.map((w) => (
@@ -133,6 +140,10 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
           <button className="big go" onClick={move("ok")} disabled={!ev || ev.dangerous || !!busy} data-testid="card-ok" title={!ev ? "確認待ち: 証拠が無い" : ev.dangerous ? "危険の印: 直してから確かめ直す" : ""}>
             {!ev ? "OK（確認待ちのため押せない）" : ev.dangerous ? "OK（危険の印のため押せない）" : "OK（署名へ）"}
           </button>
+        ) : card.status === "ok" && !supervisor ? (
+          <p className="card-note" data-testid="card-sign-note">
+            署名は監修者がします
+          </p>
         ) : card.status === "ok" ? (
           <a className="big go" href={`#/t/${encodeURIComponent(tenant)}/sign/${encodeURIComponent(card.id)}`} data-testid="card-to-sign">
             署名へ（監修者）
