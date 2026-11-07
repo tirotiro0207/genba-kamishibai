@@ -12,6 +12,9 @@ English | [日本語](README.ja.md)
   - Look at the signed cards one by one, open the route from a picture back to its source sentence, and make a card from a short rule of your own (the demo has a daily cap).
   - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only".
 - Company tenants are private. They open with two PINs: the tenant PIN, then the PIN of your role (author, supervisor, trainer or new hire).
+  - Inside a company there are two doors (being built, 11/7): the **maker side** (author, supervisors, trainer: cards, characters, picture parts) and the **reader side** (new hires and anyone on site), which shows signed cards only.
+  - Scoring the on-site answers: `#/t/<tenant>/score`. The author's tab is on the left, the supervisor's on the right. Each gives every answer a score from 1 to 10 and a comment, and cannot see the other's scores (append-only).
+- A guest entrance to try the maker side without a company (being built, 11/7): for now, electrical work is the only industry that can be chosen; the others are locked.
 
 ![Compass: from rules in text and in people's heads (start) to signed cards (end). Quality goes up, quantity (information) goes right](docs/img/shinro.en.svg)
 
@@ -28,10 +31,21 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 
 ## Why I built this
 
-- The author works with an electrical contractor (founded in 1923) that hires new staff from Vietnam.
+- The author works with an electrical contractor (founded in 1923) that hires new staff from abroad (at the on-site check on 2026-11-06: Vietnam, Myanmar and Cambodia, next to two Japanese new hires).
 - A rule that is misread on site can hurt someone. A picture card that a supervisor has checked and signed is safer than a machine translation nobody checked.
 - The card's words are in plain Japanese only. A supervisor signs only what they have read and agreed with, so a translation the supervisor cannot read is not put on the card.
 - Direction of the project: [docs/compass.md](docs/compass.md).
+
+## Ideas behind it
+
+From [docs/compass.md](docs/compass.md), the axis the project comes back to when in doubt:
+
+- **Change in quality: natural words become pictures.** Spoken words and manual sentences turn into pictogram cards. "Quality" means one thing: does it get through? It goes up in three ways: drawing it as a picture, a safety net that stops dangerous misreadings, and fixing the card with the voices of supervisors and new hires.
+- **Change in quantity: fold, do not cut.** A reader sees less at once, but a card holds what its source said (card ≈ source). The picture is the information folded up; unfold it and every part has a **route** back to the line it came from, so every card can return to its source.
+- **No translation.** The card's words are plain Japanese with furigana, written to the national guideline for plain Japanese (three steps: [docs/yasashii-nihongo.md](docs/yasashii-nihongo.md)). A supervisor signs only what they can read, and the same card keeps working as nationalities increase.
+- **A person signs; the server enforces it.** Claude drafts and checks. Only a supervisor's signature lets a card reach readers, and the server refuses unsigned, stopped or changed-after-signing cards.
+- **Veterans read too.** Accidents come where confidence turns into overconfidence. The same card is read at the morning meeting and posted where the work happens, as a second guard next to the screen.
+- **Kamishibai.** Cards are shown one at a time, and the screen moves like a picture pulled from a kamishibai frame.
 
 ## What it does
 
@@ -61,6 +75,7 @@ Also built:
 - Audit log: append-only, hash-chained record of each card (source → making → checking → human edits → signature), with a screen for supervisors and trainers.
 - Folding screen: shows the source pages stacking up and folding into one card with no text.
 - Answer recording app for the on-site check: timing (card vs. text), free answers, two graders, anonymized CSV export, erasing a participant who withdraws, and the trainer's forecast per card written before any answer comes in.
+- Scoring screen (11/7): the author and a supervisor score every answer from 1 to 10 with a comment, and also score each card for "how much gets through from the picture alone". Neither sees the other's scores; records are append-only. Answers in the reader's own language can get a reference Japanese translation by Claude, so the graders can read them (it is deleted with the answer if a participant withdraws).
 - Overnight sorting of a whole manual (which pages hold rules a worker must follow), with a supervisor screen to swap the answers.
 - Reader panel: 24 simulated readers (country of origin × Japanese reading level × background), each a Claude Code subagent, used to find pictures that do not get through before the real check. For the 30 rules whose answers were fixed (with a hash) before any reading, each reader saw all 30 pictures at once in a different order; two risky cards and one easy card were also read one at a time by the same 24 readers to check the score shift (no card was read the opposite way either way, so the fallback to one-at-a-time reading was not triggered). Results: [docs/readers.md](docs/readers.md).
 - MCP server: other tools can ask for cards; it can only make **unapproved drafts**.
@@ -74,6 +89,33 @@ Also built:
   - **Morning-meeting set**: describe the day's work and up to 8 matching signed cards are suggested (life-critical first); the chosen set is kept.
   - **Where it is posted**: signed cards can be recorded with the place they are posted; when a card is stopped, those sheets appear in the recall notice as "take down".
   - **Past accidents** can be added as a source for the "why".
+
+### Inside: where each step runs
+
+The app is one Cloudflare Worker (Hono) with D1 (records) and R2 (files), and a React screen built with Vite. Pictures are drawn by the app's own SVG code, not by an image model: Claude only writes numbers (joint angles, props, positions).
+
+| Step | Where in the code |
+|---|---|
+| Input (chat with attachments: PDF, Word, text, photos of paper) | `src/client/chat/`, `src/worker/chat.ts` (PDF pages → text with Claude), `src/client/make/` |
+| Extraction (rules with their source lines) | `src/shared/extract/`, `src/worker/extract.ts` |
+| Card making (text, keyframes, routes; plain-Japanese words with furigana) | `src/shared/make/maker.ts`, `words.ts`, `src/shared/ruby.ts`. The two-step script stage (`script.ts`) is off by default since 11/6 |
+| Drawing | `src/shared/picto/` (skeleton → named poses → character with outfit and hair → props → scene). New poses are derived from named ones: at least 7 joints stay fixed and up to 3 move by at most 30° |
+| Checking and safety net | `src/shared/verify/` (reads the frames only; a card passes only above the line and with no dangerous reading), the review queue `src/worker/queue.ts` |
+| Human fixes | `src/client/fix/`, `src/client/pose/`, `src/shared/rework.ts` (remakes only the boxed parts, so routes stay) |
+| Signature | `src/worker/sign.ts`, `src/client/sign/` |
+| Delivery | `src/worker/read.ts` (signed and unchanged only, no routes), `src/client/read/`, `src/worker/issue.ts` (stop, recall, who saw it) |
+| Audit | `src/shared/audit.ts`, `src/worker/audit.ts` (append-only, hash-chained) |
+| Overnight sorting and drafting | `src/node/night*.ts`, `src/node/managed-sort.ts` |
+| Other tools | `src/worker/mcp.ts` (MCP: drafts only) |
+| On-site check and scoring | `src/worker/trials.ts`, `src/worker/scores.ts`, `src/client/trial/`, `src/client/score/` |
+
+### On-site check (2026-11-06)
+
+- 14 new hires from four countries (Japan 2, Myanmar 2, Vietnam 2, Cambodia 8) took two tests on laptops: (1) time to understand two items, one shown as a card and the other as the original manual page; (2) eight cards, with half of each person's cards shown with their plain-Japanese words and half picture only (the two are counted apart; the reference lines are applied to "picture only").
+- How to count was fixed before any answer was seen, and its hash is in [docs/numbers.md](docs/numbers.md): [docs/fieldday-2026-11-06.md](docs/fieldday-2026-11-06.md).
+- Answers reached the app from 9 people (Japan 2, Myanmar 2, Vietnam 2, Cambodia 3): 18 of 28 for (1) and 48 of 112 for (2). The missing answers and why they were lost: [docs/failures.md](docs/failures.md) (section 4). Missing answers are not guessed into any number.
+- Scoring is under way: the author and a supervisor each score every answer from 1 to 10 with a comment, separately. The results go into the Numbers table only after both have scored.
+- In the afternoon, two supervisors each approved cards, and the printed cards were used in a morning-meeting setting. A veteran electrician posted them on a mock site and said the pictures make it easy to understand, the plain Japanese has everything needed with nothing left out, and that they want to use them at morning meetings. Two things to fix: bigger frames on the printout, and switchboard-type props that look like the real equipment (after the build period).
 
 Who owns the data: the edit and signature records belong to the company that signed up. The author's company only keeps them, and never uses them to draft cards for another company. Only how a picture was fixed ("this pose was read the wrong way") may go back into the shared drawing rules, with the company's text and all names removed, and only if the company chooses to allow it; the default is "no", and today every company is on "no" (there is no switch for it yet). If you run it yourself, all data stays with you. Details: [docs/consent.md](docs/consent.md).
 
@@ -229,7 +271,9 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 
 ## Not built
 
-- Results of the on-site check with new hires — **not built** (after the check day)
+- Results of the on-site check with new hires — **not built** (scoring by two graders is under way)
+- Separate maker and reader doors inside a company tenant, a guest entrance for the maker side, and a "picture parts" tab where a part can be fixed with a prompt and an attached image — **being built** (11/7)
+- A hook that re-runs the evaluation every time a shared update from another company or contributor is merged, so that the scores cannot quietly drop — **being built** (11/7)
 - The 2-minute and 3-minute videos — **not built**
 - A screen to list, edit and delete a company's own words (they are saved and mixed into the examples for the next card, but there is no screen) — **not built**
 - Skills for electrical work and labor conditions (`skills/`): drafts only, not connected to any call yet — **not built**
