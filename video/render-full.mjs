@@ -1,5 +1,5 @@
 // 3 分の通しの仮版を書き出す: 1 本の mp4、場面ごとの真ん中のコマの静止画、場面の一覧の 1 枚。
-// 冒頭も舞台もコードから描く。機能の場面は録画（runs-video）を、git の外から写して使う（英数字だけの場所に写し、Remotion の public に渡す）。
+// 冒頭も舞台もコードから描く。機能の場面は録画（既定は runs-video。撮り直した置き場は VIDEO_RUNS で渡す）を、git の外から写して使う（英数字だけの場所に写し、Remotion の public に渡す）。
 // 通しは会社の印を描かない（印はポータルの Composition だけが受け取る）。
 // 書き出すのは git の外（../private/material/2026-11-05-通し-v4/。前の版の置き場は上書きしない）。ローカルで書き出すだけで、API は使わない。
 // 1280×720 の座標で描き、1.5 倍の 1920×1080 で書き出す。
@@ -24,7 +24,7 @@ const copyOut = (name, sub = "") => fs.writeFileSync(path.join(DEST, sub, name),
 
 // 素材を写す（録画は h264 の mp4 に直して、コマを送りやすくする）
 assertFinal();
-const runs = path.join(priv, "rec", "runs-video");
+const runs = path.join(priv, "rec", process.env.VIDEO_RUNS ?? "runs-video");
 for (const dir of fs.readdirSync(runs)) {
   const key = dir.split("-")[0];
   if (!["fold", "card", "danger", "queue", "route", "fix", "sign", "read"].includes(key)) continue;

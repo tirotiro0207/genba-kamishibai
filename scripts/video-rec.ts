@@ -1,6 +1,7 @@
 // 098: 動画の転に使う場面を、命令 1 つで横長の動画用に撮り直す。絵が決まったら、これをもう一度流すだけで撮り直せる。
 // 画面と録画は 1152×648（playwright.config.ts の VIDEO=1）。つなぐときに 1280×720 へ広げる。
-// 録画は private/rec/runs-video/（git の外。流すたびに空になる）。手元の D1 を使うので、ほかの録画と口を分ける（E2E_PORT）
+// 録画は private/rec/runs-video-<年月日-時分秒>/（git の外）。Playwright は流し始めに置き場を空にするので、流すたびに新しい置き場にして前の録画を消さない。
+// 置き場の名前は E2E_RUNS で決め直せる。手元の D1 を使うので、ほかの録画と口を分ける（E2E_PORT）
 //
 //   npx tsx scripts/video-rec.ts
 import { spawnSync } from "node:child_process";
@@ -30,8 +31,13 @@ export const missingScenes = (scenes: string[], listOut: string) => {
   return scenes.filter((s) => !titles.some((t) => t.includes(s)));
 };
 
+/** 録画の置き場の名前。playwright.config.ts の日時つきの名前と同じ形（runs-video-20261107-123456） */
+export const videoRunsName = (now: Date) => `runs-video-${now.toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-")}`;
+
 function main() {
-  const env = { ...process.env, VIDEO: "1", E2E_RUNS: "runs-video", E2E_PORT: process.env.E2E_PORT ?? "5191" };
+  const runs = process.env.E2E_RUNS || videoRunsName(new Date());
+  const env = { ...process.env, VIDEO: "1", E2E_RUNS: runs, E2E_PORT: process.env.E2E_PORT ?? "5191" };
+  console.log(`録画の置き場: private/rec/${runs}/`);
   // シェルを通すと日本語と | が崩れるので、node で playwright を直に呼ぶ
   const cli = join(import.meta.dirname, "..", "node_modules", "@playwright", "test", "cli.js");
   // 撮る前に、場面の名前が全部どれかのテストに当たるかを確かめる（テストの題名を変えると、その場面だけ黙って抜けるため）
@@ -43,6 +49,7 @@ function main() {
     process.exit(1);
   }
   const r = spawnSync(process.execPath, [cli, "test", "-g", grepOf(SCENES), "--workers=1"], { env, stdio: "inherit" });
+  console.log(`録画の置き場: private/rec/${runs}/（つなぐときは video/render-full.mjs に VIDEO_RUNS=${runs} を渡す）`);
   process.exit(r.status ?? 1);
 }
 
