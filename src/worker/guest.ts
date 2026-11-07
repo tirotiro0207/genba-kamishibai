@@ -11,8 +11,8 @@ export const GUEST_OPEN_LIMIT: RateLimit = { limit: 5, windowSec: 24 * 3600 };
 export const GUEST_AI_LIMIT: RateLimit = { limit: 20, windowSec: 24 * 3600 };
 const JST_MS = 9 * 3600 * 1000;
 
-/** Claude を呼ぶ口（取り出し・チャットの返事・PDF と写真の文字・カードの作成と確かめ・直し・アセットの直し） */
-export const GUEST_AI_PATH = /^\/api\/t\/[^/]+\/(extract(\/[^/]+\/make)?|chats\/(pdf|image|[^/]+\/messages)|cards\/[^/]+\/(verify|redo|rework|fix)|assets(\/.*)?\/(fix|redraw|ask))$/;
+/** Claude を呼ぶ口（取り出し・チャットの返事・PDF と写真の文字・カードの作成と確かめ・直し・アセットの直し・採点の参考の訳） */
+export const GUEST_AI_PATH = /^\/api\/t\/[^/]+\/(extract(\/[^/]+\/make)?|chats\/(pdf|image|[^/]+\/messages)|cards\/[^/]+\/(verify|redo|rework|fix)|assets(\/.*)?\/(fix|redraw|ask)|trials\/[^/]+\/scoring\/translate)$/;
 
 export const isGuestTenant = (t: { id: string; kind: string }) => t.kind === "practice" && t.id.startsWith(GUEST_PREFIX);
 

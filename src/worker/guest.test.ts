@@ -29,4 +29,12 @@ describe("ゲストの置き場（11/7）", () => {
     for (let i = 0; i < 20; i++) expect((await pub(`/api/t/${g.tenant}/extract`, { method: "POST", body: "{}" }, ip)).status).not.toBe(429);
     expect((await pub(`/api/t/${g.tenant}/extract`, { method: "POST", body: "{}" }, ip)).status).toBe(429);
   });
+
+  it("採点の参考の訳の口も、Claude を呼ぶ口として同じ 20 回に数える", async () => {
+    const ip = "203.0.113.40";
+    const g = (await (await pub("/api/guest", { method: "POST" }, ip)).json()) as { tenant: string };
+    const path = `/api/t/${g.tenant}/trials/latest/scoring/translate`;
+    for (let i = 0; i < 20; i++) expect((await pub(path, { method: "POST", body: "{}" }, ip)).status).not.toBe(429);
+    expect((await pub(path, { method: "POST", body: "{}" }, ip)).status).toBe(429);
+  });
 });
