@@ -3,7 +3,7 @@
 // 人はドローマイライフ調の棒人間（丸い頭・1 本の体・棒の手足）で、右下から入る「描く手」が黒いマーカーで描く。色は黒の線と、赤とオレンジだけ。
 // 0:34.5 に棒人間がカードのピクトグラムの人に変わり、そのまま冒険の支度とポータル（0:36〜0:45.5）。ポータルに触れた所から体がドットにほどけて吸い込まれる。
 // 座標は 660×350 の紙（全体を窓の大きさへ広げて使う）。t は冒頭からの秒
-import React from "react";
+import React, { createContext, useContext } from "react";
 import { Easing, interpolate } from "remotion";
 import { characterSvg, type HeadwearKind } from "../../src/shared/picto/character";
 import { type Angles, POSES } from "../../src/shared/picto/poses";
@@ -367,6 +367,8 @@ const School: React.FC<{ t: number }> = ({ t }) => {
 
 /** 〈ゲーム機 0:28.5〜0:33.0〉〈ひらめき → ピクトグラム 0:33.0〜0:36.0〉〈冒険の支度とポータル 0:36.0〜0:45.5〉 */
 const SCROLLS = ["vietnamese/SKILL.md", "japanese/SKILL.md"];
+/** 台本 v6 の扉の場面は、ファイルの札（巻物）を描かない */
+export const StoryLook = createContext<{ noScrolls?: boolean }>({});
 export const PORTAL = { x: 520, y: 172, rx: 74, ry: 104 };
 /** ふちが波打った、縦長のいびつな丸（2 重の線）。k は大きさ */
 export const portalPath = (k: number, phase = 0) => {
@@ -381,6 +383,7 @@ export const portalPath = (k: number, phase = 0) => {
   );
 };
 const GameAndAdventure: React.FC<{ t: number; f: number }> = ({ t, f }) => {
+  const look = useContext(StoryLook);
   // 子ども: うつぶせ（〜33.0）→ 起き上がって座る → 0:34.5〜0:35.5 にピクトグラムの人になる
   const lying = t < 33.0;
   const morph = prog(t, 34.5, 1.0);
@@ -469,7 +472,7 @@ const GameAndAdventure: React.FC<{ t: number; f: number }> = ({ t, f }) => {
         </Dissolve>
       )}
       {/* 巻物の札と矢印 */}
-      {SCROLLS.map((s, i) => {
+      {!look.noScrolls && SCROLLS.map((s, i) => {
         const p = prog(t, 36.5 + i * 0.5, 0.35);
         if (p <= 0) return null;
         const x = interpolate(p, [0, 1], [-160, 120]);

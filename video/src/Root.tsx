@@ -9,6 +9,7 @@ import { Portal, PORTAL_FRAMES } from "./portal";
 import { DISSOLVE_TEST_FRAMES, DissolveTest } from "./parts-test";
 import { SCENE_COMPONENTS } from "./scenes";
 import { V3, V3_FRAMES, V3Layer } from "./v3";
+import { V6, V6_FRAMES } from "./v6";
 import { FPS, H, SCENES, startOf, TOTAL, W } from "./timeline";
 
 const Opening: React.FC = () => (
@@ -44,6 +45,8 @@ export const Root: React.FC = () => (
     {LAYERS.map((l) => (
       <Composition key={`v3-${l.id}`} id={`v3-${l.id}`} component={V3Layer} durationInFrames={V3_FRAMES} fps={FPS} width={W} height={H} defaultProps={{ layer: l.n }} />
     ))}
+    {/* 絵コンテ v6（11/7 夜）の通し（render-v6.mjs）。クレジットの字は書き出すときに props で渡す */}
+    <Composition id="v6" component={V6} durationInFrames={V6_FRAMES} fps={FPS} width={W} height={H} defaultProps={{ credits: [] as string[] }} />
     <Composition id="full-index" component={FullIndex} durationInFrames={1} fps={FPS} width={1990} height={720} />
     {/* 部品の試し: ドットに分解して吸い込まれる */}
     <Composition id="test-dissolve" component={DissolveTest} durationInFrames={DISSOLVE_TEST_FRAMES} fps={FPS} width={W} height={H} />

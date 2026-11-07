@@ -9,8 +9,9 @@
                  "blur": [[x, y, w, h], ...],   # ぼかす所（画面に対する割合 0〜1）
                  "keep": [x, y, w, h],          # これがあれば、ここ以外を全部ぼかす（人の顔を残さない）
                  "crop": [x, y, w, h],          # 切り抜く所（割合。16:9 に近い形で）
+                 "crop_to": [x, y],             # あれば、切り抜く所の左上を b の秒までにここへ動かす（カメラが動く映像を追う）
                  "white": [[x, y, w, h], ...] } ] }  # 白で消す所（割合）
-各場面の out の合計が、表の "_len" の秒と合わなければ止まる。
+各場面の out の合計が、表の "_len" の秒と合わなければ止まる。表に "_dir" があれば、出す先を video/out/pub/<_dir>/ にする（既定は v3）。
 """
 import json
 import os
@@ -21,7 +22,7 @@ import tempfile
 from PIL import Image, ImageDraw, ImageFilter
 
 TABLE, ROOT, REC = sys.argv[1], sys.argv[2], sys.argv[3]
-OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "pub", "v3")
+OUT_DIR = ""  # 表を読んでから決める
 W, H = 1152, 648
 BLUR = 28  # ぼかしの強さ（boxblur の半径。顔もロゴも読めない強さ）
 
@@ -51,10 +52,11 @@ def still(p: dict, tmp: str, i: int) -> str:
         keep = im.crop((k[0], k[1], k[0] + k[2], k[1] + k[3]))
         im = im.filter(ImageFilter.GaussianBlur(w / 60))
         im.paste(keep, (k[0], k[1]))
-    for r in p.get("blur", []):
-        b = px(r, w, h)
-        reg = im.crop((b[0], b[1], b[0] + b[2], b[1] + b[3])).filter(ImageFilter.GaussianBlur(w / 60))
-        im.paste(reg, (b[0], b[1]))
+    for key, rad in (("blur", w / 60), ("soft", w / 400)):  # soft は字が読めない程度に少しだけぼかす（写真だけ）
+        for r in p.get(key, []):
+            b = px(r, w, h)
+            reg = im.crop((b[0], b[1], b[0] + b[2], b[1] + b[3])).filter(ImageFilter.GaussianBlur(rad))
+            im.paste(reg, (b[0], b[1]))
     d = ImageDraw.Draw(im)
     for r in p.get("white", []):
         b = px(r, w, h)
@@ -104,7 +106,12 @@ def part(p: dict, tmp: str, i: int) -> str:
     pre = "".join(f"drawbox=x={b[0]}:y={b[1]}:w={b[2]}:h={b[3]}:color=white:t=fill," for b in (px(r, w, h) for r in p.get("white", [])))
     if "crop" in p:
         c = px(p["crop"], w, h)
-        pre += f"crop={c[2]}:{c[3]}:{c[0]}:{c[1]},"
+        if "crop_to" in p:
+            e = px([*p["crop_to"], p["crop"][2], p["crop"][3]], w, h)
+            d = p["b"] - p["a"]
+            pre += f"crop={c[2]}:{c[3]}:'{c[0]}+({e[0] - c[0]})*min(t/{d},1)':'{c[1]}+({e[1] - c[1]})*min(t/{d},1)',"
+        else:
+            pre += f"crop={c[2]}:{c[3]}:{c[0]}:{c[1]},"
     g.append(f"{cur}{pre}setpts=(PTS-STARTPTS)/{rate},{tail}[out]")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(p["a"]), "-to", str(p["b"]), "-i", src, "-an",
                     "-filter_complex", ";".join(g), "-map", "[out]", "-r", "30", "-video_track_timescale", "15360", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", out], check=True)
@@ -113,6 +120,7 @@ def part(p: dict, tmp: str, i: int) -> str:
 
 with open(TABLE, encoding="utf-8") as f:
     table = json.load(f)
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "pub", table.get("_dir", "v3"))
 os.makedirs(OUT_DIR, exist_ok=True)
 only = sys.argv[4:]  # 場面の名前を渡せば、その場面だけ作る
 for name, parts in table.items():
