@@ -5,13 +5,13 @@
 // 1280×720 の座標で描き、1.5 倍の 1920×1080 で書き出す。素材の無い場面は「仮」の札で埋める。動画・画像は書き出しのときに git の外から写して読む（render-full.mjs）
 import React from "react";
 import { AbsoluteFill, Easing, Freeze, Img, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
-import { characterSvg } from "../../src/shared/picto/character";
+import { characterSvg, headwearSvg, headwearTone } from "../../src/shared/picto/character";
 import { guideLook, guidePose } from "../../src/shared/picto/guide";
 import { INDUSTRY_DRAFTS } from "../../src/shared/picto/industry-drafts";
 import { type Angles, POSES } from "../../src/shared/picto/poses";
 import { Dissolve } from "./dissolve";
 import { Intro, INTRO_FRAMES } from "./intro";
-import { L, LayerCtx } from "./layers";
+import { L, LAYERS, LayerCtx } from "./layers";
 import { gait, mixAngles } from "./paper";
 import { BrushPaper, doorCover, doorDeg, FLOOR, FLOOR_Y, FONT_JP, FONT_PEN, FRAME, LightRings, StageFrame, StageLamps, WIN, WobbleDefs } from "./parts";
 import { SCENE_COMPONENTS } from "./scenes";
@@ -52,7 +52,8 @@ export const SEGS: Seg[] = [
   { id: "end", title: "扉が閉じて、机の上の紙芝居。めでたし", at: 174, len: 6 },
 ];
 export const FULL_FRAMES = sec(180);
-export interface FullProps { [key: string]: unknown; mark?: string }
+/** 通しは props を使わない（会社の印はポータルの Composition だけが mark で受け取る。v4 の通しは一般的な印も描かない） */
+export interface FullProps { [key: string]: unknown }
 
 // ---- 字幕（冒頭からの秒。画面の下の帯に 1 行・34 字まで。1 字ずつ出す） ----
 const CUES: [number, number, string][] = [
@@ -554,9 +555,16 @@ const Dust: React.FC<{ t: number; t0: number; x: number; n?: number }> = ({ t, t
   );
 };
 const Person: React.FC<{ svg: string; x: number; k?: number; wide?: number }> = ({ svg, x, k = 1, wide = 1 }) => <g transform={`translate(${x} ${G}) scale(${wide * k} ${k})`} dangerouslySetInnerHTML={{ __html: svg }} />;
-const craftSvg = (angles: Angles, facing: "left" | "right") => characterSvg({ angles, x: 0, groundY: 0, height: CRH, facing, view: "quarter", role: "worker", headwear: "helmet", outfit: CRAFT_OUTFIT }).split('fill="#999"').join('fill="#f2c230"');
+/** ヘルメットの部分だけを tone の色に塗り替える（ベストや手袋の同じ灰色は巻き込まない）。picto の形や色が変わって見つからなければ止める */
+const HELMET = headwearSvg("helmet", "quarter", "worker");
+const HELMET_FILL = `fill="${headwearTone("helmet", "worker")}"`;
+const tintHelmet = (svg: string, tone: string) => {
+  if (!svg.includes(HELMET)) throw new Error("ヘルメットの絵が見つからない（picto のかぶり物の形が変わった）");
+  return svg.split(HELMET).join(HELMET.split(HELMET_FILL).join(`fill="${tone}"`));
+};
+const craftSvg = (angles: Angles, facing: "left" | "right") => tintHelmet(characterSvg({ angles, x: 0, groundY: 0, height: CRH, facing, view: "quarter", role: "worker", headwear: "helmet", outfit: CRAFT_OUTFIT }), "#f2c230");
 const senpaiSvg = (angles: Angles) => characterSvg({ angles, x: 0, groundY: 0, height: HH, facing: "right", view: "quarter", role: "new", headwear: "helmet", outfit: YOUNG_OUTFIT });
-const supSvg = (angles: Angles) => characterSvg({ angles, x: 0, groundY: 0, height: HH, facing: "right", view: "quarter", role: "worker", headwear: "helmet", outfit: SUP_OUTFIT }).split('fill="#999"').join('fill="#fff"');
+const supSvg = (angles: Angles) => tintHelmet(characterSvg({ angles, x: 0, groundY: 0, height: HH, facing: "right", view: "quarter", role: "worker", headwear: "helmet", outfit: SUP_OUTFIT }), "#fff");
 
 /** 吹き出し（1920×1080 で y 720〜800・字は 24 px。出るとき 0.3 秒で 10 px 下りる） */
 const BUBBLES: [number, number, "hero" | "guide" | "craft" | "senpai", string][] = [
@@ -957,7 +965,19 @@ export const FullLayer: React.FC<{ layer: number }> = ({ layer }) => (
     </AbsoluteFill>
   </LayerCtx.Provider>
 );
-export const Full: React.FC<FullProps> = () => <FullLayer layer={0} />;
+/**
+ * 全部を 1 度に描く。L1〜L5 を 1 つずつ描いて下から重ねる（layer 0 で 1 度に描くと、L1 の扇の光や L2 の輪・ライトが紙の上に来て、
+ * レイヤーを重ねた full.mp4 と見え方が変わるため。静止画と一覧を full.mp4 と同じ見え方にする）
+ */
+export const Full: React.FC<FullProps> = () => (
+  <AbsoluteFill>
+    {LAYERS.map((l) => (
+      <AbsoluteFill key={l.id}>
+        <FullLayer layer={l.n} />
+      </AbsoluteFill>
+    ))}
+  </AbsoluteFill>
+);
 
 /** 場面の一覧（場面ごとの真ん中のコマの静止画を並べ、時刻と場面名を付ける。静止画は render-full.mjs が先に書き出す） */
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}${s % 1 ? `.${Math.round((s % 1) * 10)}` : ""}`;

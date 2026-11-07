@@ -1,4 +1,5 @@
-// 冒頭の 8 場面を 1 つずつの Composition にし、つないだ 1 本（opening）も置く
+// 冒頭の 8 場面を 1 つずつの Composition にし、つないだ 1 本（opening）も置く。
+// s1〜s6・opening・origami-steps は前の版（origami.tsx の Folding で折る方式）の残り。通しの v4（full）は使わない（0:00〜0:13 は intro.tsx、s7・s8 だけを使う）。前の版を書き出し直せるように残す
 import React from "react";
 import { Composition, Sequence } from "remotion";
 import { Full, FULL_FRAMES, FullIndex, FullLayer } from "./full";
@@ -29,9 +30,9 @@ export const Root: React.FC = () => (
     ))}
     {/* 折り紙の手順の一覧（静止画 1 枚。全部の手順の折り終えた形） */}
     <Composition id="origami-steps" component={StepsSheet} durationInFrames={1} fps={FPS} width={1800} height={940} />
-    {/* ポータル（0:35〜0:39）。印は書き出しのときに inputProps の mark で渡す（無ければ一般的な印） */}
+    {/* ポータルの単体（前の版。render.mjs）。印は書き出しのときに inputProps の mark で渡す（無ければ一般的な印）。通しの v4 のポータルは full.tsx の中で描き、印を描かない */}
     <Composition id="p1-portal" component={Portal} durationInFrames={PORTAL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{}} />
-    {/* 3 分の通しの仮版（枠と床の舞台は 0:13〜3:00 で変えない）と、その場面の一覧（静止画 1 枚）。印は inputProps の mark */}
+    {/* 3 分の通しの仮版（枠と床の舞台は 0:13〜3:00 で変えない）と、その場面の一覧（静止画 1 枚）。props は使わない */}
     <Composition id="full" component={Full} durationInFrames={FULL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{}} />
     {/* 通しの動画のレイヤー（L1〜L5）。L2〜L5 は透明のまま書き出す（render-layers.mjs） */}
     {LAYERS.map((l) => (
