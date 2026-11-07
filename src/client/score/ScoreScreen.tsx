@@ -129,12 +129,14 @@ function Answer({ a, ja }: { a: Fields; ja?: string }) {
 function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [scores, setScores] = useState(sheet.scores);
+  useEffect(() => setScores(sheet.scores), [sheet.scores]);
   const save = (target: string) => async (score: number | null, comment: string) => {
     await call(tenant, `trials/${sheet.trial.id}/scores`, { method: "POST", body: JSON.stringify({ target, score, comment }) });
-    sheet.scores[target] = { score, comment };
+    setScores((x) => ({ ...x, [target]: { score, comment } }));
   };
   const targets = [...sheet.responses.map((r) => r.target), ...sheet.cards.map((c) => c.target), ...sheet.pictures.map((p) => p.target)];
-  const done = targets.filter((t) => sheet.scores[t]?.score).length;
+  const done = targets.filter((t) => scores[t]?.score).length;
   const untranslated = [...sheet.responses, ...sheet.pictures].filter((r) => needsJa(r.answer) && !sheet.ja[r.target]).length;
   const translate = async () => {
     setBusy(true);
@@ -174,10 +176,14 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
       <section className="score-part">
         <h2>① 分かるまでの時間（2 項目）</h2>
         <p className="score-lead">1 人が 2 項目を、片方はカード、もう片方は元のページ（文）で見て、意味を書いた答えです</p>
-        {sheet.items.map((it) => (
+        {(["A", "B"] as const)
+          .map((item) => sheet.items.find((x) => x.item === item) ?? { item, rule: "", motion: null, words: "" })
+          .filter((it) => it.motion || sheet.responses.some((r) => r.item === it.item))
+          .map((it) => (
           <div key={it.item} className="score-item" data-testid={`score-item-${it.item}`}>
             <h3>
-              {ITEM_LABEL[it.item]}: {it.rule}
+              {ITEM_LABEL[it.item]}
+              {it.rule && <>: {it.rule}</>}
             </h3>
             {it.motion && (
               <div className="score-card">
@@ -195,13 +201,13 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
                       {r.ms !== null && <> ・ {Math.round(r.ms / 1000)} 秒</>}
                     </p>
                     <Answer a={r.answer} ja={sheet.ja[r.target]} />
-                    <ScoreBox label="どれだけ伝わっているか" value={sheet.scores[r.target]} onSave={save(r.target)} />
+                    <ScoreBox label="どれだけ伝わっているか" value={scores[r.target]} onSave={save(r.target)} />
                   </li>
                 ))}
             </ol>
           </div>
         ))}
-        {!sheet.items.length && <p className="score-none">① で見せたものが結ばれていません</p>}
+        {!sheet.responses.length && <p className="score-none">① の答えはまだありません</p>}
       </section>
 
       <section className="score-part">
@@ -216,7 +222,7 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
               <Frames motion={c.motion} />
               {c.words && <p className="score-words">文つきの人に見せた文: {c.words}</p>}
             </div>
-            <ScoreBox label="このカードは、絵だけでどれだけ伝わるか" value={sheet.scores[c.target]} onSave={save(c.target)} />
+            <ScoreBox label="このカードは、絵だけでどれだけ伝わるか" value={scores[c.target]} onSave={save(c.target)} />
             <ol className="score-list">
               {sheet.pictures
                 .filter((p) => p.card_id === c.id)
@@ -226,7 +232,7 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
                       {who(p.participant, p.group)}・<b className={p.words ? "tag words" : "tag pic"}>{p.words ? "文つき" : "絵だけ"}</b>
                     </p>
                     <Answer a={p.answer} ja={sheet.ja[p.target]} />
-                    <ScoreBox label="どれだけ伝わっているか" value={sheet.scores[p.target]} onSave={save(p.target)} />
+                    <ScoreBox label="どれだけ伝わっているか" value={scores[p.target]} onSave={save(p.target)} />
                   </li>
                 ))}
             </ol>

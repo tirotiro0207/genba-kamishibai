@@ -60,6 +60,9 @@ function List({ tenant }: { tenant: string }) {
       <a className="big go trials-new" href={go(tenant, "trial/new")} data-testid="trials-new">
         ＋ 新しい回を作る
       </a>
+      <a className="big trials-new" href={go(tenant, "score")} data-testid="trials-score">
+        答えを採点する（10 段階・作者と監修者）
+      </a>
       {rows.length === 0 ? (
         <p className="done">まだ回がありません</p>
       ) : (
