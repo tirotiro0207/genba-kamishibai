@@ -4,8 +4,11 @@
 // 期間（最初と最後のコミットの日時）も出す。README の数（106・107）と付録（103）はこの出力から取る。
 // 使い方: npx tsx scripts/count.ts（表を標準出力に出す）
 //         npx tsx scripts/count.ts --appendix（docs/appendix-build-effort.md の「数えた表」を、いまの数で貼り替える）
+//         npx tsx scripts/count.ts --failures（docs/failures.md の欄 1 を監修者の記入欄から埋める。CSV は FAILURES_REVIEW_CSV で変えられる）
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { privatePath } from "../src/node/private-dir";
+import { type Entry, readForm, summarize } from "../src/shared/sample20";
 
 const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf-8" });
 
@@ -83,6 +86,38 @@ export function readFailures(md: string): FailureRow[] {
 }
 
 export const NOT_YET = "まだ（072・083 のあと）";
+
+/** 欄 1 の数を、監修者の記入欄（064 の CSV）から出す。記入が 1 枚も無ければ空（数を推し量って入れない） */
+export function reviewValues(entries: Entry[]): Record<string, number> {
+  if (!entries.length) return {};
+  const x = summarize(entries);
+  return {
+    見た枚数: x.n,
+    書き足しのあったカード: entries.filter((e) => e.added > 0).length,
+    書き足しの合計: x.added,
+    作り直しで止まったカード: x.outcomes.作り直し,
+    漏れの合計: x.missed,
+  };
+}
+
+/** failures.md の表の「項目 | 数」の数の欄を書き込む。渡さなかった項目は今の値のまま */
+export function fillFailures(md: string, values: Record<string, number>): string {
+  return md
+    .split("\n")
+    .map((line) => {
+      const m = /^\| ([^|]+?) \| *([^|]*?) *\|$/.exec(line);
+      if (!m || !(m[1] in values)) return line;
+      return `| ${m[1]} | ${values[m[1]]} |`;
+    })
+    .join("\n");
+}
+
+/** 099 の枠: 文を添えたカードの枚数を、デモ画面・failures.md・README の 3 か所で比べる。どれかが空（null）なら「まだ」 */
+export function captionAgreement(n: { demo: number | null; failures: number | null; readme: number | null }): "一致" | "食い違い" | "まだ" {
+  const v = [n.demo, n.failures, n.readme];
+  if (v.some((x) => x === null)) return "まだ";
+  return v.every((x) => x === v[0]) ? "一致" : "食い違い";
+}
 
 export const CODE_EXT = /\.(ts|tsx|css|sql|mjs|js|py)$/;
 const lineCount = (s: string) => (s ? s.split(/\r?\n/).length - (s.endsWith("\n") ? 1 : 0) : 0);
@@ -202,6 +237,15 @@ function main() {
   const at = (l: string) => ({ at: l.split("\t")[0], hash: l.split("\t")[1] });
   const failures = files.includes("docs/failures.md") ? readFailures(readFileSync("docs/failures.md", "utf-8")) : undefined;
   const c = { ...count(log, readFileSync("docs/plan.md", "utf-8"), files, (f) => readFileSync(f, "utf-8")), span: { first: at(ends.at(-1)!), last: at(ends[0]) }, failures };
+  if (process.argv.includes("--failures")) {
+    // 欄 1 は監修者の記入欄から。欄 2・3 は 083（文を添えたカード）と 072（本物の集計）のあとに足す
+    const csv = process.env.FAILURES_REVIEW_CSV || privatePath("review64", "company-20261106-noon.csv");
+    const form = existsSync(csv) ? readForm(readFileSync(csv, "utf-8")) : { entries: [], blank: 0 };
+    const values = reviewValues(form.entries);
+    const f = "docs/failures.md";
+    writeFileSync(f, fillFailures(readFileSync(f, "utf-8").replace(/\r\n/g, "\n"), values));
+    return void process.stdout.write(`欄 1: 記入済み ${form.entries.length} 枚・まだ ${form.blank} 枚。書き込んだ項目 ${Object.keys(values).length}\n`);
+  }
   const table = toMarkdown(c);
   if (!process.argv.includes("--appendix")) return void process.stdout.write(table);
   const f = "docs/appendix-build-effort.md";

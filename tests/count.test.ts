@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { count, countBuildLog, countTests, fillAppendix, NOT_YET, readFailures, taskIds, toMarkdown } from "../scripts/count";
+import { captionAgreement, count, countBuildLog, countTests, fillAppendix, fillFailures, NOT_YET, readFailures, reviewValues, taskIds, toMarkdown } from "../scripts/count";
 
 // 113: 数えるスクリプトの前半。097: 行数と制作記録の行
 const log = ["2026-11-03\taaaa111\t005: 角度", "2026-11-03\tbbbb222\t表を直す", "2026-11-02\tcccc333\t費用を測る", "2026-11-02\t002・002b: 共通部品", "2026-11-02\t001: 骨組み"].join("\n");
@@ -82,5 +82,33 @@ describe("数えるスクリプト（113）", () => {
     expect(out).toContain("| 1. 書き足し | 見た枚数 | 20 |");
     expect(out).toContain(`| 2. 文を添えたカード | 文を添えたカード | ${NOT_YET} |`);
     expect(toMarkdown(count("", "", [], () => ""))).not.toContain("うまくいかなかったこと");
+  });
+});
+
+describe("failures.md を数で埋める（097）と、文を添えたカードの枚数の一致の枠（099）", () => {
+  const e = (outcome: "そのまま署名" | "直して署名" | "作り直し", added: number, missed: number) => ({ card: "x", outcome, added, missed, seconds: 60, note: "" });
+
+  it("監修者の記入から欄 1 の 5 つの数を出す。記入が無ければ何も出さない", () => {
+    expect(reviewValues([])).toEqual({});
+    expect(reviewValues([e("そのまま署名", 0, 0), e("直して署名", 2, 1), e("作り直し", 1, 3)])).toEqual({
+      見た枚数: 3,
+      書き足しのあったカード: 2,
+      書き足しの合計: 3,
+      作り直しで止まったカード: 1,
+      漏れの合計: 4,
+    });
+  });
+
+  it("渡した項目の数の欄だけを書き換え、ほかの行はそのまま", () => {
+    const md = ["## 1. x", "", "| 項目 | 数 |", "|---|---|", "| 見た枚数 |  |", "| 漏れの合計 | 5 |", "| 文を添えたカード |  |", "", "- 箇条 | ではない"].join("\n");
+    const out = fillFailures(md, { 見た枚数: 20, 漏れの合計: 7 });
+    expect(out.split("\n")).toEqual(["## 1. x", "", "| 項目 | 数 |", "|---|---|", "| 見た枚数 | 20 |", "| 漏れの合計 | 7 |", "| 文を添えたカード |  |", "", "- 箇条 | ではない"]);
+    expect(fillFailures(md, {})).toBe(md);
+  });
+
+  it("3 か所の枚数がそろえば一致、違えば食い違い、どれかが空ならまだ", () => {
+    expect(captionAgreement({ demo: 3, failures: 3, readme: 3 })).toBe("一致");
+    expect(captionAgreement({ demo: 3, failures: 2, readme: 3 })).toBe("食い違い");
+    expect(captionAgreement({ demo: null, failures: 3, readme: 3 })).toBe("まだ");
   });
 });
