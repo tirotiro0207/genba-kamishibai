@@ -2,7 +2,7 @@
 // どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { type Context, Hono } from "hono";
-import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, WEIGHTS, type CardWeight } from "../shared/card";
+import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, validateSource, WEIGHTS, type CardWeight } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
@@ -395,6 +395,22 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 }
+
+// 過去の事故の出どころ（11/7 既定・作者の確認待ち）: 「なぜ」の文に、過去の事故と原因（何が・原因・いつ）を出どころとして足す。
+// 中身が変わるので直しの 1 つ（saveEdit）として版を上げ、④ に残す（署名済みなら署名が外れて回収の知らせが出る）
+cards.post("/:id/accident", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await c.req.json<{ statement?: unknown; title?: unknown; cause?: unknown; date?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const body = JSON.parse(r.body) as CardBody;
+  const st = body.statements.find((s) => s.id === b.statement);
+  if (!st || st.field !== "why") return c.json({ error: "statement は「なぜ」の文の番号" }, 400);
+  const src = { kind: "accident" as const, title: typeof b.title === "string" ? b.title.trim() : "", cause: typeof b.cause === "string" ? b.cause.trim() : "", ...(typeof b.date === "string" && b.date.trim() ? { date: b.date.trim() } : {}) };
+  const errs = validateSource(src);
+  if (errs.length) return c.json({ error: "過去の事故の書き方が足りない", errors: errs }, 400);
+  const card: CardBody = { ...body, statements: body.statements.map((s) => (s.id === st.id ? { ...s, sources: [...s.sources, src] } : s)) };
+  return saveEdit(c, r, card, `「なぜ」の出どころに過去の事故を足した: ${src.title}`.slice(0, 1000));
+});
 
 // 元に戻す（11/6）: 1 つ前の版の中身に戻す。戻すのも直しの 1 つで、版を 1 つ上げて ④ に理由・直した人・日時を残す（記録は消さない）。
 // 続けて押すと、さらに 1 つ前へ戻る。前の版が無い・記録から組み立てられないときは断る。

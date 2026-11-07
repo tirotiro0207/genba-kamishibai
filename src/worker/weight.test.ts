@@ -57,6 +57,17 @@ describe("重さと束", () => {
     expect(read.cards.find((c) => c.id === id)).toMatchObject({ weight: "life", shape: "story" });
   });
 
+  it("過去の事故を「なぜ」の出どころに足すと、版が上がって経路に残る。守ることの文や書き方の足りない事故は断る", async () => {
+    const { id } = (await (await send("POST", base, { card: sampleCard() })).json()) as { id: string };
+    expect((await send("POST", `${base}/${id}/accident`, { statement: "s1", title: "x", cause: "y" })).status).toBe(400);
+    expect((await send("POST", `${base}/${id}/accident`, { statement: "s2", title: "盤で感電した", cause: "" })).status).toBe(400);
+    const res = await send("POST", `${base}/${id}/accident`, { statement: "s2", title: "盤で感電した", cause: "検電をしなかった", date: "2024-06" });
+    expect(res.status).toBe(200);
+    const v = (await res.json()) as { version: number; body: { statements: { id: string; sources: { kind: string }[] }[] } };
+    expect(v.version).toBe(2);
+    expect(v.body.statements.find((s) => s.id === "s2")!.sources.at(-1)).toEqual({ kind: "accident", title: "盤で感電した", cause: "検電をしなかった", date: "2024-06" });
+  });
+
   it("重さの無い署名済みは normal として出し、束は順番どおりに並ぶ", async () => {
     const sup = await as("supervisor");
     const ids: string[] = [];

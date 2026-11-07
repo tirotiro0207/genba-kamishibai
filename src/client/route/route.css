@@ -17,3 +17,6 @@
 .route-speech { line-height: 1.7; white-space: pre-wrap; }
 .route-speech mark { background: color-mix(in srgb, var(--fg) 14%, transparent); color: inherit; outline: 2px solid var(--fg); border-radius: 3px; }
 @media (max-width: 760px) { .route-main { grid-template-columns: 1fr; } }
+/* 過去の事故の出どころ（11/7） */
+.route-accident { display: grid; gap: 8px; margin-top: 16px; padding: 12px; border: 1px solid #ccc; border-radius: 8px; }
+.route-accident label { display: grid; gap: 4px; }

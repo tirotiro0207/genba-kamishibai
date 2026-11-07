@@ -212,6 +212,77 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
           )}
         </section>
       </div>
+      <AccidentForm tenant={tenant} card={card} onSaved={setCard} />
     </article>
+  );
+}
+
+/**
+ * 過去の事故と原因を「なぜ」の出どころに足す（11/7 既定）。足すと版が上がり、下書きに戻る（直しの 1 つ）。
+ * 何が起きたか・原因は、会社の資料や聞き取りから人が書く（AI に作らせない）
+ */
+function AccidentForm({ tenant, card, onSaved }: { tenant: string; card: CardView; onSaved: (c: CardView) => void }) {
+  const whys = card.body.statements.filter((s) => s.field === "why");
+  const [open, setOpen] = useState(false);
+  const [st, setSt] = useState(whys[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [cause, setCause] = useState("");
+  const [date, setDate] = useState("");
+  const [err, setErr] = useState("");
+  if (!whys.length) return null;
+  if (!open)
+    return (
+      <button className="pick" onClick={() => setOpen(true)} data-testid="route-accident-open">
+        過去の事故を「なぜ」の出どころに足す
+      </button>
+    );
+  const save = async () => {
+    setErr("");
+    try {
+      await req(tenant, `/cards/${encodeURIComponent(card.id)}/accident`, { method: "POST", body: JSON.stringify({ statement: st, title, cause, date: date || undefined }) });
+      onSaved(await req<CardView>(tenant, `/cards/${encodeURIComponent(card.id)}`));
+      setOpen(false);
+      setTitle("");
+      setCause("");
+      setDate("");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <section className="route-accident" data-testid="route-accident-form">
+      <h2>過去の事故を「なぜ」の出どころに足す</h2>
+      <label>
+        どの「なぜ」か
+        <select value={st} onChange={(e) => setSt(e.target.value)}>
+          {whys.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.text}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        何が起きたか
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} data-testid="route-accident-title" />
+      </label>
+      <label>
+        原因
+        <input value={cause} onChange={(e) => setCause(e.target.value)} maxLength={500} data-testid="route-accident-cause" />
+      </label>
+      <label>
+        いつ（分かれば。2024・2024-06・2024-06-01 の形）
+        <input value={date} onChange={(e) => setDate(e.target.value)} maxLength={10} />
+      </label>
+      <div className="issue-actions">
+        <button className="pick on" disabled={!title.trim() || !cause.trim()} onClick={save} data-testid="route-accident-save">
+          足す（版が上がり、下書きに戻る）
+        </button>
+        <button className="pick" onClick={() => setOpen(false)}>
+          やめる
+        </button>
+      </div>
+      {err && <p className="err">{err}</p>}
+    </section>
   );
 }
