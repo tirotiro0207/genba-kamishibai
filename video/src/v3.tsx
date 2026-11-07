@@ -33,13 +33,13 @@ export const SEGS3: Seg3[] = [
   { id: "title", title: "題（紙の人が枠を引く・紫・題）", at: 26, len: 7 },
   { id: "story", title: "むかしむかし（5 つの出来事）", at: 33, len: 9 },
   { id: "adventure", title: "冒険（ポータル・放り出し・TOMO）", at: 42, len: 7 },
-  { id: "hearing", title: "ヒアリング", at: 49, len: 11, kari: "検電の場面の紙を足す（今は v4 のヒアリング）" },
-  { id: "why", title: "なぜ（朝礼・約 257 万人）", at: 60, len: 5 },
+  { id: "hearing", title: "ヒアリング（監修者の話・検電のカードを見る）", at: 49, len: 11 },
+  { id: "why", title: "なぜ（教室で外国籍の新入社員に説明する）", at: 60, len: 5 },
   { id: "demo", title: "デモ（事例シートを入れる）", at: 65, len: 40 },
-  { id: "notrans", title: "翻訳を入れない", at: 105, len: 5, kari: "この機能の画面が入る" },
-  { id: "trial", title: "試したところ", at: 110, len: 20, kari: "割合は 071・072 のあと" },
-  { id: "voice", title: "現場の声", at: 130, len: 22, kari: "ベテランの 3 つの声 → その日のうちに機能に" },
-  { id: "spread", title: "広がり（事例の分類 → カード → ほかの業種）", at: 152, len: 13, kari: "事例の分類の紙を足す（作った枚数だけ）" },
+  { id: "notrans", title: "翻訳を入れない（やさしい日本語とふりがなの画面）", at: 105, len: 5 },
+  { id: "trial", title: "試したところ（教室・朝礼・監修者）", at: 110, len: 20 },
+  { id: "voice", title: "現場の声（壁に貼ったカード）", at: 130, len: 22 },
+  { id: "spread", title: "広がり（ほかの業種の姿）", at: 152, len: 13 },
   { id: "end", title: "結び（作業服・新人・街の明かり・題）", at: 165, len: 15 },
 ];
 export const V3_FRAMES = 180 * FPS;
@@ -58,7 +58,7 @@ export const MAP: [number, number, number, number][] = [
   [105, 110, 111, 116],
   [110, 130, 116, 140],
   [130, 152, 140, 165],
-  [152, 165, 165, 174], // 粒にほどけて業種のカード
+  [152, 165, 166, 174], // 業種の姿（v4 の 2:45〜2:46 の仮の紙がほどける所は使わない）
 ];
 export const oldAt = (t: number): number | null => {
   for (const [a, b, c, d] of MAP) if (t >= a && t < b) return c + ((t - a) / (b - a)) * (d - c);
@@ -82,12 +82,17 @@ const CUES3: [number, number, string][] = [
   [50.0, 54.5, "事故は、自信と過信の際で起きる"],
   [55.0, 59.5, "1 動作 1 確認"],
   [60.0, 65.0, "現場に外国籍の子が増えてきています"],
-  [65.5, 79.0, "この紙を入れると"],
-  [79.5, 92.0, "絵だけで伝わるかを、別の AI が確かめる"],
-  [92.5, 104.5, "人が直して署名したものだけが届く"],
-  [105.0, 110.0, "（翻訳を入れない理由が入る）"],
-  [110.0, 130.0, "（試したところ: 割合は 071・072 のあと）"],
-  [130.0, 152.0, "（現場の声: ベテランの 3 つの声）"],
+  [65.5, 74.8, "この紙を入れると"],
+  [75.0, 78.6, "絵だけで伝わるかを、別の AI が確かめる"],
+  [78.8, 91.0, "AI が、逆の読み方を見つけた"],
+  [91.2, 98.3, "人が直して、もう一度確かめた"],
+  [98.5, 104.6, "人が直して署名したものだけが届く"],
+  [105.0, 110.0, "訳さない。絵と、ふりがなの付いたやさしい日本語で伝える"],
+  [110.3, 120.8, "新入社員 9 人で試した"],
+  [121.0, 129.6, "監修者が、カードを承認した"],
+  [130.3, 137.0, "ベテランの職人に、壁に貼って使ってもらった"],
+  [137.2, 144.2, "「絵があって分かりやすい」「朝礼で使いたい」"],
+  [144.4, 151.6, "「やさしい日本語に、抜け漏れが無い」"],
   [154.0, 164.0, "同じ仕組みで、ほかの事故も、ほかの業種も"],
   [166.5, 172.0, "電気工事士は、街の明かりを守っている。その人たちを、紙芝居で守る"],
   [172.5, 178.5, "事故を、1 件でも減らすために"],
@@ -100,22 +105,17 @@ const Subtitle3: React.FC<{ t: number }> = ({ t }) => {
   const rate = Math.max(22, text.length / ((b - a) * 0.55));
   const n = Math.min(text.length, Math.floor((t - a) * rate) + 1);
   const o = 1 - prog(t, b - 0.25, 0.25);
+  // 冒頭（事故の写真と事例シート）は、画面の下 3 分の 1 の真ん中に 2 倍の大きさで出す（写真の重さに負けないように）
+  const big = a < 26;
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, opacity: o }}>
-      <text x={W / 2} y={SUB_Y} textAnchor="middle" fontFamily={FONT_PEN} fontSize={20} fontWeight={700} fill="#fffaf0" stroke="#241c45" strokeWidth={5} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
+      <text x={W / 2} y={big ? 610 : SUB_Y} textAnchor="middle" fontFamily={FONT_PEN} fontSize={big ? 40 : 20} fontWeight={700} fill="#fffaf0" stroke="#241c45" strokeWidth={big ? 9 : 5} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
         <tspan>{text.slice(0, n)}</tspan>
         <tspan fill="none" stroke="none">{text.slice(n)}</tspan>
       </text>
     </svg>
   );
 };
-const Kari3: React.FC<{ text: string }> = ({ text }) => (
-  <div style={{ position: "absolute", left: 16, top: 14, maxWidth: 260, display: "flex", alignItems: "flex-start", gap: 8, background: "#fff7d6", border: "3px solid #c0392b", borderRadius: 10, padding: "6px 10px", fontFamily: FONT_JP, fontSize: 15, fontWeight: 700, color: "#8e1f16", lineHeight: 1.3 }}>
-    <span style={{ background: "#c0392b", color: "#fff", borderRadius: 6, padding: "0 7px", flexShrink: 0 }}>仮</span>
-    {text}
-  </div>
-);
-const Draft3: React.FC = () => <div style={{ position: "absolute", right: 16, top: 12, fontFamily: FONT_JP, fontSize: 15, color: "#fff", background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "2px 10px" }}>通しの仮版 v3 台本</div>;
 
 // ---- 事故の写真（0:00〜0:10・1 枚 2 秒）: 黒地に、暗い所からゆっくり明るく・ゆるく寄る ----
 const PHOTOS: { src: string; a: number; b: number }[] = [
@@ -253,16 +253,24 @@ const Ending: React.FC<{ t: number; layer: number }> = ({ t, layer }) => {
   );
 };
 
-// ---- デモ（1:05〜1:45）: 事例シートを入れた手元の録画を、紙芝居の窓に流す ----
-const DEMO_AT = 65;
-const DEMO_LEN = 40;
-const Demo: React.FC<{ t: number }> = ({ t }) => {
-  // 終わりは薄くしない（薄くすると下の v4 の録画が透ける）。次の場面へは v4 の紙めくりで移る
-  const o = prog(t, DEMO_AT, 0.4);
+// ---- 窓に流す映像（git の外の素材を video/cut-demo-v3.py・prep-footage-v3.py で out/pub/v3/ に切ったもの） ----
+// デモ（1:05〜1:45）は事例シートを入れた手元の録画。ほかは現場の映像（顔・名札・ロゴ・PC のシールはぼかし済み）
+const CLIPS3: { src: string; at: number; len: number }[] = [
+  { src: "hearing.mp4", at: 49, len: 11 },
+  { src: "why.mp4", at: 60, len: 5 },
+  { src: "demo.mp4", at: 65, len: 40 },
+  { src: "notrans.mp4", at: 106, len: 4 }, // 105〜106 は v4 の見出しの紙「翻訳を入れない」
+  { src: "trial.mp4", at: 110, len: 20 },
+  { src: "voice.mp4", at: 130, len: 22 },
+];
+const Clip: React.FC<{ t: number; src: string; at: number; len: number }> = ({ t, src, at, len }) => {
+  // 終わりは薄くしない（薄くすると下の v4 の紙が透ける）。前の映像から続くときは入りも薄くしない
+  const joined = CLIPS3.some((c) => Math.abs(c.at + c.len - at) < 1e-6);
+  const o = joined ? 1 : prog(t, at, 0.4);
   return (
-    <Sequence from={DEMO_AT * FPS} durationInFrames={DEMO_LEN * FPS} layout="none">
+    <Sequence from={Math.round(at * FPS)} durationInFrames={Math.round(len * FPS)} layout="none">
       <div style={{ position: "absolute", left: WIN.x, top: WIN.y, width: WIN.w, height: WIN.h, background: "#fff", opacity: o, overflow: "hidden" }}>
-        <OffthreadVideo src={staticFile("v3/demo.mp4")} muted style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        <OffthreadVideo src={staticFile(`v3/${src}`)} muted style={{ width: "100%", height: "100%", objectFit: "contain" }} />
       </div>
     </Sequence>
   );
@@ -276,7 +284,6 @@ export const V3Layer: React.FC<{ layer: number }> = ({ layer }) => {
   // 2:45 からの結びは v4 の 2:54 の絵の上に重ね、v4 の絵は薄くして消す
   const oldT = old ?? (t >= 165 ? 174 : null);
   const oldO = t >= 165 ? 1 - prog(t, 165, 0.8) : 1;
-  const seg = [...SEGS3].reverse().find((s) => t >= s.at) ?? SEGS3[0];
   return (
     <LayerCtx.Provider value={layer}>
       <AbsoluteFill style={{ background: layer === 1 ? "#000" : undefined }}>
@@ -306,12 +313,10 @@ export const V3Layer: React.FC<{ layer: number }> = ({ layer }) => {
             </SheetLook.Provider>
           </AbsoluteFill>
         )}
-        {layer === 4 && <Demo t={t} />}
+        {layer === 4 && CLIPS3.map((c) => <Clip key={c.src} t={t} {...c} />)}
         <Ending t={t} layer={layer} />
         <L n={5}>
           <Subtitle3 t={t} />
-          {seg.kari && <Kari3 text={seg.kari} />}
-          <Draft3 />
         </L>
       </AbsoluteFill>
     </LayerCtx.Provider>

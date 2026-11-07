@@ -15,7 +15,8 @@ out.mkdir(parents=True, exist_ok=True)
 
 
 def find(prefix: str) -> Path:
-    hits = sorted(p for p in src.iterdir() if p.name.startswith(prefix))
+    # 作った写し（ぼかし済み）は元の素材に数えない
+    hits = sorted(p for p in src.iterdir() if p.name.startswith(prefix) and "ぼかし済み" not in p.name)
     if len(hits) != 1:
         raise SystemExit(f"{prefix} で始まる素材が 1 つではない: {[p.name for p in hits]}")
     return hits[0]
@@ -51,7 +52,7 @@ if sheet.size != (2558, 3175):
 # 黄色の説明の字（「右肘付近から流出」と星）は元のまま残す（ぼかした所に重なるため、黄色の画素だけ元に戻す）
 for box in [(815, 1192, 1240, 1252)]:
     orig = sheet.crop(box)
-    part = orig.filter(ImageFilter.GaussianBlur(9))
+    part = orig.filter(ImageFilter.GaussianBlur(16))
     yellow = orig.point(lambda v: v).convert("RGB")
     mask = Image.new("L", orig.size, 0)
     mask.putdata([255 if r > 190 and g > 190 and b < 120 else 0 for r, g, b in list(yellow.get_flattened_data())])

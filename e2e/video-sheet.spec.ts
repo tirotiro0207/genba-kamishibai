@@ -333,3 +333,88 @@ test("確かめ直して署名し、新入社員の画面に届く", async ({ pa
   await reader.waitForTimeout(5000);
   await ctx.close();
 });
+
+// 5 段目: 署名済みの版では重さを変えられない（cards.ts の /:id/weight）。版 3 の確かめる AI が「道具が検電器だと確信できない」と言ったのを
+// 言葉で直して版を上げ → 確かめ直す（503 なら 3 回まで）→ 確認に回す → 監修者が「命に関わる」を選ぶ（赤い縁）→ OK → 署名 → 新入社員の画面。
+// VIDEO_SHEET_LIFE に直しの言葉を渡したときだけ流す（本物の API。1 回 約 0.25 USD）
+const LIFE = process.env.VIDEO_SHEET_LIFE ?? "";
+
+test("言葉で直して確かめ直し、命に関わるを選んで署名し、新入社員の画面に赤い縁で届く", async ({ page, browser }) => {
+  test.skip(!LIFE || !existsSync(OUT), "VIDEO_SHEET_LIFE と、1 段目の private/rec/video-sheet.json が要る");
+  const pins = JSON.parse(readFileSync(PINS, "utf-8")) as { pin: string; people: Record<string, string> };
+  const id = (JSON.parse(readFileSync(OUT, "utf-8")) as { main: string }).main;
+  const pause = (ms = 1500) => page.waitForTimeout(ms);
+  await page.goto(`/#/t/${TENANT}/make`);
+  await page.getByTestId("tenant-pin-input").fill(pins.pin);
+  await page.getByTestId("tenant-pin-enter").click();
+  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
+  await page.getByTestId("tenant-pin-role").click();
+  await page.getByTestId("tenant-pin-role-supervisor.1").click();
+  await page.getByTestId("tenant-pin-input").fill(pins.people.supervisor1);
+  await page.getByTestId("tenant-pin-enter").click();
+  await expect(page.getByTestId("make-input")).toBeVisible();
+
+  await page.goto(`/#/t/${TENANT}/fix/${id}`);
+  await page.getByTestId("fix-mode-words").click();
+  await page.getByTestId("words-scope-all").click();
+  await page.getByTestId("words-text").pressSequentially(LIFE, { delay: 35 });
+  await pause(800);
+  await page.getByTestId("words-send").click();
+  await expect(page.getByTestId("words-done")).toBeVisible({ timeout: 5 * 60_000 });
+  await pause(2500);
+  await page.goto(`/#/t/${TENANT}/card/${id}`);
+  await expect(page.getByTestId("card")).toBeVisible();
+  let got = false;
+  for (let k = 0; k < 3 && !got; k++) {
+    await page.getByTestId("card-verify").click();
+    got = await page.getByTestId("card-check").and(page.locator("[data-evidence='1']")).waitFor({ timeout: 4 * 60_000 }).then(() => true, () => false);
+    if (!got) await pause(20_000);
+  }
+  expect(got, "確かめる AI の証拠が 3 回とも出ない").toBe(true);
+  await pause(3000);
+  const band = await page.getByTestId("card-rate-band").getAttribute("data-band").catch(() => null);
+  const rate = await page.getByTestId("card-rate").textContent().catch(() => null);
+  if (await page.getByTestId("card-to-pending").isVisible()) {
+    await page.getByTestId("card-to-pending").click();
+    await pause(1000);
+  }
+  const dangerous = ((await page.getByTestId("card-ok").getAttribute("title")) ?? "").includes("危険");
+  writeFileSync(OUT.replace(".json", "-5.json"), JSON.stringify({ id, words: LIFE, band, rate, dangerous }, null, 2));
+  expect(band === "green" && !dangerous, `緑にならない: ${band} ${rate} 危険 ${dangerous}`).toBe(true);
+
+  // 重さを選ぶ（監修者だけに出る）
+  await page.getByTestId("card-weight").scrollIntoViewIfNeeded();
+  await pause(1500);
+  await page.getByTestId("card-weight-life").click();
+  await expect(page.getByTestId("card-weight")).toHaveAttribute("data-weight", "life");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await pause(3500);
+  await page.screenshot({ path: test.info().outputPath("life.png"), fullPage: true });
+  await page.getByTestId("card-ok").scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("card-ok")).toBeEnabled({ timeout: 10_000 });
+  await page.getByTestId("card-ok").click();
+  await pause(1500);
+  await page.getByTestId("card-to-sign").click();
+  await expect(page.getByTestId("sign")).toBeVisible();
+  if (await page.getByTestId("sign-kind-stamp").isVisible().catch(() => false)) await page.getByTestId("sign-kind-stamp").click();
+  await pause(1000);
+  await page.getByTestId("sign-press").click();
+  await pause(1000);
+  await page.getByTestId("sign-submit").click();
+  await expect(page.getByTestId("sign-done")).toBeVisible();
+  await pause(2500);
+
+  const ctx = await browser.newContext({ viewport: { width: 1152, height: 648 }, recordVideo: { dir: test.info().outputPath("read"), size: { width: 1152, height: 648 } }, baseURL: test.info().project.use.baseURL });
+  const reader = await ctx.newPage();
+  await reader.goto(`/#/t/${TENANT}/read`);
+  await reader.getByTestId("tenant-pin-input").fill(pins.pin);
+  await reader.getByTestId("tenant-pin-enter").click();
+  await expect(reader.getByTestId("tenant-pin")).toHaveAttribute("data-step", "student");
+  await reader.getByTestId("tenant-pin-input").fill(pins.people.newhire1);
+  await reader.getByTestId("tenant-pin-enter").click();
+  const mine = reader.locator(`[data-testid='read-card'][data-card='${id}']`);
+  await expect(mine).toHaveAttribute("data-weight", "life");
+  await mine.scrollIntoViewIfNeeded();
+  await reader.waitForTimeout(6000);
+  await ctx.close();
+});

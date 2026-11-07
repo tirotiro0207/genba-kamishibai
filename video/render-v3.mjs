@@ -29,7 +29,7 @@ if (process.env.VIDEO_FINAL === "1") {
   ];
   if (left.length) throw new Error(`VIDEO_FINAL=1 だが、仮のまま残っている: ${left.join(" / ")}`);
 }
-for (const f of ["v3/a1.jpg", "v3/a2.jpg", "v3/a3.jpg", "v3/a5.jpg", "v3/a6.jpg", "v3/sheet.png", "v3/fold.png", "v3/demo.mp4"]) {
+for (const f of ["v3/a1.jpg", "v3/a2.jpg", "v3/a3.jpg", "v3/a5.jpg", "v3/a6.jpg", "v3/sheet.png", "v3/fold.png", "v3/demo.mp4", "v3/hearing.mp4", "v3/why.mp4", "v3/notrans.mp4", "v3/trial.mp4", "v3/voice.mp4"]) {
   if (!fs.existsSync(path.join(PUB, f))) throw new Error(`素材が無い: out/pub/${f}（先に python video/prep-v3.py <素材の置き場>）`);
 }
 for (const d of [TMP, path.join(DEST, "scenes")]) fs.mkdirSync(d, { recursive: true });
