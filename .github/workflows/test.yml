@@ -37,6 +37,16 @@ jobs:
         run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=test-results/vitest-junit.xml
         env:
           EXPORT_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
+      # 手元だけで流すテストを飛ばした数を、要約に 1 行で出す（飛ばしが増えても緑のまま気づけない、を防ぐ）
+      - name: 飛ばした数を要約に出す
+        if: ${{ !cancelled() }}
+        run: |
+          f=test-results/vitest-junit.xml
+          if [ -f "$f" ]; then
+            n=$(grep -o '<skipped' "$f" | wc -l)
+            t=$(grep -o '<testcase ' "$f" | wc -l)
+            echo "単体テスト: 全 ${t} 件のうち飛ばした ${n} 件" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: テストの結果を残す
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
