@@ -4,11 +4,11 @@ import { Hono } from "hono";
 import { guardedCall } from "../shared/claude";
 import { parseRules, rulesParams } from "../shared/extract/rules";
 import { exemplarText } from "../shared/exemplars";
-import { type Locate, makeCard, type OkRule, SCENE_TEXT, type Scene } from "../shared/make/maker";
+import { bundleFor, type Locate, makeCard, type OkRule, SCENE_TEXT, type Scene } from "../shared/make/maker";
 import { makeWords } from "../shared/make/words";
 import { D1CallLog } from "./api-log";
 import { addTerms, cardView, createCard, readAsk } from "./cards";
-import { claudeClient } from "./claude-client";
+import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
 import { gatherExemplars, recordExemplars } from "./exemplars";
 import type { PeopleVars } from "./people";
@@ -59,7 +59,7 @@ export async function runExtraction(env: Env, tenantId: string, raw: string, sou
   if (!validSource(source, text.split("\n").length)) throw new ExtractError("source が文の行の数と合わない", 400);
   const client = claudeClient(env);
   if (!client) throw new ExtractError("Claude の鍵が無い", 503);
-  const msg = await guardedCall({ client, log: new D1CallLog(env.DB) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
+  const msg = await guardedCall({ client, log: new D1CallLog(env.DB), dayBudgetUsd: dayBudget(env) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
   const rules = parseRules(msg, text).map((r) => ({
     ...r,
     where: whereIs(source, r.from.line),
@@ -106,11 +106,11 @@ extract.post("/:id/ok", async (c) => {
   return c.json({ ok: [...items].sort((a, b) => a - b) }, 201);
 });
 
-// 正式な流れの作成（034a）。OK した 1 項目から、3〜4 コマの未承認の下書きを 1 枚作る
+// 正式な流れの作成（034a）。OK した 1 項目から、3〜4 コマ（原則なら 1 コマ）の未承認の下書きを 1 枚作る
 extract.post("/:id/make", async (c) => {
   const x = await getExtraction(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!x) return c.json({ error: "無い" }, 404);
-  const b = await c.req.json<{ item?: unknown; scene?: unknown; ask?: unknown }>().catch(() => ({}) as { item?: unknown; scene?: unknown; ask?: unknown });
+  const b = await c.req.json<{ item?: unknown; scene?: unknown; ask?: unknown; shape?: unknown }>().catch(() => ({}) as { item?: unknown; scene?: unknown; ask?: unknown; shape?: unknown });
   const { item, scene } = b;
   if (!Number.isInteger(item) || !x.ok.includes(item as number)) return c.json({ error: "OK した項目の番号ではない" }, 400);
   // 「監修者に確認」の印（039）: 言い換えた・元の文に対応が無い、などの理由を作る人が付ける
@@ -118,16 +118,20 @@ extract.post("/:id/make", async (c) => {
   if (ask === null) return c.json({ error: "ask は文字" }, 400);
   // ○× の組の片側として作るとき（093a）。good か bad のほかは断る
   if (scene !== undefined && !(typeof scene === "string" && scene in SCENE_TEXT)) return c.json({ error: "scene は good か bad" }, 400);
+  // 原則の 1 コマ（11/7 既定）: shape が principle なら 1 枚の絵のカードにする
+  if (b.shape !== undefined && b.shape !== "principle" && b.shape !== "story") return c.json({ error: "shape は principle か story" }, 400);
   const client = claudeClient(c.env);
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const rule = x.rules[item as number] as OkRule;
-  const deps = { client, log: new D1CallLog(c.env.DB) };
+  const deps = { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) };
   // 手本（086）: 同じ会社・同じカテゴリの直近の直し・署名済みのカード・会社の言葉。ほかの会社のものは集めない
   const ex = await gatherExemplars(c.env.DB, c.var.tenant.id, rule.text);
-  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined, exemplarText(ex));
+  const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined, exemplarText(ex), b.shape === "principle" ? { shape: "principle" } : {});
+  // 点検表の 1 項目なら、同じ表の項目と 1 つの束にする（11/7 既定。束の順番・枚数・親の見出しは本文に入る）
+  const bundle = bundleFor(x.rules as OkRule[], item as number, x.id);
   // 言葉の欄（036）: やさしい日本語とベトナム語。出てきた現場の言葉は用語表に積む
   const words = await makeWords(deps, "app", made.card);
-  const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words }, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)], ask);
+  const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words, ...(bundle ? { bundle } : {}) }, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)], ask);
   await addTerms(c.env.DB, c.var.tenant.id, row.id, words.terms);
   await recordExemplars(c.env.DB, c.var.tenant.id, row.id, ex);
   return c.json(cardView(row), 201);

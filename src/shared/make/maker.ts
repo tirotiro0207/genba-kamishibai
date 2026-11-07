@@ -3,8 +3,10 @@
 // 絵は直接描かせない。印の 3〜4 か所がコマになる。経路の無い部品があれば、その中身を渡して 1 回だけ書き直させる。
 // 脚本の段（script.ts・11/5）は既定では呼ばない（11/6 作者の判断で前の作り方に戻した）。options の script: true で呼べる。
 // 絵を描く係には、作者の直しの教訓（lessons.ts）を既定で足す。
+// 点検表は 1 項目 1 枚（11/7 既定）: 取り出しで項目ごとに分けた決まり（step と parent つき）は、その 1 項目を確かめて ✓ を付ける 1 枚にする。
+// 原則の 1 コマ（11/7 既定）: options の shape が principle なら、1 枚の絵（angles の口）をキーフレーム 1 つ・印 1 つで書かせる。
 import type Anthropic from "@anthropic-ai/sdk";
-import type { CardBody, CardScript, SourceRef, Statement } from "../card";
+import type { CardBody, CardBundle, CardScript, CardShape, SourceRef, Statement } from "../card";
 import { LESSONS } from "./lessons";
 import { scriptText, writeScript } from "./script";
 import { validateCard } from "../card";
@@ -24,6 +26,29 @@ export interface OkRule {
   reasons: { text: string; from: From; stated: boolean }[];
   checklist: boolean;
   reworded: boolean;
+  /** 点検表の項目の順番（1 から）。点検表の 1 項目でなければ無いか null（11/7） */
+  step?: number | null;
+  /** 点検表の親の見出し（どの点検表の項目か）。点検表の 1 項目でなければ無いか null（11/7） */
+  parent?: string | null;
+}
+
+/** 点検表の 1 項目として取り出した決まりか（step と parent がある） */
+export const isChecklistItem = (r: Pick<OkRule, "checklist" | "step" | "parent">) => r.checklist && Number.isInteger(r.step) && (r.step as number) >= 1 && typeof r.parent === "string" && !!r.parent.trim();
+
+/**
+ * 点検表の 1 項目の束（11/7）。同じ取り出しの中で親の見出しが同じ項目を 1 つの束にし、順番は step の順に 1 から数え直す。
+ * id は取り出しの番号と親の見出しから作る（同じ取り出し・同じ親なら同じ束）。点検表の 1 項目でなければ null
+ */
+export function bundleFor(rules: OkRule[], item: number, extractionId: string): CardBundle | null {
+  const r = rules[item];
+  if (!r || !isChecklistItem(r)) return null;
+  const parent = r.parent!.trim();
+  const sibs = rules
+    .map((x, i) => ({ x, i }))
+    .filter(({ x }) => isChecklistItem(x) && x.parent!.trim() === parent)
+    .sort((a, b) => (a.x.step as number) - (b.x.step as number) || a.i - b.i);
+  const order = sibs.findIndex((s) => s.i === item) + 1;
+  return { id: `${extractionId}:${parent}`.slice(0, 80), order, total: sibs.length, parent };
 }
 
 /** 元の文の行の番号を、カードの元の位置にする（033 の入れたもの） */
@@ -65,16 +90,31 @@ export interface MakerOptions {
   script?: boolean;
   /** 作者の直しの教訓（lessons.ts）を絵を描く係に足す。既定は true。教訓の無い版と比べる測りのときだけ false にする */
   lessons?: boolean;
+  /** principle なら原則の 1 コマ（11/7）。既定は story（3〜4 コマ） */
+  shape?: CardShape;
+}
+
+/** 原則の 1 コマの書かせ方（11/7）。1 枚の絵の口（angles）と同じ考えで、キーフレームを 1 つだけにする */
+export const PRINCIPLE_TEXT = `この決まりは原則（いつも守る心がまえ）の 1 コマのカード。コマに分けず、1 枚の絵だけで原則が一目で伝わる構図にする。
+キーフレームは 1 つだけ（t は 0、mark は true）。そこが 1 枚の絵になる。`;
+
+/** 点検表の書かせ方。1 項目の決まりは 1 枚に 1 項目（11/7）。項目に分けていない古い取り出しは前の書き方のまま */
+export function checklistText(rule: OkRule): string {
+  if (!rule.checklist) return "";
+  if (isChecklistItem(rule))
+    return `この決まりは点検表「${rule.parent!.trim()}」の ${rule.step} 番目の 1 項目。表の全部の項目を並べない。この 1 項目を確かめて、確かめた印 ✓（check_mark か、吹き出しの ✓）を付ける動きにする。\n`;
+  return "この決まりは点検表・チェックリストの型。表の中身は描かない。手元のアップで、チェックリスト（checklist）に 1 つずつ ✓（check_mark）を付けていく動きにする。\n";
 }
 
 /** examples は同じ会社・同じカテゴリの手本の文（086・exemplarText）。無ければ空。script は先に書かせた脚本（11/5・脚本ありのときだけ） */
 export function makerParams(rule: OkRule, statements: Statement[], fix?: string, feedback?: string, scene?: Scene, examples?: string, script?: CardScript, opts: MakerOptions = {}): Anthropic.MessageCreateParamsNonStreaming {
   const why = statements.filter((s) => s.field === "why").map((s) => s.text).join("。");
-  const base = drawParams(MAKER_MODEL, "motion", rule.kind === "dont" ? `${rule.text}（してはいけないこと）` : rule.text, why || undefined);
+  const principle = opts.shape === "principle";
+  const base = drawParams(MAKER_MODEL, principle ? "angles" : "motion", rule.kind === "dont" ? `${rule.text}（してはいけないこと）` : rule.text, why || undefined);
   const lines = statements.map((s) => `${s.id}（${s.field === "rule" ? "守ること" : "なぜ"}）: ${s.text}`).join("\n");
   const system = `${base.system}
 ${scene ? `${SCENE_TEXT[scene]}
-` : ""}${rule.checklist ? "この決まりは点検表・チェックリストの型。表の中身は描かない。手元のアップで、チェックリスト（checklist）に 1 つずつ ✓（check_mark）を付けていく動きにする。\n" : ""}
+` : ""}${principle ? `${PRINCIPLE_TEXT}\n` : ""}${checklistText(rule)}
 あわせて、部品ごとの経路を parts に書いてください。キーフレームの figures と props の 1 つずつ（type と、最初のキーフレームでの番号 index）について、
 どのカードの文（statement に s1 などの番号）から描いたかと、なぜそう描いたか（reason。短く）を書く。経路の無い部品は置かない。
 ${why ? "" : "元の文に理由が無いので、新入社員に伝える理由を why に 1 文で書く（文から分かる危険だけ。元の文に無い数字や決まりは足さない）。\n"}${opts.lessons === false ? "" : `\n${LESSONS}\n`}`;
@@ -107,11 +147,19 @@ export interface Made {
   messages: Anthropic.Message[];
 }
 
-/** 手元の✓の型（034b）: 点検表の決まりは、チェックリストと ✓ の印が絵にあること */
+/**
+ * 手元の✓の型（034b）: 点検表の決まりは、チェックリストと ✓ の印が絵にあること。
+ * 点検表の 1 項目（11/7）は、その項目を確かめた ✓ があればよい（表の小物は要らない）
+ */
 export function checklistErrors(rule: OkRule, motion: MotionJson): string[] {
   if (!rule.checklist) return [];
   const kinds = new Set((motion?.keyframes ?? []).flatMap((k) => k.props.filter((p) => p.show !== false).map((p) => p.kind)));
   const e: string[] = [];
+  if (isChecklistItem(rule)) {
+    const listChecked = (motion?.keyframes ?? []).some((k) => k.props.some((p) => p.show !== false && p.kind === "checklist" && (p.checks ?? 2) > 0));
+    if (!kinds.has("check_mark") && !kinds.has("bubble_check") && !kinds.has("think_check") && !listChecked) e.push("点検表の 1 項目なのに ✓ の印が無い");
+    return e;
+  }
   if (!kinds.has("checklist")) e.push("点検表の型なのに checklist の小物が無い");
   if (!kinds.has("check_mark") && !kinds.has("bubble_check") && !kinds.has("think_check")) e.push("点検表の型なのに ✓ の印が無い");
   return e;
@@ -177,6 +225,7 @@ export async function makeCard(deps: GuardedDeps, purpose: Purpose, rule: OkRule
       frames: (out.motion?.keyframes ?? []).filter((k) => k.mark).map((k) => ({ t: k.t })),
       parts: (out.parts ?? []).map((p, j) => ({ id: `p${j + 1}`, target: { type: p.type, index: p.index }, statement: p.statement, reason: p.reason })),
       ...(script ? { script } : {}),
+      ...(opts.shape === "principle" ? { shape: "principle" as const } : {}),
     };
     const errs = [...validateCard(card), ...checklistErrors(rule, out.motion)];
     // 端で切れる人は 1 回だけ直させる（2 回目も切れていたら、形は正しいのでそのまま返し、確かめる AI の読みに任せる）

@@ -2,7 +2,7 @@
 // カードを送るときは、紙芝居の絵を抜くように今のカードが動く（076a）
 // 会社のテナントは、テナントの PIN と新入社員の役割の PIN で入る（088 の残り）。見た印は役割と端末の単位で送り、名前は集めない
 import { useEffect, useState } from "react";
-import type { CardMotion } from "../../shared/card";
+import { type CardBundle, type CardMotion, type CardWeight, WEIGHT_LABEL } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { frameSvg } from "../Safe";
 import { Slide } from "../motion/Slide";
@@ -46,13 +46,19 @@ interface ReadCard {
   words: { ja: string } | null;
   motion: CardMotion;
   frames: { t: number; png?: string }[];
+  /** 11/7〜。前のサーバーの答えには無い */
+  weight?: CardWeight;
+  bundle?: CardBundle | null;
+  shape?: "principle" | "story";
 }
 
 export function Frames({ motion }: { motion: CardMotion }) {
   if (motion.kind === "keyframes") {
+    const cut = cutFrames(motion.json);
+    // 原則の 1 コマ（11/7）は 1 枚を大きく
     return (
-      <div className="read-frames" data-testid="read-frames">
-        {cutFrames(motion.json).map(({ t, frame }, i) => (
+      <div className={`read-frames${cut.length === 1 ? " single" : ""}`} data-testid="read-frames">
+        {cut.map(({ t, frame }, i) => (
           <figure key={t} className="read-frame">
             <span className="read-n">{i + 1}</span>
             {/* 自前の描き方で作った SVG */}
@@ -129,10 +135,21 @@ function ReadCards({ tenant }: { tenant: string }) {
   if (cards.length === 0) return <p className="done" data-testid="read-empty">まだカードがありません</p>;
   const c = cards[Math.min(i, cards.length - 1)];
   return (
-    <article className="read" data-testid="read-card" data-card={c.id}>
+    <article className={`read${c.weight === "life" ? " read-life" : ""}`} data-testid="read-card" data-card={c.id} data-weight={c.weight ?? "normal"}>
       <p className="read-pos" data-testid="read-pos">
         {i + 1} / {cards.length}
       </p>
+      {/* 命に関わるカードは、絵の面の外（枠の外側）に赤い縁と印を付ける。絵の中には赤を置かない（赤は禁止の印だけ） */}
+      {c.weight === "life" && (
+        <p className="read-weight" data-testid="read-weight">
+          {WEIGHT_LABEL.life}
+        </p>
+      )}
+      {c.bundle && (
+        <p className="read-bundle" data-testid="read-bundle">
+          {c.bundle.parent}（{c.bundle.order} / {c.bundle.total}）
+        </p>
+      )}
       <Slide k={c.id} dir={dir}>
         <Frames motion={c.motion} />
         <section className="read-text">

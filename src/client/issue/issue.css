@@ -22,3 +22,11 @@ ol.issue-list { counter-reset: pick; }
   .issue-noprint, .issue-noprint-box, .issue-pick { display: none !important; }
   .issue-box { border: 0; padding: 0; }
 }
+/* 11/7: 命に関わる印・はがす紙・朝礼の組の掲示の版 */
+.issue-life { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; background: var(--err, #c22); color: #fff; font-size: 13px; font-weight: 700; }
+.issue-remove { color: var(--err, #c22); font-weight: 700; }
+.issue-sheet { margin-top: 12px; border: 1px solid var(--line, #ccc); }
+.issue-sheet svg { display: block; width: 100%; height: auto; }
+@media print {
+  .issue-sheet { border: 0; break-after: page; }
+}

@@ -99,7 +99,9 @@ function Payload({ v }: { v: unknown }) {
 
 export function AuditScreen({ tenant, cardId }: { tenant: string; cardId: string }) {
   const [role, setRole] = useState<string | null>(() => store.get(`role:${tenant}`));
-  const [data, setData] = useState<{ entries: Entry[]; chain_ok: boolean } | null>(null);
+  const [data, setData] = useState<{ entries: Entry[] } | null>(null);
+  // 連鎖の確かめはテナント全部を読むので、カードの記録とは別に 1 回だけ呼ぶ（11/7）
+  const [chainOk, setChainOk] = useState<boolean | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     setErr("");
@@ -109,8 +111,14 @@ export function AuditScreen({ tenant, cardId }: { tenant: string; cardId: string
       if (res.status === 401 || res.status === 403) setRole(null);
       return setErr((b as { error?: string }).error ?? `HTTP ${res.status}`);
     }
-    setData(b as { entries: Entry[]; chain_ok: boolean });
+    setData(b as { entries: Entry[] });
   }, [tenant, cardId, role]);
+  useEffect(() => {
+    if (!role) return;
+    fetch(api(tenant, "/audit/verify"), { headers: headers(tenant, role) })
+      .then((r) => (r.ok ? (r.json() as Promise<{ ok: boolean }>) : null))
+      .then((v) => setChainOk(v ? v.ok : null), () => setChainOk(null));
+  }, [tenant, role]);
   useEffect(() => {
     if (role) load();
   }, [role, load]);
@@ -122,8 +130,8 @@ export function AuditScreen({ tenant, cardId }: { tenant: string; cardId: string
   const other = data.entries.filter((e) => e.step === null);
   return (
     <div className="audit" data-testid="audit">
-      <p className={data.chain_ok ? "audit-ok" : "err"} data-testid="audit-chain">
-        {data.chain_ok ? "記録の連鎖: 途中の書き換え・消した跡は無い" : "記録の連鎖: 途中が書き換えられたか消されている"}
+      <p className={chainOk === false ? "err" : chainOk ? "audit-ok" : "done"} data-testid="audit-chain">
+        {chainOk === null ? "記録の連鎖: 確かめ中…" : chainOk ? "記録の連鎖: 途中の書き換え・消した跡は無い" : "記録の連鎖: 途中が書き換えられたか消されている"}
       </p>
       <p className="who">カード {cardId}</p>
       <ol className="audit-steps">

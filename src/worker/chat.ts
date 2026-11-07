@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { BudgetExceededError, guardedCall } from "../shared/claude";
 import { D1CallLog } from "./api-log";
-import { claudeClient } from "./claude-client";
+import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
 import { ExtractError, type InputSource, MAX_INPUT_CHARS, runExtraction } from "./extract";
 import type { PeopleVars } from "./people";
@@ -174,7 +174,7 @@ chats.post("/pdf", async (c) => {
   const client = claudeClient(c.env);
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const msg = await guardedCall(
-    { client, log: new D1CallLog(c.env.DB) },
+    { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) },
     {
       purpose: "app",
       label: "PDF の文字（チャット）",

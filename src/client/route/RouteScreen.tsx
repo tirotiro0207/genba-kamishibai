@@ -22,7 +22,8 @@ const speechKey = (input: string) => `speech:${input}`;
 
 export async function loadTexts(tenant: string, body: CardBody): Promise<Texts> {
   const out: Texts = {};
-  const refs = body.statements.flatMap((s) => s.sources);
+  // 過去の事故（accident）の出どころは、文そのものを持っているので読みに行かない
+  const refs = body.statements.flatMap((s) => s.sources).filter((r): r is Exclude<SourceRef, { kind: "accident" }> => r.kind !== "accident");
   await Promise.all(
     [...new Map(refs.map((r) => [r.kind === "doc" ? docKey(r.doc, r.page) : speechKey(r.input), r])).entries()].map(async ([k, r]) => {
       try {
@@ -41,10 +42,25 @@ export async function loadTexts(tenant: string, body: CardBody): Promise<Texts> 
   return out;
 }
 
-const whereOf = (r: SourceRef) => (r.kind === "doc" ? `${r.doc} ${r.page} ページ ${r.line}${r.line_end ? `〜${r.line_end}` : ""} 行` : `話した言葉 ${r.start + 1}〜${r.end} 字`);
+const whereOf = (r: SourceRef) =>
+  r.kind === "doc" ? `${r.doc} ${r.page} ページ ${r.line}${r.line_end ? `〜${r.line_end}` : ""} 行` : r.kind === "speech" ? `話した言葉 ${r.start + 1}〜${r.end} 字` : `過去の事故${r.date ? `（${r.date}）` : ""}`;
 
 /** 1 つの元の位置。資料は前後 3 行を添えて該当の行を光らせ、話した言葉は字の範囲を光らせる */
 export function Source({ r, texts }: { r: SourceRef; texts: Texts }) {
+  // 過去の事故と原因（11/7）: 何が起きたか・原因を、そのまま出す
+  if (r.kind === "accident")
+    return (
+      <figure className="route-src" data-testid="route-accident">
+        <figcaption className="route-where">{whereOf(r)}</figcaption>
+        <p className="route-speech">
+          <b>何が: </b>
+          {r.title}
+          <br />
+          <b>原因: </b>
+          {r.cause}
+        </p>
+      </figure>
+    );
   if (r.kind === "doc") {
     const lines = texts[docKey(r.doc, r.page)];
     const end = r.line_end ?? r.line;
@@ -196,6 +212,77 @@ export function RouteScreen({ tenant, cardId }: { tenant: string; cardId: string
           )}
         </section>
       </div>
+      <AccidentForm tenant={tenant} card={card} onSaved={setCard} />
     </article>
+  );
+}
+
+/**
+ * 過去の事故と原因を「なぜ」の出どころに足す（11/7 既定）。足すと版が上がり、下書きに戻る（直しの 1 つ）。
+ * 何が起きたか・原因は、会社の資料や聞き取りから人が書く（AI に作らせない）
+ */
+function AccidentForm({ tenant, card, onSaved }: { tenant: string; card: CardView; onSaved: (c: CardView) => void }) {
+  const whys = card.body.statements.filter((s) => s.field === "why");
+  const [open, setOpen] = useState(false);
+  const [st, setSt] = useState(whys[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [cause, setCause] = useState("");
+  const [date, setDate] = useState("");
+  const [err, setErr] = useState("");
+  if (!whys.length) return null;
+  if (!open)
+    return (
+      <button className="pick" onClick={() => setOpen(true)} data-testid="route-accident-open">
+        過去の事故を「なぜ」の出どころに足す
+      </button>
+    );
+  const save = async () => {
+    setErr("");
+    try {
+      await req(tenant, `/cards/${encodeURIComponent(card.id)}/accident`, { method: "POST", body: JSON.stringify({ statement: st, title, cause, date: date || undefined }) });
+      onSaved(await req<CardView>(tenant, `/cards/${encodeURIComponent(card.id)}`));
+      setOpen(false);
+      setTitle("");
+      setCause("");
+      setDate("");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <section className="route-accident" data-testid="route-accident-form">
+      <h2>過去の事故を「なぜ」の出どころに足す</h2>
+      <label>
+        どの「なぜ」か
+        <select value={st} onChange={(e) => setSt(e.target.value)}>
+          {whys.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.text}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        何が起きたか
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} data-testid="route-accident-title" />
+      </label>
+      <label>
+        原因
+        <input value={cause} onChange={(e) => setCause(e.target.value)} maxLength={500} data-testid="route-accident-cause" />
+      </label>
+      <label>
+        いつ（分かれば。2024・2024-06・2024-06-01 の形）
+        <input value={date} onChange={(e) => setDate(e.target.value)} maxLength={10} />
+      </label>
+      <div className="issue-actions">
+        <button className="pick on" disabled={!title.trim() || !cause.trim()} onClick={save} data-testid="route-accident-save">
+          足す（版が上がり、下書きに戻る）
+        </button>
+        <button className="pick" onClick={() => setOpen(false)}>
+          やめる
+        </button>
+      </div>
+      {err && <p className="err">{err}</p>}
+    </section>
   );
 }

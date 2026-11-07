@@ -55,3 +55,6 @@
 /* 絵の直し方の入口（11/6 作者）。絵のすぐ下に 1 列で並べる */
 .card-fixes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .card-fixes > span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+/* 重さ（11/7）: 命に関わる / それ以外を、OK・署名の前に監修者が選ぶ */
+.card-weight { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: none; padding: 0; margin: 8px 0; }
+.card-weight legend { padding: 0; margin-bottom: 4px; font-weight: 700; }

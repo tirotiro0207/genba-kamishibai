@@ -27,6 +27,9 @@ interface Rule {
   reasons: { text: string; from: From; stated: boolean; where: Where }[];
   checklist: boolean;
   reworded: boolean;
+  /** 点検表の項目の順番と見出し（11/7。前の取り出しには無い） */
+  step?: number | null;
+  parent?: string | null;
 }
 
 const api = (tenant: string, path: string) => `/api/t/${encodeURIComponent(tenant)}${path}`;
@@ -249,7 +252,7 @@ function ReviewStep({ tenant, id, text, rules, onDone }: { tenant: string; id: s
               ))}
               {(r.checklist || r.reworded) && (
                 <p className="make-tags">
-                  {r.checklist && <span>手元の✓</span>}
+                  {r.checklist && <span>{r.parent && r.step ? `点検表「${r.parent}」の ${r.step} 番目` : "手元の✓"}</span>}
                   {r.reworded && <span>言い換えた</span>}
                 </p>
               )}
@@ -284,6 +287,8 @@ function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rule
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [ask, setAsk] = useState<Record<number, string | undefined>>({});
+  // 原則の 1 コマで作る項目（11/7 既定）。心がまえの決まりを 1 枚の絵にする
+  const [principle, setPrinciple] = useState<Record<number, boolean>>({});
 
   async function make(item: number) {
     setBusy(item);
@@ -291,7 +296,7 @@ function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rule
     try {
       const why = ask[item]?.trim();
       if (ask[item] !== undefined && !why) throw new Error("監修者に確かめてほしいことを書いてください");
-      const c = await req<{ id: string }>(tenant, `/extract/${encodeURIComponent(id)}/make`, { method: "POST", body: JSON.stringify({ item, ask: why || undefined }) });
+      const c = await req<{ id: string }>(tenant, `/extract/${encodeURIComponent(id)}/make`, { method: "POST", body: JSON.stringify({ item, ask: why || undefined, ...(principle[item] ? { shape: "principle" } : {}) }) });
       setMade((m) => ({ ...m, [item]: c.id }));
     } catch (e) {
       setErr((e as Error).message);
@@ -316,6 +321,10 @@ function MakeCards({ tenant, id, rules, ok }: { tenant: string; id: string; rule
                     data-testid={`ask-${i}`}
                   />
                   監修者に確認
+                </label>
+                <label>
+                  <input type="checkbox" checked={!!principle[i]} onChange={(e) => setPrinciple((p) => ({ ...p, [i]: e.target.checked }))} data-testid={`principle-${i}`} />
+                  原則の 1 コマで作る
                 </label>
                 {ask[i] !== undefined && <input value={ask[i]} onChange={(e) => setAsk((a) => ({ ...a, [i]: e.target.value }))} placeholder="何を確かめてほしいか" data-testid={`ask-text-${i}`} />}
               </div>

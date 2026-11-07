@@ -17,7 +17,7 @@ export async function addCompanyWords(db: D1Database, tenantId: string, words: C
 }
 
 /** 用語表に積んだ言葉を、会社の呼び方として積む */
-export const callsFromTerms = (terms: { ja: string; vi: string }[]): CompanyWord[] => terms.map((t) => ({ kind: "call", phrase: t.ja, prefer: t.vi }));
+export const callsFromTerms = (terms: { ja: string; vi?: string }[]): CompanyWord[] => terms.filter((t) => (t.vi ?? "").trim()).map((t) => ({ kind: "call", phrase: t.ja, prefer: t.vi ?? "" }));
 
 /** 人の直し（050 の before・after）から、言い換えと使わない言い方を積む */
 export async function addEditWords(db: D1Database, tenantId: string, cardId: string, before: Record<string, unknown>, after: Record<string, unknown>) {

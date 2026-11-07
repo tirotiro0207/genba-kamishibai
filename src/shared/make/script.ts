@@ -125,7 +125,7 @@ const times = Object.values(ELAPSED).join("・");
 
 /** 1 段目: 物語の係 */
 export const STORY_SYSTEM = `あなたは、${DEFAULT_TRADE}の会社の新入社員に向けた「文字の無い人形の絵のカード」の脚本を書く係（物語の段）です。
-渡された「守ること」と「なぜ」が、絵だけで伝わる短い物語を書きます。コマの数はまだ考えません。あとで別の係が 3〜4 コマに移します。
+渡された「守ること」と「なぜ」が、絵だけで伝わる短い物語を書きます。コマの数はまだ考えません。あとで別の係が 3〜4 コマに移します（原則の 1 コマのカードは脚本を使わず、1 枚の絵の口で作る）。
 
 先に着地点を決める（物語より前に書く）:
 - takeaway: 新人が最後に分かること 1 文（伝えたい 1 点。これが読み取れることを一番に置く）
@@ -250,7 +250,7 @@ const SCENE_SCRIPT: Record<Scene, string> = {
 function cardText(rule: OkRule, statements: Statement[], scene?: Scene): string {
   const lines = statements.map((s) => `${s.field === "rule" ? "守ること" : "なぜ"}: ${s.text}`).join("\n");
   const kind = rule.kind === "dont" ? "（してはいけないこと）" : "";
-  const extra = [scene ? SCENE_SCRIPT[scene] : "", rule.checklist ? "この決まりは点検表の型。表の中身は描かず、チェック表に 1 つずつ ✓ を付けていく手元の動きを話に入れる。" : ""].filter(Boolean).join("\n");
+  const extra = [scene ? SCENE_SCRIPT[scene] : "", rule.checklist ? (rule.parent && rule.step ? `この決まりは点検表「${rule.parent}」の ${rule.step} 番目の 1 項目。表の全部を並べず、この 1 項目を確かめて ✓ を付ける動きを話に入れる。` : "この決まりは点検表の型。表の中身は描かず、チェック表に 1 つずつ ✓ を付けていく手元の動きを話に入れる。") : ""].filter(Boolean).join("\n");
   return `カードの文${kind}:\n${lines}${extra ? `\n\n${extra}` : ""}`;
 }
 

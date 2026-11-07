@@ -1,6 +1,7 @@
 // 動きを再生してコマを切り出す部品（079a）。
 // AI が書くのはキーフレームの JSON（時刻ごとの関節・小物の値と、意味の変わる時刻の印）だけ。
 // 間は描く側が線形に補って動かし、印の付いた 3〜4 か所をコマとして切り出す。同じ JSON なら同じコマになる。
+// 原則の 1 コマのカード（11/7）は、1 枚の絵（angles の口の答え）をキーフレーム 1 つ・印 1 つの動きにして持つ（principleMotion）。
 import { EXPRESSIONS, type Expression } from "./avatar";
 import { type ChecklistIcon, INNER_KINDS, INNER_MARKS, type InnerKind, type InnerMark, type PropKind, PROP_KINDS, type PropSpec } from "./props";
 import { type Frame, type FrameFigure, renderFrame, type Role, ROLES, validateFrame } from "./scene";
@@ -153,11 +154,17 @@ export function validateFrameJson(k: FrameJson): string[] {
   return errs;
 }
 
-/** 範囲の検査。問題の一覧を返す（空なら通る） */
-export function validateMotion(m: MotionJson): string[] {
+/** 1 枚の絵（angles の口の答え）を、原則の 1 コマのカードの動き（キーフレーム 1 つ・印 1 つ）にする */
+export const principleMotion = (k: FrameJson): MotionJson => ({ keyframes: [{ t: 0, mark: true, figures: k.figures, props: k.props }] });
+
+/**
+ * 範囲の検査。問題の一覧を返す（空なら通る）。
+ * single は原則の 1 コマのカード（11/7）: キーフレームは 1 つから、印はちょうど 1 つ
+ */
+export function validateMotion(m: MotionJson, opts: { single?: boolean } = {}): string[] {
   const errs: string[] = [];
   const ks = m?.keyframes;
-  if (!Array.isArray(ks) || ks.length < 2) return ["キーフレームは 2 つ以上"];
+  if (!Array.isArray(ks) || ks.length < (opts.single ? 1 : 2)) return [opts.single ? "キーフレームは 1 つ以上" : "キーフレームは 2 つ以上"];
   // 形の壊れたキーフレーム（figures・props が並びでない）は、先に文字で返す（中を読むと例外になる）
   const broken = ks.findIndex((k) => !k || typeof k !== "object" || !Array.isArray(k.figures) || !Array.isArray(k.props) || [...k.figures, ...k.props].some((v) => !v || typeof v !== "object"));
   if (broken >= 0) return [`keyframes[${broken}] に figures と props の並び（中身はオブジェクト）が要る`];
@@ -172,7 +179,9 @@ export function validateMotion(m: MotionJson): string[] {
     for (const e of validateFrameJson(k)) errs.push(`keyframes[${i}].${e}`);
   });
   const marks = ks.filter((k) => k.mark).length;
-  if (marks < MARKS_MIN || marks > MARKS_MAX) errs.push(`印は ${MARKS_MIN}〜${MARKS_MAX} か所: ${marks}`);
+  if (opts.single) {
+    if (marks !== 1) errs.push(`原則の 1 コマは印 1 か所: ${marks}`);
+  } else if (marks < MARKS_MIN || marks > MARKS_MAX) errs.push(`印は ${MARKS_MIN}〜${MARKS_MAX} か所: ${marks}`);
   return errs;
 }
 
@@ -216,6 +225,7 @@ export function cutFrames(m: MotionJson): { t: number; frame: Frame }[] {
 /** 再生用: fps で刻んだ各時刻の SVG（本体の画面からは呼ばない。テストで動きを確かめる道具） */
 export function playSvgs(m: MotionJson, fps = 12): string[] {
   const end = m.keyframes[m.keyframes.length - 1].t;
+  // 原則の 1 コマ（キーフレーム 1 つ）は、その 1 枚だけ
   const out: string[] = [];
   for (let i = 0; i <= Math.round(end * fps); i++) out.push(renderFrame(frameAt(m, i / fps)).svg);
   return out;

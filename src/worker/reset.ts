@@ -32,7 +32,10 @@ export const RESET_TABLES = [
   "card_opens",
   "card_exemplars",
   "recall_notices",
+  "sample_reviews",
   "weekly_samples",
+  "card_posts",
+  "morning_sets",
   "cards",
 ] as const;
 

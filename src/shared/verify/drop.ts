@@ -30,6 +30,7 @@ export interface DropCheck {
 export async function verifyWithDrop(deps: GuardedDeps, purpose: Purpose, card: CardBody, images: ImageBlock[]): Promise<DropCheck> {
   const full = await verifyCard(deps, purpose, card, images);
   const index = droppableFrame(card);
+  // 原則の 1 コマ（11/7）とコマの少ないカードは抜けないので、全部のコマの読みだけで線を引く（伝わる率 85 以上・危ない取り違え無し）
   if (index === null || images.length < 3) return { full, dropped: null, pass: passes(full) };
   const evidence = await verifyCard(deps, purpose, card, images.filter((_, i) => i !== index));
   return { full, dropped: { index, evidence }, pass: passes(full) && passes(evidence) };

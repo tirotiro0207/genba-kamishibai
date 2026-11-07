@@ -46,7 +46,7 @@ const TOOLS = [
   {
     name: "doc_to_cards",
     description:
-      "この資料をカードに。文か、資料のページから決まりを取り出し、決まりごとに 3〜4 コマの絵のカードを未承認の下書きで作る。署名は監修者が画面でするまで新入社員には配られない",
+      "この資料をカードに。文か、資料のページから決まりを取り出し、決まりごとに 3〜4 コマの絵のカード（原則・心がまえは 1 コマにもできる）を未承認の下書きで作る。署名は監修者が画面でするまで新入社員には配られない",
     inputSchema: {
       type: "object",
       properties: {
@@ -229,7 +229,7 @@ export function mcpApp(inner: Inner) {
           protocolVersion: typeof want === "string" && PROTOCOL_VERSIONS.includes(want) ? want : PROTOCOL_VERSIONS[0],
           capabilities: { tools: {} },
           serverInfo: { name: "genba-kamishibai", version: "0.1.0" },
-          instructions: `安全の決まりの文や資料から、文字を読まなくても分かる 3〜4 コマの絵のカードを作ります。作れるのは未承認の下書きまでで、署名は監修者が画面でします。テナント: ${t.name}${readOnly ? READ_ONLY_NOTE : ""}`,
+          instructions: `安全の決まりの文や資料から、文字を読まなくても分かる 3〜4 コマの絵のカード（原則は 1 コマ）を作ります。作れるのは未承認の下書きまでで、署名は監修者が画面でします。テナント: ${t.name}${readOnly ? READ_ONLY_NOTE : ""}`,
         }),
       );
     }

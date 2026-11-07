@@ -109,9 +109,8 @@ audit.get("/cards/:id", async (c) => {
   )
     .bind(c.var.tenant.id, c.req.param("id"))
     .all<AuditRow>();
-  const entries = results.map(parse).map((e) => ({ ...e, step: AUDIT_STEP[e.kind] ?? null }));
-  const v = await verifyTenant(c.env.DB, c.var.tenant.id);
-  return c.json({ entries, chain_ok: v.ok });
+  // 連鎖の確かめはテナント全部を読むので、ここではしない。画面は /verify を別に 1 回だけ呼ぶ（11/7）
+  return c.json({ entries: results.map(parse).map((e) => ({ ...e, step: AUDIT_STEP[e.kind] ?? null })) });
 });
 
 audit.on(["PUT", "PATCH", "DELETE", "POST"], ["/", "/*"], (c) => c.json({ error: "記録は追記だけ（仕組みの中からだけ足す）" }, 405));

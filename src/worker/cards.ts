@@ -2,7 +2,7 @@
 // どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { type Context, Hono } from "hono";
-import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
+import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, validateSource, WEIGHTS, type CardWeight, wordsRubyErrors } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
@@ -13,7 +13,7 @@ import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
 import { appendAudit, appendAuditIf } from "./audit";
-import { claudeClient } from "./claude-client";
+import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, personName } from "./people";
 import { createRecall, readReason } from "./recall";
@@ -151,7 +151,9 @@ cards.post("/", async (c) => {
 });
 
 /** 用語表に積む（036）。同じカードの同じ言葉は 1 行 */
-export async function addTerms(db: D1Database, tenantId: string, cardId: string, terms: Term[]) {
+export async function addTerms(db: D1Database, tenantId: string, cardId: string, all: Term[]) {
+  // 訳（vi）は任意になった（11/5）。訳の無い組は用語表にも会社の呼び方にも積まない
+  const terms = all.filter((t) => t.ja?.trim() && (t.vi ?? "").trim());
   if (!terms.length) return;
   await db.batch(terms.map((t) => db.prepare("INSERT OR IGNORE INTO glossary (tenant_id, ja, vi, card_id) VALUES (?, ?, ?, ?)").bind(tenantId, t.ja.slice(0, 80), t.vi.slice(0, 120), cardId)));
   // 会社の言葉（085）: 用語表の言葉を、会社の呼び方として積む
@@ -291,7 +293,7 @@ cards.post("/:id/verify", async (c) => {
   const images = bytes.map((_, i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: b64[i] } }));
   let evidence: Evidence;
   try {
-    evidence = await verifyCard({ client, log: new D1CallLog(c.env.DB) }, "app", body, images);
+    evidence = await verifyCard({ client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) }, "app", body, images);
   } catch (e) {
     return c.json({ error: `確かめる AI が答えなかった: ${(e as Error).message}` }, 502);
   }
@@ -312,6 +314,42 @@ async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: Ca
   if (r.status === "signed") await createRecall(db, tenantId, r, by, reason);
 }
 
+// 重さ（11/7 既定・作者の確認待ち）: 監修者が確認・署名の前に「命に関わる / それ以外」を決める。重さは本文に入る（指紋に入る）ので版を 1 つ上げ、
+// ④ に直しの 1 行（fields: weight）を残す。絵は変わらないので、状態はそのままにし、今の版の確かめる AI の証拠を新しい版へ引き継ぐ（③ に carried_from 付きで足す）。
+// 署名済み・停止のカードは受けない（署名済みに書き足すと指紋が変わって閲覧から外れるため。変えるなら直す道で版を上げて署名し直す）
+cards.put("/:id/weight", async (c) => {
+  const p = (c.var as PeopleVars).person;
+  if (p?.role !== "supervisor") return c.json({ error: "重さは監修者が決める" }, 403);
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await c.req.json<{ weight?: unknown; version?: unknown }>().catch(() => ({}) as { weight?: unknown; version?: unknown });
+  if (!WEIGHTS.includes(b.weight as CardWeight)) return c.json({ error: "weight は life（命に関わる）か normal（それ以外）" }, 400);
+  if (b.version !== undefined && b.version !== r.version) return c.json({ error: `画面の版 ${String(b.version)} と今の版 ${r.version} が違う。読み直して` }, 409);
+  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードの重さは、ここでは変えない（直して版を上げ、署名し直す）" }, 409);
+  const before = JSON.parse(r.body) as CardBody;
+  const weight = b.weight as CardWeight;
+  if (before.weight === weight) return c.json({ ...cardView(r), changed: [] });
+  const card: CardBody = { ...before, weight };
+  const by = whoOf(c);
+  const evidence = await currentEvidence(c.env.DB, c.var.tenant.id, r);
+  const update = c.env.DB.prepare("UPDATE cards SET body = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?").bind(JSON.stringify(card), r.id, c.var.tenant.id, r.version);
+  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, update, {
+    card_id: r.id,
+    kind: "edit",
+    actor: by,
+    payload: { from_version: r.version, to_version: r.version + 1, fields: ["weight"], before: { weight: before.weight ?? null }, after: { weight }, by, edited_at: new Date().toISOString(), reason: `重さを決めた: ${weight === "life" ? "命に関わる" : "それ以外"}` },
+  });
+  if (!entry) return c.json({ error: "ほかの直しと重なった。読み直して" }, 409);
+  if (evidence) {
+    const last = await c.env.DB.prepare("SELECT actor, payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'verify' AND json_extract(payload, '$.version') = ? ORDER BY created_at DESC, n DESC LIMIT 1")
+      .bind(c.var.tenant.id, r.id, r.version)
+      .first<{ actor: string; payload: string }>();
+    const png = last ? (JSON.parse(last.payload) as { png_sha256?: unknown }).png_sha256 : undefined;
+    await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "verify", actor: last?.actor ?? evidence.agent, payload: { version: r.version + 1, evidence, ...(png ? { png_sha256: png } : {}), carried_from: r.version } });
+  }
+  return c.json({ ...cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!), changed: ["weight"] });
+});
+
 // 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。
 // 署名済みも直せる。直すと署名が外れ、前の版に回収の知らせが出る（reopenOnEdit）。配るには確かめ直して署名し直す
 cards.put("/:id", async (c) => {
@@ -330,6 +368,9 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const before = JSON.parse(r.body) as CardBody;
+  // 言葉の欄のふりがな: words.ja を変えたときだけ見る（元に戻す・ほかの欄の直しは、決まりより前のカードでも止めない）
+  const rubyErrs = wordsRubyErrors(card, before);
+  if (rubyErrs.length) return c.json({ error: "言葉の欄のふりがなが足りない", errors: rubyErrs }, 400);
   const changed = (Object.keys({ ...before, ...card }) as (keyof CardBody)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(card[k]));
   // 修正の差分（050）: 何も変わらない直しは記録も版も増やさない。理由の無い直しは受けない
   if (!changed.length) return c.json({ ...cardView(r), changed });
@@ -359,6 +400,22 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
   if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 }
+
+// 過去の事故の出どころ（11/7 既定・作者の確認待ち）: 「なぜ」の文に、過去の事故と原因（何が・原因・いつ）を出どころとして足す。
+// 中身が変わるので直しの 1 つ（saveEdit）として版を上げ、④ に残す（署名済みなら署名が外れて回収の知らせが出る）
+cards.post("/:id/accident", async (c) => {
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await c.req.json<{ statement?: unknown; title?: unknown; cause?: unknown; date?: unknown }>().catch(() => ({}) as Record<string, unknown>);
+  const body = JSON.parse(r.body) as CardBody;
+  const st = body.statements.find((s) => s.id === b.statement);
+  if (!st || st.field !== "why") return c.json({ error: "statement は「なぜ」の文の番号" }, 400);
+  const src = { kind: "accident" as const, title: typeof b.title === "string" ? b.title.trim() : "", cause: typeof b.cause === "string" ? b.cause.trim() : "", ...(typeof b.date === "string" && b.date.trim() ? { date: b.date.trim() } : {}) };
+  const errs = validateSource(src);
+  if (errs.length) return c.json({ error: "過去の事故の書き方が足りない", errors: errs }, 400);
+  const card: CardBody = { ...body, statements: body.statements.map((s) => (s.id === st.id ? { ...s, sources: [...s.sources, src] } : s)) };
+  return saveEdit(c, r, card, `「なぜ」の出どころに過去の事故を足した: ${src.title}`.slice(0, 1000));
+});
 
 // 元に戻す（11/6）: 1 つ前の版の中身に戻す。戻すのも直しの 1 つで、版を 1 つ上げて ④ に理由・直した人・日時を残す（記録は消さない）。
 // 続けて押すと、さらに 1 つ前へ戻る。前の版が無い・記録から組み立てられないときは断る。
@@ -424,7 +481,7 @@ cards.post("/:id/redo", async (c) => {
   const before = JSON.parse(r.body) as CardBody;
   let out;
   try {
-    out = await redoCard({ client, log: new D1CallLog(db) }, "app", before, ask.frame, ask.box, ask.text);
+    out = await redoCard({ client, log: new D1CallLog(db), dayBudgetUsd: dayBudget(c.env) }, "app", before, ask.frame, ask.box, ask.text);
   } catch (e) {
     return c.json({ error: (e as Error).message }, e instanceof RedoError ? e.status : 502);
   }
@@ -466,7 +523,7 @@ cards.post("/:id/rework", async (c) => {
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   let out;
   try {
-    out = await reworkCard({ client, log: new D1CallLog(db) }, "app", before, text, frame as number | null);
+    out = await reworkCard({ client, log: new D1CallLog(db), dayBudgetUsd: dayBudget(c.env) }, "app", before, text, frame as number | null);
   } catch (e) {
     return c.json({ error: (e as Error).message }, e instanceof ReworkError ? e.status : 502);
   }

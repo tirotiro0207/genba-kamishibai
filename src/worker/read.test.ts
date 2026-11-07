@@ -35,7 +35,7 @@ describe("新入社員の閲覧の入口（028）", () => {
   it("経路や部品の理由は返さない", async () => {
     const id = await cardWith("signed", "028 経路なし");
     const c = (await (await call(`/api/t/practice/read/cards/${id}`)).json()) as Record<string, unknown>;
-    expect(Object.keys(c).sort()).toEqual(["frames", "id", "motion", "rule", "why", "words"]);
+    expect(Object.keys(c).sort()).toEqual(["bundle", "frames", "id", "motion", "pair", "rule", "shape", "weight", "why", "words"]);
     expect(JSON.stringify(c)).not.toContain("sources");
   });
 
@@ -92,5 +92,23 @@ describe("新入社員の閲覧の入口（028）", () => {
     expect((await env.DB.prepare("SELECT count(*) AS n FROM cards WHERE tenant_id = 'practice'").first<{ n: number }>())!.n).toBe(before);
     // 入口のしるしが違うテナントのものなら、読む口も開かない
     expect((await call(`/api/t/demo/read/cards`, json("GET", undefined, nh))).status).toBe(401);
+  });
+});
+
+describe("○× の組を読む口に付ける（11/7）", () => {
+  it("両方とも署名が崩れていなければ組を付け、相手が出せない枚なら付けない", async () => {
+    const good = await cardWith("signed", "組 ○");
+    const bad = await cardWith("signed", "組 ×");
+    await env.DB.prepare("INSERT INTO card_pairs (tenant_id, good_card, bad_card) VALUES ('practice', ?, ?)").bind(good, bad).run();
+    const list = (await (await call("/api/t/practice/read/cards")).json()) as { cards: { id: string; pair: { good: string; bad: string } | null }[] };
+    expect(list.cards.find((x) => x.id === good)!.pair).toEqual({ good, bad });
+    expect(((await (await call(`/api/t/practice/read/cards/${bad}`)).json()) as { pair: unknown }).pair).toEqual({ good, bad });
+
+    // × の枚の中身が署名のあとに変わると、× は出ず、○ にも組を付けない
+    await env.DB.prepare("UPDATE cards SET body = json_set(body, '$.why', '変えた') WHERE id = ?").bind(bad).run();
+    const after = (await (await call("/api/t/practice/read/cards")).json()) as { cards: { id: string; pair: unknown }[] };
+    expect(after.cards.some((x) => x.id === bad)).toBe(false);
+    expect(after.cards.find((x) => x.id === good)!.pair).toBeNull();
+    expect(((await (await call(`/api/t/practice/read/cards/${good}`)).json()) as { pair: unknown }).pair).toBeNull();
   });
 });
