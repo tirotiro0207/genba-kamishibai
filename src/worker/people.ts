@@ -68,6 +68,16 @@ export function personName(env: Env, p: Person): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+/**
+ * 画面と API に出す名前。会社のテナントは PIN の内側なのでそのまま出す。
+ * 公開デモと練習は誰でも読めるので、公開に同意した枠（PUBLIC_NAMES）だけ出し、ほかは空欄にする
+ */
+export function shownName(env: Env, kind: string, p: Person): string {
+  if (kind === "company") return personName(env, p);
+  const ok = (env.PUBLIC_NAMES ?? "").split(",").map((x) => x.trim()).includes(`${p.role}.${p.slot}`);
+  return ok ? personName(env, p) : "";
+}
+
 /** テナントの後ろに置く。x-role のしるしがあれば読み、無ければ null（役割なし） */
 export async function personGuard(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
   const token = c.req.header("x-role") ?? "";
@@ -179,12 +189,12 @@ people.post("/login", async (c) => {
   }
   if (!c.env.SESSION_SECRET) return c.json({ error: NO_SECRET }, 503);
   const p: Person = student ? { role, slot, student } : { role, slot };
-  return c.json({ token: await signRole(c.env.SESSION_SECRET, c.var.tenant.id, p), role, slot, student: student ?? null, name: personName(c.env, p) });
+  return c.json({ token: await signRole(c.env.SESSION_SECRET, c.var.tenant.id, p), role, slot, student: student ?? null, name: shownName(c.env, c.var.tenant.kind, p) });
 });
 
 people.get("/me", (c) => {
   const p = c.var.person;
-  return p ? c.json({ role: p.role, slot: p.slot, ...(p.student ? { student: p.student } : {}), name: personName(c.env, p) }) : c.json({ role: null });
+  return p ? c.json({ role: p.role, slot: p.slot, ...(p.student ? { student: p.student } : {}), name: shownName(c.env, c.var.tenant.kind, p) }) : c.json({ role: null });
 });
 
 /** 役割の一覧（監修者 2 名を見分ける名前つき。名前が無ければ空欄） */
@@ -196,5 +206,5 @@ people.get("/people", (c) => {
     { role: "trainer", slot: 1 },
     { role: "newhire", slot: 1 },
   ];
-  return c.json({ people: list.map((p) => ({ ...p, name: personName(c.env, p) })) });
+  return c.json({ people: list.map((p) => ({ ...p, name: shownName(c.env, c.var.tenant.kind, p) })) });
 });

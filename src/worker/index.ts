@@ -11,7 +11,7 @@ import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { assets } from "./assets";
 import { guest, guestGate } from "./guest";
-import { scoreNames, scoreSlot, scoring } from "./scores";
+import { publicScoreNames, scoreSlot, scoring } from "./scores";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
 import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate, trialsGate } from "./people";
@@ -76,7 +76,7 @@ app.get("/api/t/:tenant/session", async (c) => {
 });
 
 // 採点の入口で「どちらが採点するか」を選ぶための名前（PIN の前に読む。名前と枠だけで、答えや点は出さない。11/7 作者）
-app.get("/api/score-names", (c) => c.json({ ...scoreNames(c.env), slot: scoreSlot(c.env) }));
+app.get("/api/score-names", (c) => c.json({ ...publicScoreNames(c.env), slot: scoreSlot(c.env) }));
 app.use("/api/t/:tenant/*", tenantGuard);
 // 公開デモ（093b）。本番では練習用と架空の会社は見るだけで、作るのは /api/demo/make だけ
 // ゲストの置き場（11/7）。Claude を呼ぶ口の回数を数える

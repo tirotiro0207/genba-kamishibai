@@ -15,7 +15,7 @@ import { D1CallLog } from "./api-log";
 import { appendAudit, appendAuditIf } from "./audit";
 import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
-import { type PeopleVars, personName } from "./people";
+import { type PeopleVars, shownName } from "./people";
 import { createRecall, readReason } from "./recall";
 import { cleanupCardSessions, listUsedExemplars, sessionDeleter } from "./exemplars";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
@@ -73,11 +73,11 @@ export const sourcePayload = (card: CardBody) => ({
 /** ② 作る側が何をしたか: 項目と、動き・コマ・部品 */
 export const makePayload = (card: CardBody) => ({ rule: card.rule, why: card.why, motion: card.motion, frames: card.frames, parts: card.parts });
 
-/** 署名の行の actor（"supervisor.1"）を、役割・番号・名前（環境変数。無ければ空欄）にする */
-function signerOf(env: Env, actor: string) {
+/** 署名の行の actor（"supervisor.1"）を、役割・番号・名前（環境変数。無ければ空欄。公開デモは同意した枠だけ）にする */
+function signerOf(env: Env, kind: string, actor: string) {
   const [role, n] = actor.split(".");
   const slot = n === "2" ? 2 : 1;
-  return { role, slot, name: role === "supervisor" ? personName(env, { role: "supervisor", slot }) : "" };
+  return { role, slot, name: role === "supervisor" ? shownName(env, kind, { role: "supervisor", slot }) : "" };
 }
 
 /** 資料の名前（11/6 作者）。環境変数 DOC_LABELS（{"資料の鍵": "見せる名前"} の JSON）から。読めなければ空 */
@@ -107,7 +107,7 @@ cards.get("/", async (c) => {
   return c.json({
     cards: results.map((r) => {
       const s = last.get(r.id);
-      return { ...cardView(r), signed: s ? { ...signerOf(c.env, s.actor), at: s.at } : null };
+      return { ...cardView(r), signed: s ? { ...signerOf(c.env, c.var.tenant.kind, s.actor), at: s.at } : null };
     }),
     review,
     docs: docLabels(c.env),

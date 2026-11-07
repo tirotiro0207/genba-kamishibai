@@ -9,18 +9,23 @@ import { withWords } from "../shared/picture-order";
 import { D1CallLog } from "./api-log";
 import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
-import { type PeopleVars, personName, studentGroup, TEST_GROUP } from "./people";
+import { type PeopleVars, personName, shownName, studentGroup, TEST_GROUP } from "./people";
 import { getTrial, pictureCards, readMaterial, view } from "./trials";
 
 export const scoring = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 export type ScoreGrader = "author" | "supervisor";
-/** 採点の右のタブの人が入る監修者の枠（11/7 作者「一郎と黒須さんで採点する」）。本番は環境変数で決める */
+/** 採点の右のタブの人が入る監修者の枠（11/7 作者「作者と監修者の 2 人で採点する」）。本番は環境変数で決める */
 export const scoreSlot = (env: Env): 1 | 2 => (env.SCORE_SUPERVISOR_SLOT?.trim() === "2" ? 2 : 1);
 /** 採点の 2 人の名前。右は SCORE_SUPERVISOR_NAME、無ければその枠の監修者の名前 */
 export const scoreNames = (env: Env) => ({
   author: personName(env, { role: "author", slot: 1 }),
   supervisor: env.SCORE_SUPERVISOR_NAME?.trim() || personName(env, { role: "supervisor", slot: scoreSlot(env) }),
+});
+/** PIN の前に読む名前（誰でも読める口なので、公開に同意した枠の名前だけ。ほかは空欄で、画面は役割の名前を出す） */
+export const publicScoreNames = (env: Env) => ({
+  author: shownName(env, "", { role: "author", slot: 1 }),
+  supervisor: shownName(env, "", { role: "supervisor", slot: scoreSlot(env) }) ? scoreNames(env).supervisor : "",
 });
 /** 採点できるのは作者と、決めた枠の監修者だけ（もう 1 人の監修者の点が混ざらないように） */
 const graderOf = (env: Env, p: { role: string; slot: number } | null | undefined): ScoreGrader | null =>

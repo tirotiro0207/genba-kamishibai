@@ -9,7 +9,7 @@ import { isoWeek, MORNING_MAX, morningScore, newSeed, pickSample, reviewerFor, S
 import { appendAudit } from "./audit";
 import type { CardRow } from "./cards";
 import type { Env } from "./env";
-import { type Person, type PeopleVars, personName } from "./people";
+import { type Person, type PeopleVars, shownName } from "./people";
 import { actorOf, type SignPayload, signIntact } from "./sign";
 
 export const issue = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
@@ -199,10 +199,10 @@ async function reviewsOf(db: D1Database, tenantId: string): Promise<ReviewRow[]>
   return (await db.prepare("SELECT week, card_id, version, reviewed_by, reviewed_at, note FROM sample_reviews WHERE tenant_id = ?").bind(tenantId).all<ReviewRow>()).results;
 }
 
-const sampleView = (env: Env, r: SampleRow, reviews: ReviewRow[] = []) => {
+const sampleView = (env: Env, kind: string, r: SampleRow, reviews: ReviewRow[] = []) => {
   const who = (actor: string | null) => {
     const m = /^(supervisor)\.([12])$/.exec(actor ?? "");
-    return m ? personName(env, { role: "supervisor", slot: Number(m[2]) as Person["slot"] }) : "";
+    return m ? shownName(env, kind, { role: "supervisor", slot: Number(m[2]) as Person["slot"] }) : "";
   };
   const picks = (JSON.parse(r.picked) as SamplePick[]).map((x) => {
     const rv = reviews.find((y) => y.week === r.week && y.card_id === x.card_id) ?? null;
@@ -215,11 +215,11 @@ const sampleView = (env: Env, r: SampleRow, reviews: ReviewRow[] = []) => {
  * その週の抜き取りを返す。まだ無ければ、そのときに署名済み（中身が署名と合う）のカードから、新しい種で 2 枚を選んで記録する。
  * 同じ週の 2 回目からは、記録したものをそのまま返す。署名済みが 1 枚も無い間は何も記録せず picks が空のまま返す
  */
-export async function ensureSample(db: D1Database, env: Env, tenantId: string, now = new Date()) {
+export async function ensureSample(db: D1Database, env: Env, tenantId: string, now = new Date(), kind = "") {
   const week = isoWeek(now);
   const get = () => db.prepare("SELECT week, seed, picked, pool, created_at FROM weekly_samples WHERE tenant_id = ? AND week = ?").bind(tenantId, week).first<SampleRow>();
   const have = await get();
-  if (have) return sampleView(env, have, await reviewsOf(db, tenantId));
+  if (have) return sampleView(env, kind, have, await reviewsOf(db, tenantId));
   const pool = await signedCards(db, tenantId);
   if (!pool.length) return { week, seed: null, pool: 0, size: SAMPLE_SIZE, created_at: null, picks: [], reviewed: 0 };
   const seed = newSeed();
@@ -229,16 +229,16 @@ export async function ensureSample(db: D1Database, env: Env, tenantId: string, n
     return { card_id: x.id, version: x.version, rule: x.rule, signed_by: x.signed_by, signed_at: x.signed_at, reviewer: reviewerFor(x.signed_by) };
   });
   await db.prepare("INSERT OR IGNORE INTO weekly_samples (tenant_id, week, seed, picked, pool, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(tenantId, week, seed, JSON.stringify(picked), pool.length, now.toISOString()).run();
-  return sampleView(env, (await get())!, await reviewsOf(db, tenantId));
+  return sampleView(env, kind, (await get())!, await reviewsOf(db, tenantId));
 }
 
-issue.post("/sample", async (c) => c.json(await ensureSample(c.env.DB, c.env, c.var.tenant.id)));
+issue.post("/sample", async (c) => c.json(await ensureSample(c.env.DB, c.env, c.var.tenant.id, new Date(), c.var.tenant.kind)));
 
 /** これまでの週の抜き取り（新しい週から） */
 issue.get("/samples", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT week, seed, picked, pool, created_at FROM weekly_samples WHERE tenant_id = ? ORDER BY week DESC").bind(c.var.tenant.id).all<SampleRow>();
   const reviews = await reviewsOf(c.env.DB, c.var.tenant.id);
-  return c.json({ samples: results.map((r) => sampleView(c.env, r, reviews)) });
+  return c.json({ samples: results.map((r) => sampleView(c.env, c.var.tenant.kind, r, reviews)) });
 });
 
 /**
@@ -264,7 +264,7 @@ issue.post("/samples/:week/:card/reviewed", async (c) => {
   const card = await c.env.DB.prepare("SELECT status FROM cards WHERE id = ? AND tenant_id = ?").bind(cardId, tid).first<{ status: string }>();
   if (card)
     await appendAudit(c.env.DB, tid, { card_id: cardId, kind: "status", actor: me, payload: { version: pick.version, from: card.status, to: card.status, reason: `週の抜き取り（${week}）で見直した${note ? `: ${note}` : ""}`, review: { week } } });
-  return c.json(sampleView(c.env, row!, await reviewsOf(c.env.DB, tid)));
+  return c.json(sampleView(c.env, c.var.tenant.kind, row!, await reviewsOf(c.env.DB, tid)));
 });
 
 // 朝礼の組（11/7 既定）。その日の作業を言葉で書くと、署名済み（中身が署名と合う）のカードから合うものを選んで並べる。
