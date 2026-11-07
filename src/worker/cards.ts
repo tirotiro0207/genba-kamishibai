@@ -2,7 +2,7 @@
 // どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { type Context, Hono } from "hono";
-import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, validateSource, WEIGHTS, type CardWeight } from "../shared/card";
+import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, validateSource, WEIGHTS, type CardWeight, wordsRubyErrors } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
@@ -13,7 +13,7 @@ import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
 import { appendAudit, appendAuditIf } from "./audit";
-import { claudeClient } from "./claude-client";
+import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, personName } from "./people";
 import { createRecall, readReason } from "./recall";
@@ -151,7 +151,9 @@ cards.post("/", async (c) => {
 });
 
 /** 用語表に積む（036）。同じカードの同じ言葉は 1 行 */
-export async function addTerms(db: D1Database, tenantId: string, cardId: string, terms: Term[]) {
+export async function addTerms(db: D1Database, tenantId: string, cardId: string, all: Term[]) {
+  // 訳（vi）は任意になった（11/5）。訳の無い組は用語表にも会社の呼び方にも積まない
+  const terms = all.filter((t) => t.ja?.trim() && (t.vi ?? "").trim());
   if (!terms.length) return;
   await db.batch(terms.map((t) => db.prepare("INSERT OR IGNORE INTO glossary (tenant_id, ja, vi, card_id) VALUES (?, ?, ?, ?)").bind(tenantId, t.ja.slice(0, 80), t.vi.slice(0, 120), cardId)));
   // 会社の言葉（085）: 用語表の言葉を、会社の呼び方として積む
@@ -291,7 +293,7 @@ cards.post("/:id/verify", async (c) => {
   const images = bytes.map((_, i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: b64[i] } }));
   let evidence: Evidence;
   try {
-    evidence = await verifyCard({ client, log: new D1CallLog(c.env.DB) }, "app", body, images);
+    evidence = await verifyCard({ client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) }, "app", body, images);
   } catch (e) {
     return c.json({ error: `確かめる AI が答えなかった: ${(e as Error).message}` }, 502);
   }
@@ -366,6 +368,9 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
   const errs = validateCard(card);
   if (errs.length) return c.json({ error: "カードの形か経路が足りない", errors: errs }, 400);
   const before = JSON.parse(r.body) as CardBody;
+  // 言葉の欄のふりがな: words.ja を変えたときだけ見る（元に戻す・ほかの欄の直しは、決まりより前のカードでも止めない）
+  const rubyErrs = wordsRubyErrors(card, before);
+  if (rubyErrs.length) return c.json({ error: "言葉の欄のふりがなが足りない", errors: rubyErrs }, 400);
   const changed = (Object.keys({ ...before, ...card }) as (keyof CardBody)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(card[k]));
   // 修正の差分（050）: 何も変わらない直しは記録も版も増やさない。理由の無い直しは受けない
   if (!changed.length) return c.json({ ...cardView(r), changed });
@@ -476,7 +481,7 @@ cards.post("/:id/redo", async (c) => {
   const before = JSON.parse(r.body) as CardBody;
   let out;
   try {
-    out = await redoCard({ client, log: new D1CallLog(db) }, "app", before, ask.frame, ask.box, ask.text);
+    out = await redoCard({ client, log: new D1CallLog(db), dayBudgetUsd: dayBudget(c.env) }, "app", before, ask.frame, ask.box, ask.text);
   } catch (e) {
     return c.json({ error: (e as Error).message }, e instanceof RedoError ? e.status : 502);
   }
@@ -518,7 +523,7 @@ cards.post("/:id/rework", async (c) => {
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   let out;
   try {
-    out = await reworkCard({ client, log: new D1CallLog(db) }, "app", before, text, frame as number | null);
+    out = await reworkCard({ client, log: new D1CallLog(db), dayBudgetUsd: dayBudget(c.env) }, "app", before, text, frame as number | null);
   } catch (e) {
     return c.json({ error: (e as Error).message }, e instanceof ReworkError ? e.status : 502);
   }

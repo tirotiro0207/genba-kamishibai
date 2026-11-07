@@ -1,6 +1,7 @@
 // 回答の記録の API（011 のサーバー）を呼ぶ
 import type { CardMotion } from "../../shared/card";
-import { authHeaders } from "../pin/TenantPin";
+import { pinLost } from "../events";
+import { authHeaders, needsPin } from "../pin/TenantPin";
 export type Shown = "card" | "text";
 export interface Assignment {
   participant: string;
@@ -35,7 +36,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   // JSON でない返事（前に立つ置き場の 5xx の HTML や 413 など）でも、読めない字ではなく HTTP の番号で伝える
   const body = await res.json().catch(() => ({}));
   // 送り直しで 409（済んでいる）を見分けられるように、HTTP の番号を付けて投げる
-  if (!res.ok) throw Object.assign(new Error((body as { error?: string }).error ?? `HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) {
+    const msg = (body as { error?: string }).error ?? `HTTP ${res.status}`;
+    // 入ったしるしが切れた（401・403 で「PIN で入って」「役割で入って」）ときは、App の PinRescue に PIN の画面へ戻してもらう
+    if ((res.status === 401 || res.status === 403) && needsPin(msg) && tenant) pinLost(tenant);
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
   return body as T;
 }
 

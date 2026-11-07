@@ -1,7 +1,8 @@
 // ③ 採点の画面。採点者ごとに開き、もう 1 人の判定は見えない。答えた人の ID も出さない
 import { useCallback, useEffect, useState } from "react";
 import { unpackAnswer } from "../../shared/answer-fields";
-import { authHeaders } from "../pin/TenantPin";
+import { pinLost } from "../events";
+import { authHeaders, needsPin } from "../pin/TenantPin";
 import { csvUrl, type Grade, type Grader, listGrades, listResponses, postGrade, type ResponseRow, type Verdict } from "./api";
 
 const LABEL: Record<Verdict, string> = { correct: "正しい", wrong: "違う", danger: "危ない読み違い" };
@@ -106,7 +107,12 @@ export function GradeScreen({ tenant, id, grader }: { tenant: string; id: string
         data-testid="grade-csv"
         onClick={async () => {
           const res = await fetch(csvUrl(tenant, id), { headers: authHeaders(tenant) });
-          if (!res.ok) return setErr(`CSV を書き出せない: ${res.status}`);
+          if (!res.ok) {
+            const msg = ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "";
+            // 入ったしるしが切れたときは PIN の画面に戻す（ほかの API と同じ）
+            if ((res.status === 401 || res.status === 403) && needsPin(msg)) pinLost(tenant);
+            return setErr(`CSV を書き出せない: ${res.status}${msg ? `（${msg}）` : ""}`);
+          }
           const a = document.createElement("a");
           a.href = URL.createObjectURL(await res.blob());
           a.download = "answers.csv";

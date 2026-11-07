@@ -8,7 +8,7 @@ import { bundleFor, type Locate, makeCard, type OkRule, SCENE_TEXT, type Scene }
 import { makeWords } from "../shared/make/words";
 import { D1CallLog } from "./api-log";
 import { addTerms, cardView, createCard, readAsk } from "./cards";
-import { claudeClient } from "./claude-client";
+import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
 import { gatherExemplars, recordExemplars } from "./exemplars";
 import type { PeopleVars } from "./people";
@@ -59,7 +59,7 @@ export async function runExtraction(env: Env, tenantId: string, raw: string, sou
   if (!validSource(source, text.split("\n").length)) throw new ExtractError("source が文の行の数と合わない", 400);
   const client = claudeClient(env);
   if (!client) throw new ExtractError("Claude の鍵が無い", 503);
-  const msg = await guardedCall({ client, log: new D1CallLog(env.DB) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
+  const msg = await guardedCall({ client, log: new D1CallLog(env.DB), dayBudgetUsd: dayBudget(env) }, { purpose: "app", label: "取り出し（画面）", params: rulesParams(text, focus) });
   const rules = parseRules(msg, text).map((r) => ({
     ...r,
     where: whereIs(source, r.from.line),
@@ -123,7 +123,7 @@ extract.post("/:id/make", async (c) => {
   const client = claudeClient(c.env);
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
   const rule = x.rules[item as number] as OkRule;
-  const deps = { client, log: new D1CallLog(c.env.DB) };
+  const deps = { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) };
   // 手本（086）: 同じ会社・同じカテゴリの直近の直し・署名済みのカード・会社の言葉。ほかの会社のものは集めない
   const ex = await gatherExemplars(c.env.DB, c.var.tenant.id, rule.text);
   const made = await makeCard(deps, "app", rule, locator(x.id, x.input.text, x.input.source), undefined, scene as Scene | undefined, exemplarText(ex), b.shape === "principle" ? { shape: "principle" } : {});

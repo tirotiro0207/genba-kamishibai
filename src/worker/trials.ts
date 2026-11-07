@@ -1,5 +1,6 @@
 // 回答の記録アプリの保存（011）。回を作ると種と割り当てが残り、答えは追記だけ受け付ける。
 import { Hono } from "hono";
+import { fitAnswer } from "../shared/answer-fields";
 import { type ExportGrade, type ExportResponse, toAnswersCsv, VERDICTS, type Verdict } from "../shared/answers-csv";
 import { crossSummary } from "../shared/summary";
 import { assign, crossAssign, newSeed } from "../shared/assign";
@@ -158,7 +159,8 @@ trials.post("/:id/responses", async (c) => {
   if (b.item !== "A" && b.item !== "B") return c.json({ error: "item は A か B" }, 400);
   const ms = b.ms === undefined || b.ms === null ? null : Number(b.ms);
   if (ms !== null && (!Number.isInteger(ms) || ms < 0 || ms > 3_600_000)) return c.json({ error: "ms が範囲の外" }, 400);
-  const answer = typeof b.answer === "string" ? b.answer.slice(0, 2000) : null;
+  // 2 つの欄の JSON の答えは、途中で切ると読めなくなるので、欄ごとに詰める（fitAnswer）
+  const answer = typeof b.answer === "string" ? fitAnswer(b.answer) : null;
   // 見せたものは割り当てから決める（答える側に選ばせない）。同じ参加者・項目の何回目かで順番の何番目かが決まる
   const done = await c.env.DB.prepare("SELECT count(*) AS n FROM responses WHERE trial_id = ? AND participant = ? AND item = ?").bind(t.id, a.participant, b.item).first<{ n: number }>();
   const k = done?.n ?? 0;
@@ -347,7 +349,7 @@ trials.post("/:id/picture-answers", async (c) => {
   if (typeof b.card_id === "string" && b.card_id !== next.id) return c.json({ error: "このカードは今の順番ではない" }, 400);
   // 同じ人が同時に 2 つ送ると、両方が同じカードを選ぶ。後の方は一意の決まりで入らないので、済んでいるとして返す
   const row = await c.env.DB.prepare("INSERT INTO picture_answers (trial_id, tenant_id, participant, card_id, answer) VALUES (?, ?, ?, ?, ?) RETURNING seq, created_at")
-    .bind(t.id, c.var.tenant.id, p, next.id, b.answer.trim().slice(0, 2000))
+    .bind(t.id, c.var.tenant.id, p, next.id, fitAnswer(b.answer.trim()))
     .first<{ seq: number; created_at: string }>()
     .catch((e: unknown) => (isUniqueError(e) ? null : Promise.reject(e)));
   if (!row) return c.json({ error: "このカードの答えは済んでいる" }, 409);
