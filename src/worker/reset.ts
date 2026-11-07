@@ -11,6 +11,8 @@ import type { PeopleVars } from "./people";
 
 /** 消す表（子から順に） */
 export const RESET_TABLES = [
+  "asset_active",
+  "asset_versions",
   "scores",
   "score_ja",
   "grades",

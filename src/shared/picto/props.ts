@@ -5,6 +5,7 @@
 // 置き場所は数字で決める: 人形の関節に付ける（関節と、背の高さに対するずれ）か、キャンバスの上の位置。
 // 吹き出しは、考える（点線と小さい丸）と話す（しっぽ）の 2 つ。中に道具の絵と「？」か「✓」を描く。
 import { type Joint, JOINTS, type Posed, PROPORTION, type Pt } from "./skeleton";
+import { placeOverride, propOverride } from "./prop-override";
 // 11/5: 電気の現場の道具と保護具 17 個を足し、安全帯（置いたとき）と保護めがね（持つ・置くとき）を写真に合わせて描き直した。
 // クレーンの先の近くに置いた吊り荷は、先の真下へ寄せてワイヤーでつなぐ
 
@@ -216,7 +217,7 @@ export const SEAT_TOP: Partial<Record<PropKind, number>> = { chair: 0.46 };
 const FLOOR_Y = 0.88;
 
 /** c が部品の下の真ん中（床に置く）の部品。吹き出しの中では真ん中へずらして描く */
-const ON_FLOOR = new Set<PropKind>([
+export const ON_FLOOR = new Set<PropKind>([
   "toolbox", "trash_bin", "cone", "barrier", "ladder", "stepladder", "fire_extinguisher", "hot_pot", "cart", "forklift", "bucket", "chemical", "gas_cylinder",
   "cubicle", "work_platform", "rolling_scaffold", "safety_shoes", "step_stool", "crane", "insulated_boots", "aerial_platform",
   "partition", "height_2m", "chair",
@@ -1736,6 +1737,9 @@ export function propsSvg(props: PropSpec[], posed: Posed[], size: number): strin
         : onHand ? posed[(p.at as { figure: number }).figure].h * PROPORTION.hand * 3.6
         : p.size * size;
       if (p.kind === "anchor_line") return `<g data-part="prop">${anchorLine(c, s, d, size, W)}</g>`;
+      // テナントで決めた差し替えの絵（11/7 prop-override.ts）。身に着けた物は体に合わせて描くので差し替えない
+      const swap = onHead || onHand ? undefined : propOverride(p.kind);
+      if (swap) return `<g data-part="prop" data-override="${p.kind}">${placeOverride(swap, c, s, d, ON_FLOOR.has(p.kind))}</g>`;
       // 人の腰に付けた椅子（11/6）: 床に置き、座面の上の面がお尻の下（腰の関節から背の高さ × 0.03 下）に合う大きさにする。
       // 背もたれが背中のすぐ後ろ（腰から背の高さ × 0.13 後ろ）に立ち、体に隠れずに見えるよう、椅子を後ろへずらす
       if (p.kind === "chair" && "figure" in p.at) {
