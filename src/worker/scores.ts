@@ -9,7 +9,7 @@ import { withWords } from "../shared/picture-order";
 import { D1CallLog } from "./api-log";
 import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
-import { type PeopleVars, personName, shownName, studentGroup, TEST_GROUP } from "./people";
+import { LATE_PARTICIPANTS, type PeopleVars, personName, shownName, studentGroup, TEST_GROUP } from "./people";
 import { getTrial, pictureCards, readMaterial, view } from "./trials";
 
 export const scoring = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
@@ -44,8 +44,9 @@ export const needsJa = needsJapanese;
 /** 1 回に訳す答えの数（長い答えが多くても返事が切れないように分ける） */
 const JA_CHUNK = 25;
 
-/** 試しの ID（student_test01 など・国籍「テスト」）は採点に出さない */
-const isTest = (participant: string, group?: string) => group === TEST_GROUP || studentGroup(participant) === TEST_GROUP;
+/** 試しの ID（student_test01 など・国籍「テスト」）は採点に出さない。試しの ID で受けた本物の参加者（LATE_PARTICIPANTS）は出す */
+const isTest = (participant: string, group?: string) =>
+  !(participant in LATE_PARTICIPANTS) && (group === TEST_GROUP || studentGroup(participant) === TEST_GROUP);
 
 /** latest: 答えのあるいちばん新しい回（採点の入口は回を選ばずに開く） */
 async function resolveTrial(db: D1Database, tenantId: string, id: string) {
@@ -97,7 +98,7 @@ scoring.get("/:id/scoring", async (c) => {
   for (const r of mine) latest[r.target] = { score: r.score, comment: r.comment ?? "" };
   const ja: Record<string, string> = {};
   for (const r of (await c.env.DB.prepare("SELECT target, ja FROM score_ja WHERE trial_id = ?").bind(t.id).all<{ target: string; ja: string }>()).results) ja[r.target] = r.ja;
-  const person = (p: string) => ({ participant: p, group: groups.get(p)?.group ?? studentGroup(p) });
+  const person = (p: string) => ({ participant: p, group: LATE_PARTICIPANTS[p] ?? groups.get(p)?.group ?? studentGroup(p) });
   return c.json({
     trial: { id: t.id, created_at: t.created_at },
     me,

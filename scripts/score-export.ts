@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { privatePath } from "../src/node/private-dir";
 import { type AnswerRow, answersCsv, latestScores, type PartSummary, type ScoreRow, summarize } from "../src/shared/score-report";
-import { studentGroup, TEST_GROUP } from "../src/worker/people";
+import { LATE_PARTICIPANTS, studentGroup, TEST_GROUP } from "../src/worker/people";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -49,7 +49,9 @@ function main() {
   if (!trial) throw new Error("採点の行がまだ無い");
   const t = esc(trial);
   const groups = groupsOf(sql<{ participants: string }>(`SELECT participants FROM trials WHERE id = '${t}'`)[0].participants);
-  const keep = (p: string) => (groups.get(p) ?? studentGroup(p)) !== TEST_GROUP && studentGroup(p) !== TEST_GROUP;
+  // 9 人: 試しの ID で受けた本物の参加者 2 人を入れる。7 人: 入れない（2 つを並べて出す決まり）
+  const groupOf = (p: string) => LATE_PARTICIPANTS[p] ?? groups.get(p) ?? studentGroup(p);
+  const keep = (p: string) => p in LATE_PARTICIPANTS || ((groups.get(p) ?? studentGroup(p)) !== TEST_GROUP && studentGroup(p) !== TEST_GROUP);
   const responses = sql<{ seq: number; participant: string; item: string; shown: string; ms: number | null; answer: string }>(
     `SELECT seq, participant, item, shown, ms, answer FROM responses WHERE trial_id = '${t}' AND erased = 0 AND answer IS NOT NULL ORDER BY participant, item`,
   );
@@ -57,21 +59,24 @@ function main() {
     `SELECT seq, participant, card_id, answer FROM picture_answers WHERE trial_id = '${t}' AND erased = 0 AND answer IS NOT NULL ORDER BY seq`,
   );
   const answers: AnswerRow[] = [
-    ...responses.filter((r) => keep(r.participant)).map((r) => ({ target: `r:${r.seq}`, participant: r.participant, group: groups.get(r.participant) ?? studentGroup(r.participant), part: "time" as const, item: r.item, shown: r.shown, ms: r.ms, answer: r.answer })),
-    ...pictures.filter((r) => keep(r.participant)).map((r) => ({ target: `p:${r.seq}`, participant: r.participant, group: groups.get(r.participant) ?? studentGroup(r.participant), part: "picture" as const, item: r.card_id, shown: "picture", ms: null, answer: r.answer })),
+    ...responses.filter((r) => keep(r.participant)).map((r) => ({ target: `r:${r.seq}`, participant: r.participant, group: groupOf(r.participant), part: "time" as const, item: r.item, shown: r.shown, ms: r.ms, answer: r.answer })),
+    ...pictures.filter((r) => keep(r.participant)).map((r) => ({ target: `p:${r.seq}`, participant: r.participant, group: groupOf(r.participant), part: "picture" as const, item: r.card_id, shown: "picture", ms: null, answer: r.answer })),
   ];
   const scores = latestScores(sql<ScoreRow>(`SELECT seq, target, grader, score, comment FROM scores WHERE trial_id = '${t}'`));
   const ja = Object.fromEntries(sql<{ target: string; ja: string }>(`SELECT target, ja FROM score_ja WHERE trial_id = '${t}'`).map((r) => [r.target, r.ja]));
-  const csv = answersCsv(answers, scores, ja);
   const at = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
-  const md = summaryMd(summarize(answers, scores), trial, at);
   const dir = privatePath("score");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "answers.csv"), "﻿" + csv, "utf-8");
-  writeFileSync(join(dir, "summary.md"), md, "utf-8");
-  if (process.argv.includes("--public")) writeFileSync(join(ROOT, "docs", "answers.csv"), "﻿" + csv, "utf-8");
-  process.stdout.write(md);
-  console.log(`CSV: ${join(dir, "answers.csv")}（${answers.length} 行）`);
+  const seven = answers.filter((a) => !(a.participant in LATE_PARTICIPANTS));
+  for (const [list, tail, label] of [[answers, "", "9 人"], [seven, "_7", "7 人（試しの ID で受けた 2 人を入れない）"]] as const) {
+    const csv = answersCsv([...list], scores, ja);
+    const md = summaryMd(summarize([...list], scores), trial, at).replace("採点の集計（", `採点の集計・${label}（`);
+    writeFileSync(join(dir, `answers${tail}.csv`), "﻿" + csv, "utf-8");
+    writeFileSync(join(dir, `summary${tail}.md`), md, "utf-8");
+    if (!tail && process.argv.includes("--public")) writeFileSync(join(ROOT, "docs", "answers.csv"), "﻿" + csv, "utf-8");
+    process.stdout.write(md);
+    console.log(`CSV: ${join(dir, `answers${tail}.csv`)}（${list.length} 行）`);
+  }
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) main();

@@ -22,6 +22,11 @@ const STUDENT_RE = /^student_([a-z])_(\d{1,3})$/i;
 /** 試しのための ID（11/6 作者「student_test01 とか 05 あたりまで」）。国籍は「テスト」で、数えるときに外す */
 const TEST_RE = /^student_test(\d{2})$/i;
 export const TEST_GROUP = "テスト";
+/**
+ * 11/6 の試しで、遅れて来て試しの ID で受けた本物の参加者（docs/fieldday-2026-11-06-participants.md）。
+ * 採点と書き出しでは参加者として扱う。数は、この 2 人を入れた 9 人と、入れない 7 人を並べて出す
+ */
+export const LATE_PARTICIPANTS: Record<string, string> = { student_test04: "カンボジア", student_test05: "カンボジア" };
 /** 打った ID を揃える（大文字小文字・前後の空白）。形が違えば null */
 export function normalizeStudent(x: unknown): string | null {
   const tm = typeof x === "string" ? x.trim().match(TEST_RE) : null;

@@ -106,3 +106,14 @@ describe("採点の入口: どちらが採点するかを PIN の前に選ぶ（
     expect((await call(`${base}/${t.id}/scoring/page/C`, json("GET", a))).status).toBe(400);
   });
 });
+
+describe("試しの ID で受けた本物の参加者（11/6 の 2 人）", () => {
+  it("採点の表に出し、国籍はカンボジア。ほかの試しの ID は出さない", async () => {
+    const t = (await (await call(base, json("POST", null, { participants: ["student_test04", "student_test01"], seed: "score-late" }))).json()) as { id: string };
+    for (const p of ["student_test04", "student_test01"])
+      await call(`${base}/${t.id}/responses`, json("POST", null, { participant: p, item: "A", answer: JSON.stringify({ ja: "でんきをしらべる", own: "" }) }));
+    const sa = (await (await call(`${base}/${t.id}/scoring`, json("GET", await role("author")))).json()) as { responses: { participant: string; group: string }[] };
+    expect(sa.responses.map((r) => r.participant)).toEqual(["student_test04"]);
+    expect(sa.responses[0].group).toBe("カンボジア");
+  });
+});
