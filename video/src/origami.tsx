@@ -3,7 +3,7 @@
 // 手順は手本の動画の折り方（脚の紙 11・体の紙 18・組む 2・仕上げ 5）を、直線だけの多角形に描き起こしたもの。
 // 1 手順は「そのあとの紙の層」と、そこで折れる「フラップ」（折ったあとの形・折り線）で書く。
 // フラップの折る前の形は、折ったあとの形を折り線で裏返して求める。動きは、折り線を軸に面が回る（見かけの幅が cos で縮み、半分を越えると裏の面が見える）
-import React from "react";
+import React, { createContext, useContext } from "react";
 import { PAPER, PAPER_EDGE, PAPER_FAR, type Pt, TorsoPattern } from "./paper";
 import { INK } from "./timeline";
 
@@ -235,7 +235,11 @@ export const StepsSheet: React.FC = () => {
 };
 
 /** 2 枚の紙の面の絵（ぼかした文字の貼り紙）。どちらも赤い見出し「守る注意事項」と箇条書き（11/5 夜）。正方形 200 の左上が (-100,-100) */
-export const SheetPatterns: React.FC = () => (
+/** 刷る紙の柄を画像に替える（台本 v3: 事例シートをぼかした紙を折る）。無ければ今までの「守る注意事項」の柄 */
+export const SheetLook = createContext<{ image?: string }>({});
+export const SheetPatterns: React.FC = () => {
+  const { image } = useContext(SheetLook);
+  return (
   <defs>
     {/* 体の紙の表のうち、胴の前の面にだけ薄い文字（体の紙の座標と、組んだあとの紙の人の座標） */}
     <TorsoPattern id="torso-b" x={-26} y={-34} w={52} h={136} />
@@ -244,7 +248,12 @@ export const SheetPatterns: React.FC = () => (
     <filter id="sheet-blur" x="-10%" y="-10%" width="120%" height="120%">
       <feGaussianBlur stdDeviation="2" />
     </filter>
-    {(["legs", "body"] as const).map((k) => (
+    {image && (["legs", "body"] as const).map((k) => (
+      <pattern key={k} id={`sheet-${k}`} patternUnits="userSpaceOnUse" x={-100} y={-100} width={200} height={200}>
+        <image href={image} width={200} height={200} preserveAspectRatio="xMidYMid slice" />
+      </pattern>
+    ))}
+    {!image && (["legs", "body"] as const).map((k) => (
       <pattern key={k} id={`sheet-${k}`} patternUnits="userSpaceOnUse" x={-100} y={-100} width={200} height={200}>
         <rect width={200} height={200} fill={PAPER} />
         <g filter="url(#sheet-blur)" opacity={0.85}>
@@ -266,4 +275,5 @@ export const SheetPatterns: React.FC = () => (
       </pattern>
     ))}
   </defs>
-);
+  );
+};

@@ -3,7 +3,7 @@
 // → 体の紙を脚の紙に差し込む → 折り紙のまま目が描かれ、腕と脚がぴょこっと動いて立つ → 吹き出し「紙芝居にします！」→ 右から木の枠を引っぱり込み、左へ走って消える。
 // 紙の人は、折り終えた紙の面そのものを部品（胴と頭・両腕・両脚）に分けて動かす。完成した絵に切り替えないので、書類が折られてそのまま人になったと途切れずに見える。
 // 0:13.0（コマ 390）で枠が真ん中に止まっているのは、前の版と同じ（後ろの場面がそこから始まるため）
-import React from "react";
+import React, { createContext, useContext } from "react";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
 import { cut, DIAMOND_BACK_M, foldAll, FoldPaper, Facets, translateFacets } from "./fold";
 import { ARM_PIVOT, BODY_FOLDS, CROTCH, FOOT_OUT, HEAD_TOP, LEG_DY, LEG_FOLDS, OUTLINE } from "./fold-steps";
@@ -202,11 +202,16 @@ const FRAME_FROM = EDGE_X + HAND + FRAME.w / 2;
 const frameCx = (f: number) => (f < GRAB_END ? FRAME_FROM : interpolate(f, [GRAB_END, PULL_END], [FRAME_FROM, W / 2], { ...clamp, easing: Easing.inOut(Easing.quad) }));
 
 const BUBBLE_TEXT = "紙芝居にします！";
+/** 台本 v3 の差し替え: 吹き出しの言葉と、時計・見出し・印刷口・説明の大きな字を描かない（bare。紙は前の場面から来る）。無ければ今までどおり */
+export const IntroLook = createContext<{ bubble?: string; bare?: boolean }>({});
 
 /** 冒頭 0:00〜0:13 の 1 コマ（g は冒頭からのコマ） */
 export const Intro: React.FC<{ g?: number; outline?: "over" | "side" }> = ({ g: gIn, outline }) => {
   const cur = useCurrentFrame();
   const g = gIn ?? cur;
+  const look = useContext(IntroLook);
+  const bubbleText = look.bubble ?? BUBBLE_TEXT;
+  const bubbleSize = Math.min(40, 330 / bubbleText.length);
 
   const clocksO = interpolate(g, [P1, P1 + 18], [1, 0], clamp);
   const headO = interpolate(g, [FOLD_START - 6, FOLD_START + 4], [1, 0], clamp);
@@ -346,9 +351,9 @@ export const Intro: React.FC<{ g?: number; outline?: "over" | "side" }> = ({ g: 
         </L>
         <L n={3}>
         {/* 時計（見出しは下から出す方を使うので、ここでは描かない） */}
-        {clocksO > 0 && g >= DIAL_DRAW[0] && <Clocks g={g + (sec(2.5) - HANDS_AT)} draw={[0, 0, dialP, dialP]} opacity={clocksO} />}
-        <Labels g={g} o={headO} />
-        <Mouth p={mouthP} o={headO} busy={busy} />
+        {!look.bare && clocksO > 0 && g >= DIAL_DRAW[0] && <Clocks g={g + (sec(2.5) - HANDS_AT)} draw={[0, 0, dialP, dialP]} opacity={clocksO} />}
+        {!look.bare && <Labels g={g} o={headO} />}
+        {!look.bare && <Mouth p={mouthP} o={headO} busy={busy} />}
 
         {/* 印刷: 1 枚目（脚）→ 2 枚目（体）。刷り終えたら置き場へ */}
         {g >= P1 && g < FOLD_START &&
@@ -390,7 +395,7 @@ export const Intro: React.FC<{ g?: number; outline?: "over" | "side" }> = ({ g: 
         )}
 
         {/* 説明の大きな字 */}
-        {bigO > 0 && (
+        {!look.bare && bigO > 0 && (
           <g opacity={bigO} transform={`translate(${W / 2} ${CAP_Y}) scale(${0.6 + bigIn * 0.4})`}>
             <text x={0} y={0} textAnchor="middle" fontFamily={FONT_PEN} fontSize={58} fontWeight={700} fill={INK} stroke="#fbfaf5" strokeWidth={10} paintOrder="stroke" filter="url(#wobble)">
               文字の情報を、折りたたんで、絵にする。
@@ -450,8 +455,8 @@ export const Intro: React.FC<{ g?: number; outline?: "over" | "side" }> = ({ g: 
           <g opacity={bubO} transform={`translate(${x - 110} ${BUB_Y}) scale(${bub})`}>
             {/* 頭の左に出す（右手を振るので右は空けておく。上の説明の字とも重ならない） */}
             <path transform="scale(-1 1)" d="M-20 -50H330Q350 -50 350 -30V30Q350 50 330 50H40L-20 100L0 50H-20Q-40 50 -40 30V-30Q-40 -50 -20 -50Z" fill="#fff" stroke={INK} strokeWidth={5} strokeLinejoin="round" />
-            <text x={-155} y={14} textAnchor="middle" fontFamily={FONT_JP} fontSize={40} fontWeight={700} fill={INK}>
-              {BUBBLE_TEXT}
+            <text x={-155} y={14} textAnchor="middle" fontFamily={FONT_JP} fontSize={bubbleSize} fontWeight={700} fill={INK}>
+              {bubbleText}
             </text>
           </g>
         )}

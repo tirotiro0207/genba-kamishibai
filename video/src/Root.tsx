@@ -8,6 +8,7 @@ import { StepsSheet } from "./origami";
 import { Portal, PORTAL_FRAMES } from "./portal";
 import { DISSOLVE_TEST_FRAMES, DissolveTest } from "./parts-test";
 import { SCENE_COMPONENTS } from "./scenes";
+import { V3, V3_FRAMES, V3Layer } from "./v3";
 import { FPS, H, SCENES, startOf, TOTAL, W } from "./timeline";
 
 const Opening: React.FC = () => (
@@ -37,6 +38,11 @@ export const Root: React.FC = () => (
     {/* 通しの動画のレイヤー（L1〜L5）。L2〜L5 は透明のまま書き出す（render-layers.mjs） */}
     {LAYERS.map((l) => (
       <Composition key={l.id} id={l.id} component={FullLayer} durationInFrames={FULL_FRAMES} fps={FPS} width={W} height={H} defaultProps={{ layer: l.n }} />
+    ))}
+    {/* 台本 v3（11/7 夜）の通しと、そのレイヤー（render-v3.mjs） */}
+    <Composition id="v3" component={V3} durationInFrames={V3_FRAMES} fps={FPS} width={W} height={H} />
+    {LAYERS.map((l) => (
+      <Composition key={`v3-${l.id}`} id={`v3-${l.id}`} component={V3Layer} durationInFrames={V3_FRAMES} fps={FPS} width={W} height={H} defaultProps={{ layer: l.n }} />
     ))}
     <Composition id="full-index" component={FullIndex} durationInFrames={1} fps={FPS} width={1990} height={720} />
     {/* 部品の試し: ドットに分解して吸い込まれる */}
