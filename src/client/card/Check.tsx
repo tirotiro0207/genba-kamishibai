@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { type CardBody, type CardStatus, type CardWeight, WEIGHT_LABEL, WEIGHTS } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
+import { motionRuleLine, motionRuleWarnings } from "../../shared/picto/motion-rule";
 import { renderFrame, SIZE } from "../../shared/picto/scene";
 import type { Evidence } from "../../shared/verify/formal";
 import { req } from "../make/MakeScreen";
@@ -72,6 +73,8 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
   // 重さ（11/7 既定）: 監修者が OK・署名の前に決める。本文に入るので版が 1 つ上がる（絵は変わらないので、確かめる AI の証拠は引き継ぐ）
   const setWeight = (w: CardWeight) => run(`weight-${w}`, () => req(tenant, `${path}/weight`, { method: "PUT", body: JSON.stringify({ weight: w, version: card.version }) }));
   const weight = card.body.weight;
+  // 動きの決まり（7 対 3）から外れた姿勢は、止めずに小さく知らせる（11/7 作者）
+  const ruleLine = card.body.motion.kind === "keyframes" ? motionRuleLine(motionRuleWarnings(card.body.motion.json)) : "";
 
   return (
     <section className="card-check" data-testid="card-check" data-evidence={ev ? "1" : "0"}>
@@ -101,6 +104,11 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
         <p className="card-wait" data-testid="card-wait">
           <strong>確認待ち</strong>
           <span>確かめる AI の証拠（どの絵を見て・何点で・なぜか）がまだ無いので、OK を押せません</span>
+        </p>
+      )}
+      {ruleLine && (
+        <p className="card-note" data-testid="card-motion-rule">
+          {ruleLine}
         </p>
       )}
       {(card.status === "pending" || card.status === "ok") && (
