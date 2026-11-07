@@ -168,7 +168,7 @@ export function PictureAnswerScreen({ tenant, id, participant }: { tenant: strin
   const next = cards.find((c) => !done.has(c.id));
   const banner = out.pending.length > 0 && (
     <p className="err" data-testid="pic-pending">
-      まだ おくれて いません（{out.pending.length}）{" "}
+      まだ おくれて いません（{out.pending.length}）{out.blocked && <> {out.blocked}。このままでは おくれません。せんせいに つたえて ください。</>}{" "}
       <button type="button" onClick={() => void out.flush()} data-testid="pic-resend">
         もう いちど おくる
       </button>

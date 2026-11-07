@@ -141,7 +141,7 @@ export function SelfScreen({ tenant, id, participant }: { tenant: string; id: st
   const cur = items.find((x) => !done.has(x.item));
   const banner = out.pending.length > 0 && (
     <p className="err" data-testid="self-pending">
-      まだ おくれて いません（{out.pending.length}）{" "}
+      まだ おくれて いません（{out.pending.length}）{out.blocked && <> {out.blocked}。このままでは おくれません。せんせいに つたえて ください。</>}{" "}
       <button type="button" onClick={() => void out.flush()} data-testid="self-resend">
         もう いちど おくる
       </button>
