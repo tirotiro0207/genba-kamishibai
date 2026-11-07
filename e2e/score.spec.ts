@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { hashPin } from "../src/worker/tenant";
 import { freshTenant, sql } from "./helpers/ok";
 
-// 試しの答えの 10 段階の採点（11/7）: 入口は左に作者・右に監修者のタブ。押すとその役割の PIN で入り、答えに点とコメントを残す。
+// 試しの答えの 10 段階の採点（11/7）: 入口で先に作者か監修者かを選び、会社の PIN とその役割の PIN で入り、答えに点とコメントを残す。
 // もう 1 人のタブに移ると、その役割の PIN で入り直し、前の人の点は見えない。PIN はこの使い捨てのテナントのためだけの値
 test("採点の入口から作者と監修者がそれぞれ点とコメントを残せる", async ({ page, request }) => {
   const T = freshTenant("score", "採点の確認");
@@ -19,15 +19,17 @@ test("採点の入口から作者と監修者がそれぞれ点とコメント�
   await page.goto("/#/");
   await page.evaluate(() => sessionStorage.clear());
   await page.goto(`/#/t/${T}/score`);
-  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "tenant");
-  await page.getByTestId("tenant-pin-input").fill(pin.tenant);
-  await page.getByTestId("tenant-pin-enter").click();
-  // 入口: 左に作者、右に監修者
+  // 入口: PIN より先に、どちらが採点するかを選ぶ（左に作者、右に監修者）
+  await expect(page.getByTestId("tenant-pin")).toHaveCount(0);
   await expect(page.getByTestId("score-tab-author")).toContainText("作者");
   await expect(page.getByTestId("score-tab-supervisor")).toContainText("監修者");
 
-  // 作者のタブ → 作者の PIN → 採点
+  // 作者を選ぶ → 会社の PIN → 作者の PIN → 採点
   await page.getByTestId("score-tab-author").click();
+  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "tenant");
+  await page.getByTestId("tenant-pin-input").fill(pin.tenant);
+  await page.getByTestId("tenant-pin-enter").click();
+  await expect(page.getByTestId("tenant-pin")).toHaveAttribute("data-step", "role");
   await page.getByTestId("tenant-pin-input").fill(pin.author);
   await page.getByTestId("tenant-pin-enter").click();
   await expect(page.getByTestId("score-sheet")).toBeVisible();

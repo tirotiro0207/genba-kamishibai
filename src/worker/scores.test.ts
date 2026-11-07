@@ -52,3 +52,26 @@ describe("試しの答えの 10 段階の採点（11/7）", () => {
     expect(b.trial.id).toBe(t.id);
   });
 });
+
+describe("採点の入口: どちらが採点するかを PIN の前に選ぶ（11/7 作者）", () => {
+  it("名前と右の人の枠を PIN なしで読める。答えや点は出さない", async () => {
+    const res = await call("/api/score-names");
+    expect(res.status).toBe(200);
+    const b = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(b).sort()).toEqual(["author", "slot", "supervisor"]);
+    expect(b.slot).toBe(1);
+  });
+
+  it("右の人の枠と名前は環境変数で決まり、決めた枠でない監修者は採点できない", async () => {
+    const { scoreNames, scoreSlot } = await import("./scores");
+    const e = { ...env, SCORE_SUPERVISOR_SLOT: "2", SCORE_SUPERVISOR_NAME: "右の人", SUPERVISOR_2_NAME: "監修者二" } as typeof env;
+    expect(scoreSlot(e)).toBe(2);
+    expect(scoreNames(e).supervisor).toBe("右の人");
+    expect(scoreNames({ ...e, SCORE_SUPERVISOR_NAME: "" } as typeof env).supervisor).toBe("監修者二");
+    expect(scoreSlot({ ...env, SCORE_SUPERVISOR_SLOT: "x" } as typeof env)).toBe(1);
+    // 既定（枠 1）のとき、監修者 2 で入っても採点の表は開けない
+    const t = await answered();
+    const b = (await (await call("/api/t/practice/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "supervisor", slot: 2 }) })).json()) as { token: string };
+    expect((await call(`${base}/${t.id}/scoring`, json("GET", b.token))).status).toBe(403);
+  });
+});

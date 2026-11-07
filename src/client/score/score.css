@@ -41,3 +41,6 @@
 .score-state.saved { color: var(--accent); }
 .score-state.err { color: var(--err); }
 @media (max-width: 640px) { .score-scale button { font-size: 15px; padding: 8px 0; } .score-name { font-size: 18px; } }
+/* 最初の画面の「どちらが採点するか」の 2 つのボタン（11/7 作者） */
+.score-tabs.big a { padding: 36px 20px; align-items: center; }
+.score-tabs.big .score-name { font-size: 28px; font-weight: 700; }

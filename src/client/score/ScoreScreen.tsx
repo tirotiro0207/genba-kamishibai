@@ -1,5 +1,6 @@
 // 試しの答えの 10 段階の採点（11/7 作者）。#/t/<テナント>/score（入口）・#/t/<テナント>/score/author ・ #/t/<テナント>/score/supervisor。
-// 入口は左に作者、右に監修者のタブ。タブを押すと、その役割の PIN で入って、参加者ごとの答えに 1〜10 の点とコメントを付ける。
+// 入口は「どちらが採点しますか」の 2 つのボタン（左に作者、右に監修者。名前は Worker の環境変数）。押すと会社の PIN、次にその人の PIN で入って、
+// 参加者ごとの答えに 1〜10 の点とコメントを付ける（11/7 作者「開いたらすぐ、一郎か黒須さんかを選ぶ」）。
 // もう 1 人の点は見えない（相談せずに付けるため）。母語の答えには、採点する人が読めるように参考の日本語の訳を付けられる
 import { useCallback, useEffect, useState } from "react";
 import type { CardMotion } from "../../shared/card";
@@ -23,7 +24,6 @@ interface Sheet {
 }
 
 const enc = encodeURIComponent;
-const ROLE_VALUE: Record<ScoreGrader, string> = { author: "author.1", supervisor: "supervisor.1" };
 const ROLE_LABEL: Record<ScoreGrader, string> = { author: "作者", supervisor: "監修者" };
 const ITEM_LABEL: Record<"A" | "B", string> = { A: "項目 A", B: "項目 B" };
 /** 10 段階の目安（11/7 作者「何段階伝わってるか伝わってないか」） */
@@ -52,9 +52,11 @@ async function call<T>(tenant: string, path: string, init?: RequestInit): Promis
   return body as T;
 }
 
+/** 入っている役割と枠（例 supervisor.2）。採点の右の人は決めた枠で入るので、枠まで比べる */
 const roleOf = (tenant: string) => {
   try {
-    return sessionStorage.getItem(roleKey(tenant))?.split(".")[1] ?? null;
+    const v = sessionStorage.getItem(roleKey(tenant))?.split(".");
+    return v && v.length >= 3 ? `${v[1]}.${v[2]}` : null;
   } catch {
     return null;
   }
@@ -243,9 +245,9 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
   );
 }
 
-function Tabs({ tenant, names, active }: { tenant: string; names: Partial<Record<ScoreGrader, string>>; active?: ScoreGrader }) {
+function Tabs({ tenant, names, active, big = false }: { tenant: string; names: Partial<Record<ScoreGrader, string>>; active?: ScoreGrader; big?: boolean }) {
   return (
-    <nav className="score-tabs" data-testid="score-tabs">
+    <nav className={`score-tabs${big ? " big" : ""}`} data-testid="score-tabs">
       {(["author", "supervisor"] as const).map((g) => (
         <a key={g} href={`#/t/${enc(tenant)}/score/${g}`} className={active === g ? "on" : ""} data-testid={`score-tab-${g}`}>
           <span className="score-role">{ROLE_LABEL[g]}</span>
@@ -260,16 +262,23 @@ export function ScoreScreen({ tenant, grader }: { tenant: string; grader?: Score
   const [tok, setTok] = useState(() => hasToken(tenant));
   const [role, setRole] = useState(() => roleOf(tenant));
   const [names, setNames] = useState<Partial<Record<ScoreGrader, string>>>({});
+  const [slot, setSlot] = useState<1 | 2>(1);
+  const value = (g: ScoreGrader) => (g === "author" ? "author.1" : `supervisor.${slot}`);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [err, setErr] = useState("");
-  const ready = !!grader && role === grader;
+  const ready = !!grader && role === value(grader);
 
+  // 2 人の名前と右の人の枠は、PIN の前に読む（最初の画面で選べるように）
   useEffect(() => {
-    if (!tok) return;
-    call<{ people: { role: string; slot: number; name: string }[] }>(tenant, "people")
-      .then((b) => setNames({ author: b.people.find((p) => p.role === "author")?.name ?? "", supervisor: b.people.find((p) => p.role === "supervisor" && p.slot === 1)?.name ?? "" }))
+    fetch("/api/score-names")
+      .then((r) => (r.ok ? (r.json() as Promise<{ author: string; supervisor: string; slot: number }>) : null))
+      .then((b) => {
+        if (!b) return;
+        setNames({ author: b.author, supervisor: b.supervisor });
+        setSlot(b.slot === 2 ? 2 : 1);
+      })
       .catch(() => {});
-  }, [tenant, tok]);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -284,21 +293,36 @@ export function ScoreScreen({ tenant, grader }: { tenant: string; grader?: Score
     if (ready) void load();
   }, [ready, load]);
 
+  // 最初の画面: どちらが採点するかを選ぶ（PIN より先）
+  if (!grader)
+    return (
+      <div className="score" data-testid="score">
+        <h1>試しの答えの採点</h1>
+        <p className="score-lead">採点する人を選んでください。選んだあとに PIN を入れます</p>
+        <Tabs tenant={tenant} names={names} big />
+      </div>
+    );
+  const label = names[grader] ? `${names[grader]}さん（${ROLE_LABEL[grader]}）` : ROLE_LABEL[grader];
   // 会社の PIN（まだなら）
-  if (!tok) return <TenantPin tenant={tenant} tenantOnly onDone={() => setTok(true)} />;
-  // タブを押した役割で入る（今の役割と違えば入り直す）
-  if (grader && role !== grader)
+  if (!tok)
     return (
       <div className="score">
         <Tabs tenant={tenant} names={names} active={grader} />
-        <TenantPin key={grader} tenant={tenant} roles={[{ value: ROLE_VALUE[grader], label: `${ROLE_LABEL[grader]}${names[grader] ? `（${names[grader]}）` : ""}` }]} onDone={() => setRole(roleOf(tenant))} />
+        <TenantPin tenant={tenant} tenantOnly onDone={() => setTok(true)} />
+      </div>
+    );
+  // 選んだ人の PIN で入る（今の役割と枠が違えば入り直す）
+  if (role !== value(grader))
+    return (
+      <div className="score">
+        <Tabs tenant={tenant} names={names} active={grader} />
+        <TenantPin key={`${grader}.${slot}`} tenant={tenant} named={false} roles={[{ value: value(grader), label }]} onDone={() => setRole(roleOf(tenant))} />
       </div>
     );
   return (
     <div className="score" data-testid="score">
       <h1>試しの答えの採点</h1>
       <Tabs tenant={tenant} names={names} active={grader} />
-      {!grader && <p className="score-lead">自分のタブを押してください。押すと、その役割の PIN で入って採点します</p>}
       {err && <p className="err">{err}</p>}
       {ready && !sheet && !err && <p>読み込み中…</p>}
       {ready && sheet && <Sheet tenant={tenant} sheet={sheet} reload={load} />}

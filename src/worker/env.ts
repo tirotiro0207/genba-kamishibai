@@ -9,6 +9,10 @@ export interface Env {
   /** 役割の名前（030b）。手元の Worker は .dev.vars、本番は wrangler secret から読む（.env は Node のスクリプトだけが読む）。無ければ空欄 */
   SUPERVISOR_1_NAME?: string;
   SUPERVISOR_2_NAME?: string;
+  /** 採点の右のタブの人の名前（11/7 作者。無ければその監修者の枠の名前） */
+  SCORE_SUPERVISOR_NAME?: string;
+  /** 採点の右のタブの人が入る監修者の枠（"1" か "2"。無ければ 1） */
+  SCORE_SUPERVISOR_SLOT?: string;
   TRAINER_NAME?: string;
   AUTHOR_NAME?: string;
   /** 監修者に見てもらうカードの番号（11/6 作者）。, か空白で区切り、この順でホームのタブに出す。本番は wrangler secret。無ければタブを出さない */

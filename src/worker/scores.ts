@@ -15,7 +15,16 @@ import { getTrial, pictureCards, readMaterial, view } from "./trials";
 export const scoring = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 export type ScoreGrader = "author" | "supervisor";
-const graderOf = (role: string | undefined): ScoreGrader | null => (role === "author" ? "author" : role === "supervisor" ? "supervisor" : null);
+/** 採点の右のタブの人が入る監修者の枠（11/7 作者「一郎と黒須さんで採点する」）。本番は環境変数で決める */
+export const scoreSlot = (env: Env): 1 | 2 => (env.SCORE_SUPERVISOR_SLOT?.trim() === "2" ? 2 : 1);
+/** 採点の 2 人の名前。右は SCORE_SUPERVISOR_NAME、無ければその枠の監修者の名前 */
+export const scoreNames = (env: Env) => ({
+  author: personName(env, { role: "author", slot: 1 }),
+  supervisor: env.SCORE_SUPERVISOR_NAME?.trim() || personName(env, { role: "supervisor", slot: scoreSlot(env) }),
+});
+/** 採点できるのは作者と、決めた枠の監修者だけ（もう 1 人の監修者の点が混ざらないように） */
+const graderOf = (env: Env, p: { role: string; slot: number } | null | undefined): ScoreGrader | null =>
+  p?.role === "author" ? "author" : p?.role === "supervisor" && p.slot === scoreSlot(env) ? "supervisor" : null;
 export const TRANSLATE_MODEL = "claude-sonnet-5-5";
 const JA_RE = /[぀-ヿ一-鿿]/;
 
@@ -61,7 +70,7 @@ async function sheetRows(env: Env, tenantId: string, trialId: string) {
 
 /** 採点の表: 2 人の名前・① の答え・② のカードと答え・自分の点だけ・参考の訳 */
 scoring.get("/:id/scoring", async (c) => {
-  const me = graderOf(c.var.person?.role);
+  const me = graderOf(c.env, c.var.person);
   if (!me) return c.json({ error: "採点は作者か監修者の役割で入ってください" }, 403);
   const s = await sheetRows(c.env, c.var.tenant.id, c.req.param("id"));
   if (!s) return c.json({ error: "回が無い" }, 404);
@@ -86,7 +95,7 @@ scoring.get("/:id/scoring", async (c) => {
   return c.json({
     trial: { id: t.id, created_at: t.created_at },
     me,
-    names: { author: personName(c.env, { role: "author", slot: 1 }), supervisor: personName(c.env, { role: "supervisor", slot: 1 }) },
+    names: scoreNames(c.env),
     items,
     responses: responses.map((r) => ({ target: `r:${r.seq}`, ...person(r.participant), item: r.item, shown: r.shown, ms: r.ms, answer: unpackAnswer(r.answer) ?? { ja: "", own: "" } })),
     cards: cards.map((x) => ({ target: `c:${x.id}`, id: x.id, pos: x.pos, rule: x.rule, motion: x.motion, words: x.words })),
@@ -104,7 +113,7 @@ scoring.get("/:id/scoring", async (c) => {
 
 /** 点とコメントを足す（追記だけ）。点は 1〜10 か空、コメントは 2000 字まで */
 scoring.post("/:id/scores", async (c) => {
-  const me = graderOf(c.var.person?.role);
+  const me = graderOf(c.env, c.var.person);
   if (!me) return c.json({ error: "採点は作者か監修者の役割で入ってください" }, 403);
   const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!t) return c.json({ error: "回が無い" }, 404);
@@ -136,7 +145,7 @@ const JA_SCHEMA = {
 
 /** まだ訳の無い母語の答えを、まとめて 1 回で日本語にする（参考の訳）。訳は答えごとに 1 回だけ残す */
 scoring.post("/:id/scoring/translate", async (c) => {
-  if (!graderOf(c.var.person?.role)) return c.json({ error: "採点は作者か監修者の役割で入ってください" }, 403);
+  if (!graderOf(c.env, c.var.person)) return c.json({ error: "採点は作者か監修者の役割で入ってください" }, 403);
   const s = await sheetRows(c.env, c.var.tenant.id, c.req.param("id"));
   if (!s) return c.json({ error: "回が無い" }, 404);
   const have = new Set((await c.env.DB.prepare("SELECT target FROM score_ja WHERE trial_id = ?").bind(s.t.id).all<{ target: string }>()).results.map((r) => r.target));

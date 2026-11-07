@@ -97,7 +97,7 @@ const has = (key: string) => {
 
 /** roles に選べる役割（value は「役割.番号」）。1 つなら選ぶ欄を出さない */
 /** tenantOnly: 会社の PIN の段だけで onDone を呼ぶ（採点の入口 11/7。役割はタブを押してから選ぶ） */
-export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false }: { tenant: string; onDone: () => void; roles?: readonly { value: string; label: string }[]; tenantOnly?: boolean }) {
+export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false, named = true }: { tenant: string; onDone: () => void; roles?: readonly { value: string; label: string }[]; tenantOnly?: boolean; named?: boolean }) {
   const [step, setStep] = useState<"tenant" | "role" | "student">(() => (has(tokenKey(tenant)) ? (roles.length === 1 && roles[0].value.startsWith("newhire") ? "student" : "role") : "tenant"));
   const [who, setWho] = useState<string>(roles[0].value);
   // 新入社員の ID（11/6 作者）。student_V_1 の形。前もって作らず、入ったときにその場で決まる
@@ -121,7 +121,8 @@ export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false }:
       live = false;
     };
   }, [step, tenant]);
-  const shown = roles.map((r) => (r.value.startsWith("supervisor") && names[r.value] ? { ...r, label: `${r.label}（${names[r.value]}さん）` } : r));
+  // named=false は、呼ぶ側が名前を付けた札をそのまま出す（採点の入口。名前が 2 回出ないように）
+  const shown = roles.map((r) => (named && r.value.startsWith("supervisor") && names[r.value] ? { ...r, label: `${r.label}（${names[r.value]}さん）` } : r));
 
   async function enter(e: FormEvent) {
     e.preventDefault();
