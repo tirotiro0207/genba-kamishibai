@@ -6,7 +6,7 @@
 
 - 単体のテスト: `npx vitest run`
 - 録画: `npx playwright test --workers=1`（並べて流すと下の 1 番で落ちる）
-- 見回り: `SWEEP=1 npx playwright test e2e/sweep.spec.ts --workers=1`。結果は `private/audit/122-sweep.json`（git の外）
+- 見回り: `SWEEP=1 npx playwright test e2e/sweep.spec.ts --workers=1`。結果は `private/audit/122-sweep-<日時>.json`（git の外。流すたびに別の名前で残す）
   - 練習用・架空の会社・会社のテナントを、それぞれ使い捨てで作って見る（会社は 2 段の PIN もその場で作る）。画面ごとに、その画面を使う役で入る
   - 1 つの画面でボタンを最大 25 個、1 つ押すたびに画面を開き直す
   - AI を呼ぶ口（取り出し・作り直し・確かめ・公開デモの作成）は押しても通さない。消す操作は押さない。確かめの窓はキャンセルする

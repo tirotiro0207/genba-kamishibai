@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const TABLES = ["cards", "audit_chains", "audit_log", "card_pairs", "glossary", "company_words", "extractions", "extraction_oks", "card_opens"];
+const TABLES = ["cards", "audit_chains", "audit_log", "card_pairs", "glossary", "company_words", "extractions", "extraction_oks", "card_opens", "card_posts", "sample_reviews", "morning_sets"];
 const lines = readFileSync("demo/seed.sql", "utf-8").split("\n").filter((l) => l && !l.startsWith("--"));
 
 /** INSERT の VALUES (...) を列ごとの値に割る。文字は '' を ' に戻し、文字でない値（数・NULL）はそのままの字で返す */
