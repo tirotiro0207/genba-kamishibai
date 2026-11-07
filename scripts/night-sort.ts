@@ -6,6 +6,7 @@
 //   --sub は Managed Agents の代わりに、同じ指示をサブスクリプションの claude -p で 1 ページずつ呼ぶ（063 の前の通しの確かめ。手元の D1 だけ）
 import { claudePMessage } from "../src/node/claude-p-client";
 import { makeClient } from "../src/node/client";
+import { FileCallLog } from "../src/node/file-log";
 import { ensureAgent, MA_MODEL, sortPageManaged } from "../src/node/managed-sort";
 import { costUsd } from "../src/shared/claude";
 import { parseSort, SORT_SYSTEM } from "../src/shared/sort/page";
@@ -36,7 +37,9 @@ ${text}` }] } as never);
   } else {
     const client = makeClient();
     const ids = await ensureAgent(client);
-    sortPage = (text) => sortPageManaged(client, ids, text);
+    // 夜間の費用も、ほかの呼び出しと同じ台帳（private/logs）に足し、全体の 1 日の上限を見てから呼ぶ
+    const log = new FileCallLog();
+    sortPage = (text) => sortPageManaged(client, ids, text, { log });
   }
   const s = await runNight({ sql: d1Sql(args.includes("--remote") ? "remote" : "local"), runId, tenant: opt("--tenant") ?? "company", doc, pages, sortPage, log: (l) => console.log(l) });
   console.log(`走り手 ${s.run_id}: ${s.pages} ページ、この回 ${s.done_now}・飛ばした ${s.skipped}・失敗 ${s.errors}・走らせ直し ${s.resumes} 回・費用 ${s.usd.toFixed(2)} USD`);

@@ -4,6 +4,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { BudgetExceededError, type BudgetEvent, type CallLog, dayBudgetUsd, DEFAULT_LIMITS, notifyBudget, startOfJstDay, sumAllUsd } from "../shared/claude";
 import { parseSort, SORT_SYSTEM, type SortResult } from "../shared/sort/page";
 import { privatePath } from "./private-dir";
 
@@ -54,8 +55,44 @@ export interface ManagedSort extends SortResult {
 /** 1 回のセッションの費用の上限（セント）。1 ページの仕分けは数セントのはず */
 export const SESSION_BUDGET_CENTS = 50;
 
-export async function sortPageManaged(client: Anthropic, ids: ManagedIds, pageText: string, budgetCents = SESSION_BUDGET_CENTS): Promise<ManagedSort> {
+export interface ManagedGuard {
+  /** 呼び出しの記録（ほかの呼び出しと同じ台帳。ここに足し、ここの合計を見て呼ぶ） */
+  log: CallLog;
+  /** 全部の用途を合わせた 1 日の上限。無ければ dayBudgetUsd() */
+  dayBudgetUsd?: number;
+  /** 1 回のセッションの費用の上限（セント）。無ければ SESSION_BUDGET_CENTS */
+  budgetCents?: number;
+  onBudget?: (e: BudgetEvent) => void;
+  now?: () => number;
+}
+
+/**
+ * セッションを作る前に、ほかの呼び出しと同じ上限（全体の 1 日・夜間の 1 日と全体）を見る。
+ * 1 回のセッションの上限（budgetCents）まで使う見込みで数えるので、上限を超えそうなら作らない
+ */
+async function checkBudget(guard: ManagedGuard, label: string, budgetCents: number) {
+  const est = budgetCents / 100;
+  const now = (guard.now ?? Date.now)();
+  const day = startOfJstDay(now);
+  const budget = guard.dayBudgetUsd ?? dayBudgetUsd();
+  const spent = await sumAllUsd(guard.log, day);
+  const limits = DEFAULT_LIMITS.night;
+  const stop = (which: "perCall" | "perDay" | "total" | "allPerDay") => {
+    (guard.onBudget ?? notifyBudget)({ kind: "stop", day, spentUsd: spent, estimateUsd: est, budgetUsd: budget, purpose: "night", label });
+    throw new BudgetExceededError("night", which, est);
+  };
+  if (est > limits.perCallUsd) stop("perCall");
+  if (spent + est > budget) stop("allPerDay");
+  if ((await guard.log.sumUsd("night", day)) + est > limits.perDayUsd) stop("perDay");
+  if ((await guard.log.sumUsd("night")) + est > limits.totalUsd) stop("total");
+}
+
+const LABEL = "Managed Agents の仕分け";
+
+export async function sortPageManaged(client: Anthropic, ids: ManagedIds, pageText: string, guard: ManagedGuard): Promise<ManagedSort> {
   const t0 = Date.now();
+  const budgetCents = guard.budgetCents ?? SESSION_BUDGET_CENTS;
+  await checkBudget(guard, LABEL, budgetCents);
   const session = await client.beta.sessions.create({
     agent: { type: "agent", id: ids.agent_id, version: ids.agent_version },
     environment_id: ids.environment_id,
@@ -81,14 +118,43 @@ export async function sortPageManaged(client: Anthropic, ids: ManagedIds, pageTe
     }
     if (stop !== "end_turn") throw new Error(`セッションが答えの前に止まった（${stop}）`);
     const r = parseSort(text);
-    const after = await client.beta.sessions.retrieve(session.id);
-    const cost = after.usage?.list_cost;
-    const usd = cost ? Number(cost.amount) / 100 : null;
+    const usd = await readUsd(client, session.id);
+    await record(guard, usd, Date.now() - t0, true);
     return { ...r, session_id: session.id, usd, ms: Date.now() - t0, deleted: await remove(client, session.id) };
   } catch (e) {
+    // 止まったり読めなかったりしても、使った分は台帳に残す（読めなければ上限いっぱい使ったものとして数える）
+    await record(guard, await readUsd(client, session.id), Date.now() - t0, false, e instanceof Error ? e.message : String(e));
     await remove(client, session.id);
     throw e;
   }
+}
+
+/** セッションの list cost（USD）。読めなければ null */
+async function readUsd(client: Anthropic, id: string): Promise<number | null> {
+  try {
+    const cost = (await client.beta.sessions.retrieve(id)).usage?.list_cost;
+    return cost ? Number(cost.amount) / 100 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 呼び出しの台帳に 1 行足す。費用が読めないときは、セッションの上限（budgetCents）を使った見込みで残す */
+async function record(guard: ManagedGuard, usd: number | null, ms: number, ok: boolean, error?: string) {
+  await guard.log.append({
+    at: new Date((guard.now ?? Date.now)()).toISOString(),
+    purpose: "night",
+    label: LABEL,
+    model: MA_MODEL,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+    usd: usd ?? (guard.budgetCents ?? SESSION_BUDGET_CENTS) / 100,
+    ms,
+    ok,
+    ...(error ? { error } : {}),
+  });
 }
 
 async function remove(client: Anthropic, id: string): Promise<boolean> {

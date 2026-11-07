@@ -18,11 +18,12 @@ const PAGES = [
 async function main() {
   const client = makeClient();
   const ids = await ensureAgent(client);
+  const log = new FileCallLog();
   for (const p of PAGES) {
-    const ma = await sortPageManaged(client, ids, p.text);
+    const ma = await sortPageManaged(client, ids, p.text, { log });
     const t0 = Date.now();
     const msg = await guardedCall(
-      { client, log: new FileCallLog() },
+      { client, log },
       { purpose: "measure", label: "仕分けの試作（自前の 1 回）", params: { model: MA_MODEL, max_tokens: 2000, system: SORT_SYSTEM, messages: [{ role: "user", content: `次のページを仕分けてください。\n\n${p.text}` }] } },
     );
     const own = parseSort(msg.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
