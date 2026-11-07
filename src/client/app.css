@@ -91,3 +91,6 @@ main[data-testid="app"] { position: relative; }
 ruby { ruby-position: over; }
 ruby rt { font-size: 0.55em; font-weight: 400; letter-spacing: 0; }
 :where(.read-words, .card-words p, .card-lead-row.lead-words dd, [data-testid="home-body-words"]):has(ruby) { line-height: 2.1; }
+/* 見る側の下の帯（11/7） */
+.read-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 760px; margin: 24px auto 0; }
+.read-foot .pick { font-size: 15px; text-decoration: none; }

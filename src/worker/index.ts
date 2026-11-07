@@ -9,6 +9,7 @@ import { files } from "./files";
 import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
+import { guest, guestGate } from "./guest";
 import { scoring } from "./scores";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
@@ -44,6 +45,9 @@ app.get("/api/handle/:handle", async (c) => {
   return c.json({ tenant: t.id });
 });
 
+// ゲストで動作確認する（11/7 作者）。その人だけの使い捨ての置き場を作る
+app.route("/api/guest", guest);
+
 // 会社のテナントに PIN で入る
 app.post("/api/t/:tenant/session", async (c) => {
   const t = await c.env.DB.prepare("SELECT id, kind, name, pin_hash FROM tenants WHERE id = ?").bind(c.req.param("tenant")).first<TenantRow>();
@@ -72,6 +76,8 @@ app.get("/api/t/:tenant/session", async (c) => {
 
 app.use("/api/t/:tenant/*", tenantGuard);
 // 公開デモ（093b）。本番では練習用と架空の会社は見るだけで、作るのは /api/demo/make だけ
+// ゲストの置き場（11/7）。Claude を呼ぶ口の回数を数える
+app.use("/api/t/:tenant/*", guestGate);
 app.use("/api/t/:tenant/*", publicGate);
 app.route("/api/demo", demo);
 // 役割（030b）。署名・停止は監修者だけ、新入社員はカードの API に入れない

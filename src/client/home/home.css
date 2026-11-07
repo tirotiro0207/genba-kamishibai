@@ -99,3 +99,15 @@
 /* 一覧の小さな印（11/7）: 命に関わる・原則・束 */
 .home-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid #999; border-radius: 4px; font-size: 12px; color: #444; }
 .home-tag.life { border-color: #c22; background: #c22; color: #fff; font-weight: 700; }
+/* 作る側と見る側の入口（11/7） */
+.home-doors { display: flex; flex-direction: column; gap: 16px; max-width: 760px; margin: 8vh auto 0; }
+.home-doors h1 { margin: 0; font-size: 24px; }
+.home-door-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .home-door-row { grid-template-columns: 1fr; } }
+.home-door { font: inherit; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 24px 20px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.home-door b { font-size: 26px; }
+.home-door span { font-size: 17px; }
+.home-door small { font-size: 14px; color: var(--muted); }
+.home-door.make { border-color: var(--accent); }
+.home-door:hover { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+.home-door-backbar { position: relative; z-index: 2; display: flex; justify-content: center; margin-top: 12px; }

@@ -32,7 +32,7 @@ import { req } from "../make/MakeScreen";
 import { loadTexts, type Texts } from "../route/RouteScreen";
 import type { SourceRef, Statement } from "../../shared/card";
 import { Original } from "./Original";
-import { ENTRY, logout, STAFF, studentHome, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
+import { logout, NEWHIRE, STAFF, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./home.css";
 import { Ruby } from "../Ruby";
 
@@ -61,14 +61,54 @@ const t = (tenant: string, path: string) => `#/t/${encodeURIComponent(tenant)}/$
 const signer = (s: NonNullable<Card["signed"]>) => (s.name ? `${s.name}さん` : `${ROLE_NAME[s.role] ?? s.role} ${s.slot}`);
 const day = (s: string) => new Date(s.includes("T") ? s : `${s.replace(" ", "T")}Z`).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" });
 
+/** 署名済みのカードを見る画面（見る側の最初の画面） */
+export const viewerHome = (tenant: string) => `#/t/${encodeURIComponent(tenant)}/read`;
+
+/**
+ * 作る側と見る側の入口（11/7 作者「作る側の画面と見る側の画面をちゃんと分けて」）。
+ * 作る側は作者・監修者・教育担当で、カードを作る・直す・署名する。見る側は新入社員と現場の人で、署名済みのカードだけを見る
+ */
+function Doors({ onPick }: { onPick: (side: "make" | "view") => void }) {
+  return (
+    <section className="home-doors" data-testid="home-doors">
+      <h1>どちらで入りますか</h1>
+      <div className="home-door-row">
+        <button type="button" className="home-door make" onClick={() => onPick("make")} data-testid="home-door-make">
+          <b>作る側</b>
+          <span>カードを作る・直す・署名する</span>
+          <small>作者・監修者・教育担当</small>
+        </button>
+        <button type="button" className="home-door view" onClick={() => onPick("view")} data-testid="home-door-view">
+          <b>見る側</b>
+          <span>署名されたカードを見る</span>
+          <small>新入社員・現場の人</small>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
   const [needPin] = useNeedsTenantPin(tenant);
   const [err, setErr] = useState("");
-  // 新入社員を押すと、ID を入れる段に進む（11/6 作者）。PIN の無いテナント（練習）でも同じ順にする
-  const [asStudent, setAsStudent] = useState(false);
+  const [side, setSide] = useState<"make" | "view" | null>(null);
+  // 見る側を押すと、ID を入れる段に進む（ID はテストを受ける人だけ。カードを見るだけなら空のまま）
+  const asStudent = side === "view";
   const [student, setStudent] = useState("");
   if (needPin === null) return <p>読み込み中…</p>;
-  if (needPin) return <TenantPin tenant={tenant} roles={ENTRY} onDone={onDone} />;
+  if (!side) return <Doors onPick={setSide} />;
+  const back = (
+    <button type="button" className="pick home-door-back" onClick={() => setSide(null)} data-testid="home-door-back">
+      ← 作る側・見る側を選び直す
+    </button>
+  );
+  if (needPin)
+    return (
+      <>
+        <TenantPin tenant={tenant} roles={side === "make" ? STAFF : NEWHIRE} onDone={onDone} />
+        <div className="home-door-backbar">{back}</div>
+      </>
+    );
   const go = async (value: string, id?: string) => {
     const [role, slot] = value.split(".");
     try {
@@ -85,17 +125,17 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
         className="home-pick"
         onSubmit={(e) => {
           e.preventDefault();
-          void go("newhire.1", student.trim());
+          void go("newhire.1", student.trim() || undefined);
         }}
         data-testid="home-pick-student"
       >
-        <p>新入社員の ID を入れてください</p>
+        <p>見る側で入ります。テストを受ける人だけ、新入社員の ID を入れてください（カードを見るだけなら空のまま）</p>
         <input value={student} onChange={(e) => setStudent(e.target.value.replace(/\s/g, ""))} placeholder="student_V_1" autoCapitalize="off" autoComplete="off" spellCheck={false} data-testid="home-student-id" />
         <div className="verdicts">
-          <button type="button" className="pick" onClick={() => setAsStudent(false)}>
-            ← 役割を選び直す
+          <button type="button" className="pick" onClick={() => setSide(null)}>
+            ← 作る側・見る側を選び直す
           </button>
-          <button className="pick go-pick" disabled={!student.trim()} data-testid="home-student-enter">
+          <button className="pick go-pick" data-testid="home-student-enter">
             入る
           </button>
         </div>
@@ -104,17 +144,15 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
     );
   return (
     <section className="home-pick" data-testid="home-pick">
-      <p>どの役で入りますか</p>
+      <p>作る側の、どの役で入りますか</p>
       <div className="verdicts">
         {STAFF.map((r) => (
           <button key={r.value} className="pick" onClick={() => go(r.value)} data-testid={`home-as-${r.value.replace(".", "-")}`}>
             {r.label}
           </button>
         ))}
-        <button className="pick" onClick={() => setAsStudent(true)} data-testid="home-as-newhire-1">
-          新入社員
-        </button>
       </div>
+      {back}
       {err && <p className="err">{err}</p>}
     </section>
   );
@@ -444,9 +482,9 @@ export function HomeScreen({ tenant }: { tenant: string }) {
   }, [tenant, me?.role]);
   if (!me) return <p>読み込み中…</p>;
   const role = me.role;
-  // 新入社員は、新入社員だけの画面へ（11/6 作者）
+  // 見る側（新入社員・現場の人）は、署名済みのカードを見る画面へ（11/7 作者。テストはその画面の下から）
   if (role === "newhire") {
-    location.replace(studentHome(tenant));
+    location.replace(viewerHome(tenant));
     return <p>読み込み中…</p>;
   }
   if (!role || !(role in ROLE_NAME)) return <RolePick tenant={tenant} onDone={check} />;

@@ -33,3 +33,5 @@
   .bd-row { animation: none; }
   .bd-inner { transition: none; }
 }
+.login button.login-guest { width: 100%; font: inherit; font-size: 22px; cursor: pointer; }
+.login-note { margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); }

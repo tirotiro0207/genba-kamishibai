@@ -7,7 +7,11 @@ import { TRACED_HAIRS } from "../../shared/picto/hair-traced";
 export interface Avatar {
   hair: Hair;
   face: FaceParts;
+  /** 業種（11/7。industry-drafts.ts の番号）。今は電気工事（01）だけ選べる */
+  industry?: string;
 }
+/** 今選べる業種（11/7 作者: ほかの業種は鍵をかけて、電気工事だけ） */
+export const OPEN_INDUSTRIES: readonly string[] = ["01"];
 export const DEFAULT_AVATAR: Avatar = { hair: "bob", face: DEFAULT_FACE };
 /** 選べる髪（キャラクターを作る画面の一覧と同じ） */
 export const HAIRS: readonly Hair[] = ["bob", ...TRACED_HAIRS];
@@ -24,7 +28,8 @@ export function normalizeAvatar(a: unknown): Avatar {
   for (const k of Object.keys(FACE_OPTIONS) as (keyof FaceParts)[]) {
     if ((FACE_OPTIONS[k] as readonly unknown[]).includes(saved[k])) (face as Record<string, unknown>)[k] = saved[k];
   }
-  return { hair, face };
+  const industry = typeof (o as { industry?: unknown }).industry === "string" && OPEN_INDUSTRIES.includes((o as { industry: string }).industry) ? (o as { industry: string }).industry : undefined;
+  return industry ? { hair, face, industry } : { hair, face };
 }
 
 const key = (tenant: string, role: string) => `avatar:${tenant}:${role}`;

@@ -45,11 +45,12 @@ export function myRole(tenant: string): string | null {
 
 function BackBar({ tenant, over }: { tenant: string; over: boolean }) {
   const student = myRole(tenant) === "newhire";
-  const to = `#/t/${encodeURIComponent(tenant)}/${student ? "student" : "home"}`;
+  // 見る側（11/7）は、署名済みのカードを見る画面に戻る
+  const to = `#/t/${encodeURIComponent(tenant)}/${student ? "read" : "home"}`;
   return (
     <nav className={over ? "back-bar over" : "back-bar"} data-testid="back-bar">
       <a href={to} data-testid="back-home">
-        {student ? "← じぶんの がめん" : "← ホーム"}
+        {student ? "← カードを みる" : "← ホーム"}
       </a>
     </nav>
   );
@@ -169,7 +170,9 @@ export function App() {
   const maker = r[0] === "t" && ["card", "route", "fix", "fold", "make", "audit", "sign", "pose", "queue"].includes(r[2]);
   // 戻る帯（11/6 作者「ホームに戻るとか、ボタンを押していって、そこにたどり着く経路」）。ホームと新入社員の画面には出さない。
   // 新入社員が受けている途中（① と絵のテスト・② の答え）にも出さない（終わりの画面に戻るボタンを置く）
-  const back = r[0] === "t" && !!r[2] && !["home", "student"].includes(r[2]) && !(r[2] === "trial" && ["self", "pictures", "answer"].includes(r[4]));
+  // 見る側の人が署名済みのカードを見ている画面（read）にも出さない（そこが見る側のホーム。11/7）
+  const viewerHome = r[2] === "read" && r[0] === "t" && myRole(r[1]) === "newhire";
+  const back = r[0] === "t" && !!r[2] && !["home", "student"].includes(r[2]) && !viewerHome && !(r[2] === "trial" && ["self", "pictures", "answer"].includes(r[4]));
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
   return (
     <main data-testid="app">

@@ -6,8 +6,9 @@
 import { useMemo, useState } from "react";
 import { FACE_OPTIONS, type FaceParts } from "../../shared/picto/avatar";
 import { characterSvg, type Hair } from "../../shared/picto/character";
+import { INDUSTRY_DRAFTS } from "../../shared/picto/industry-drafts";
 import { STANDING } from "../../shared/picto/skeleton";
-import { type Avatar, DEFAULT_AVATAR, HAIRS, saveAvatar } from "./store";
+import { type Avatar, DEFAULT_AVATAR, HAIRS, OPEN_INDUSTRIES, saveAvatar } from "./store";
 import "./avatar.css";
 
 const HAIR_LABEL: Record<string, string> = {
@@ -69,7 +70,9 @@ export function AvatarSetup({ tenant, role, onDone, initial, edit = false }: { t
   const [mode, setMode] = useState<"default" | "custom">(same ? "default" : "custom");
   const [custom, setCustom] = useState<Avatar>(initial ?? DEFAULT_AVATAR);
   const [tab, setTab] = useState<Tab>(TABS[0]);
-  const shown = mode === "default" ? DEFAULT_AVATAR : custom;
+  // 業種（11/7 作者）。最初に選んでもらう。今は電気工事だけ選べ、ほかは「準備中」で鍵をかける
+  const [industry, setIndustry] = useState(initial?.industry ?? OPEN_INDUSTRIES[0]);
+  const shown = { ...(mode === "default" ? DEFAULT_AVATAR : custom), industry };
 
   const choices = tab.key === "hair" ? HAIRS : OPTS[tab.key];
   const current = tab.key === "hair" ? custom.hair : (custom.face as unknown as Record<string, string>)[tab.key];
@@ -88,6 +91,17 @@ export function AvatarSetup({ tenant, role, onDone, initial, edit = false }: { t
     <div className="av" data-testid="avatar-setup">
       {!edit && <h1>あなたのキャラクター</h1>}
       <div className="av-card">
+        <label className="av-industry">
+          <span>あなたの業種を選んでください</span>
+          <select value={industry} onChange={(e) => setIndustry(e.target.value)} data-testid="avatar-industry">
+            {INDUSTRY_DRAFTS.map((d) => (
+              <option key={d.id} value={d.id} disabled={!OPEN_INDUSTRIES.includes(d.id)}>
+                {d.name}
+                {OPEN_INDUSTRIES.includes(d.id) ? "" : "（準備中）"}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="av-seg" role="tablist" aria-label="キャラクターの作り方">
           {(["default", "custom"] as const).map((m) => (
             <button key={m} role="tab" aria-selected={mode === m} className={mode === m ? "on" : ""} onClick={() => setMode(m)} data-testid={`avatar-mode-${m}`}>

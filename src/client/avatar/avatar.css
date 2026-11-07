@@ -40,3 +40,7 @@
 @media (prefers-reduced-motion: reduce) {
   .av-body.custom .av-stage, .av-panel { animation: none; }
 }
+/* 業種を選ぶ（11/7）。電気工事だけ選べる */
+.av-industry { display: flex; flex-direction: column; gap: 6px; font-size: 16px; color: var(--fg); }
+.av-industry select { font-size: 18px; max-width: 360px; }
+.av-industry option:disabled { color: var(--muted); }

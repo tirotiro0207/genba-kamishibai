@@ -190,7 +190,7 @@ export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false }:
       )}
       {step === "student" && (
         <label>
-          ID（れい: student_V_1）
+          ID（テストを受ける人だけ。カードを見るだけなら空のまま。れい: student_V_1）
           <input value={student} onChange={(e) => setStudent(e.target.value.replace(/\s/g, ""))} autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} placeholder="student_V_1" data-testid="tenant-pin-student" />
         </label>
       )}
@@ -205,7 +205,7 @@ export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false }:
           次へ
         </button>
       ) : (
-        <button className="big go" disabled={busy || !pin || (step === "student" && !student.trim())} data-testid="tenant-pin-enter">
+        <button className="big go" disabled={busy || !pin} data-testid="tenant-pin-enter">
           入る
         </button>
       )}

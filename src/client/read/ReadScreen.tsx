@@ -77,7 +77,41 @@ export function ReadScreen({ tenant }: { tenant: string }) {
   return (
     <PinGate tenant={tenant} roles={NEWHIRE}>
       <ReadCards tenant={tenant} />
+      <ViewerFoot tenant={tenant} />
     </PinGate>
+  );
+}
+
+/**
+ * 見る側の下の帯（11/7 作者）。見る側は署名済みのカードを見るのが本筋で、テストは教育担当に言われた人だけが下から入る。
+ * 「おわり」で役割のしるしを消し、次の人に渡せるようにする（作る側の人がこの画面を開いたときは出さない）
+ */
+function ViewerFoot({ tenant }: { tenant: string }) {
+  let role: string | null = null;
+  try {
+    role = sessionStorage.getItem(roleKey(tenant))?.split(".")[1] ?? null;
+  } catch {
+    role = null;
+  }
+  if (role !== "newhire") return null;
+  const leave = () => {
+    try {
+      sessionStorage.removeItem(roleKey(tenant));
+    } catch {
+      // 保存が使えない端末は、閉じれば消える
+    }
+    location.hash = `#/t/${encodeURIComponent(tenant)}/home`;
+    location.reload();
+  };
+  return (
+    <footer className="read-foot" data-testid="read-foot">
+      <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/student`} data-testid="read-go-test">
+        テストを うける（いわれた ひとだけ）
+      </a>
+      <button type="button" className="pick" onClick={leave} data-testid="read-leave">
+        おわり（つぎの ひとに わたす）
+      </button>
+    </footer>
   );
 }
 

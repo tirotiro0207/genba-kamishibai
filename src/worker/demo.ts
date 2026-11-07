@@ -11,6 +11,7 @@ import { addTerms, cardView, createCard } from "./cards";
 import { claudeClient } from "./claude-client";
 import type { Env } from "./env";
 import { locator } from "./extract";
+import { isGuestTenant } from "./guest";
 import { hitRateLimit, type RateLimit } from "./rate-limit";
 import type { TenantVars } from "./tenant";
 
@@ -62,7 +63,8 @@ demo.post("/make", async (c) => {
  */
 const PUBLIC_POSTS = /^\/api\/t\/[^/]+\/(cards\/[^/]+\/open|login|read\/cards\/[^/]+\/seen)$/;
 export async function publicGate(c: Context<{ Bindings: Env; Variables: TenantVars }>, next: Next) {
-  if (!c.env.PUBLIC_DEMO || c.var.tenant.kind === "company") return next();
+  // ゲストの置き場（11/7・guest.ts）は作る側の操作を通す。Claude を呼ぶ回数は guestGate が数える
+  if (!c.env.PUBLIC_DEMO || c.var.tenant.kind === "company" || isGuestTenant(c.var.tenant)) return next();
   const m = c.req.method;
   if (m === "GET" || m === "HEAD" || (m === "POST" && PUBLIC_POSTS.test(c.req.path))) return next();
   return c.json({ error: "公開の置き場では見るだけです。作るのは「その場で作る」から" }, 403);
