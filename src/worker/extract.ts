@@ -131,7 +131,7 @@ extract.post("/:id/make", async (c) => {
   const bundle = bundleFor(x.rules as OkRule[], item as number, x.id);
   // 言葉の欄（036）: やさしい日本語とベトナム語。出てきた現場の言葉は用語表に積む
   const words = await makeWords(deps, "app", made.card);
-  const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words, ...(bundle ? { bundle } : {}) }, "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)], ask);
+  const row = await createCard(c.env.DB, c.var.tenant.id, { ...made.card, words: words.words, ...(bundle ? { bundle } : {}) }, c.var.person ? actorOf(c.var.person) : "maker", [rule.from.quote, ...rule.reasons.map((r) => r.from.quote)], ask);
   await addTerms(c.env.DB, c.var.tenant.id, row.id, words.terms);
   await recordExemplars(c.env.DB, c.var.tenant.id, row.id, ex);
   return c.json(cardView(row), 201);

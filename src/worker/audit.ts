@@ -50,13 +50,14 @@ export async function appendAudit(db: D1Database, tenantId: string, input: Audit
 
 /**
  * 状態を移す 1 文（pre）と記録の 1 行を、1 つのバッチ（1 つのトランザクション）で書く。
+ * post は同じバッチの末尾に足す文（回収の知らせなど。記録の行が入ったときだけ入る文にする）。
  * pre が 1 行も変えなければ記録は足さずに null を返す。記録が足せなければ pre も戻る（「移ったのに記録が無い」を作らない）
  */
-export async function appendAuditIf(db: D1Database, tenantId: string, pre: D1PreparedStatement, input: AuditInput): Promise<AuditEntry | null> {
-  return appendAuditWith(db, tenantId, input, pre);
+export async function appendAuditIf(db: D1Database, tenantId: string, pre: D1PreparedStatement, input: AuditInput, post: D1PreparedStatement[] = []): Promise<AuditEntry | null> {
+  return appendAuditWith(db, tenantId, input, pre, post);
 }
 
-async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInput, pre: D1PreparedStatement | null): Promise<AuditEntry | null> {
+async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInput, pre: D1PreparedStatement | null, post: D1PreparedStatement[] = []): Promise<AuditEntry | null> {
   const chain = await currentChain(db, tenantId);
   const payload = JSON.parse(canonical(input.payload ?? null));
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -75,6 +76,7 @@ async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInp
       const [moved] = await db.batch([
         pre,
         db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0").bind(...values),
+        ...post,
       ]);
       return moved.meta.changes ? { ...draft, hash } : null;
     } catch (e) {

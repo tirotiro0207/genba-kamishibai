@@ -116,6 +116,11 @@ export async function cardsGate(c: Context<{ Bindings: Env; Variables: PeopleVar
   if (c.req.method === "POST" && /\/cards\/[^/]+\/status$/.test(c.req.path)) {
     const { to } = await c.req.json<{ to?: string }>().catch(() => ({ to: undefined }));
     if ((to === "signed" || to === "stopped") && p?.role !== "supervisor") return c.json({ error: "署名と停止は監修者だけ" }, 403);
+    // 止めたカードを下書きに戻すと本文の関所（上）を通らず直せてしまうので、戻すのも監修者だけ
+    if (to === "draft" && p?.role !== "supervisor") {
+      const cur = await c.env.DB.prepare("SELECT status FROM cards WHERE id = ? AND tenant_id = ?").bind(c.req.path.match(/\/cards\/([^/]+)\/status$/)![1], c.var.tenant.id).first<{ status: string }>();
+      if (cur?.status === "stopped") return c.json({ error: "止めたカードを下書きに戻せるのは監修者だけ" }, 403);
+    }
     // 止める理由は必ず要る（088 の残り）。回収の知らせに載せるため
     if (to === "stopped") {
       const { reason } = await c.req.json<{ reason?: unknown }>().catch(() => ({ reason: undefined }));

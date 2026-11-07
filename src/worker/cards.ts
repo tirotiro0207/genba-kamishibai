@@ -16,7 +16,7 @@ import { appendAudit, appendAuditIf } from "./audit";
 import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, shownName } from "./people";
-import { createRecall, readReason } from "./recall";
+import { readReason, recallStatement } from "./recall";
 import { cleanupCardSessions, listUsedExemplars, sessionDeleter } from "./exemplars";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
 import type { Env } from "./env";
@@ -307,11 +307,14 @@ cards.post("/:id/verify", async (c) => {
  * 状態が移った 1 行を監査に足す（確認待ち・OK から下書きに戻ったときも）。署名済みだったなら、前の版を印刷した人が
  * 回収できるよう回収の知らせを出す（止めたときと同じ）
  */
+const reopenReason = (r: CardRow, why: string) => `直したため（版 ${r.version} → ${r.version + 1}）: ${why}`.slice(0, 200);
+/** 直しの書き込み（appendAuditIf）と同じバッチに入れる回収の知らせ。署名済みが外れるときだけ。途中で落ちても「署名は外れたのに知らせが無い」を作らない */
+async function recallOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string): Promise<D1PreparedStatement[]> {
+  return r.status === "signed" && r.status !== to ? [await recallStatement(db, tenantId, r, by, reopenReason(r, why))] : [];
+}
 async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string) {
   if (r.status === to) return;
-  const reason = `直したため（版 ${r.version} → ${r.version + 1}）: ${why}`.slice(0, 200);
-  await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason } });
-  if (r.status === "signed") await createRecall(db, tenantId, r, by, reason);
+  await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason: reopenReason(r, why) } });
 }
 
 // 重さ（11/7 既定・作者の確認待ち）: 監修者が確認・署名の前に「命に関わる / それ以外」を決める。重さは本文に入る（指紋に入る）ので版を 1 つ上げ、
@@ -392,7 +395,7 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
     kind: "edit",
     actor: by,
     payload: { ...extra, from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
-  });
+  }, await recallOnEdit(c.env.DB, c.var.tenant.id, r, status, by, reason));
   if (!entry) return c.json({ error: "ほかの直しと重なった。読み直して" }, 409);
   // 会社の言葉（085）: 直しの前と後から、言い換えと使わない言い方を積む
   await addEditWords(c.env.DB, c.var.tenant.id, r.id, before as unknown as Record<string, unknown>, card as unknown as Record<string, unknown>);
@@ -495,11 +498,11 @@ cards.post("/:id/redo", async (c) => {
   const entry = await appendAuditIf(db, tid, update, {
     card_id: r.id,
     kind: "edit",
-    actor: "maker",
+    actor: whoOf(c, "maker"),
     payload: { request: "redone", from_n: b.n, from_version: r.version, to_version: r.version + 1, frame: ask.frame, parts: out.targets.parts, figures: out.targets.figures, props: out.targets.props, before: key(before), after: key(out.body), count },
-  });
+  }, await recallOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text));
   if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
-  // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5）
+  // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5。知らせは上の書き込みと同じバッチ）
   await reopenOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text);
   return c.json({ ...cardView((await getCard(db, tid, r.id))!), redo: { ...out.targets, count, left: REDO_MAX - count } });
 });
@@ -556,9 +559,9 @@ cards.post("/:id/status", async (c) => {
   // 状態を移す文と、移った 1 行を 1 つのトランザクションで書く。「誰が」は役割のしるしから（止めた監修者が残る）
   const move = c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status);
   const by = whoOf(c);
-  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, move, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } });
+  // 署名済みを止めたら、印刷したカードを回収できるよう、版と署名の日付つきの知らせを教育担当に出す（088）。移りと記録と知らせを同じバッチで書く
+  const post = r.status === "signed" && to === "stopped" ? [await recallStatement(c.env.DB, c.var.tenant.id, r, by, reason)] : [];
+  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, move, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } }, post);
   if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
-  // 署名済みを止めたら、印刷したカードを回収できるよう、版と署名の日付つきの知らせを教育担当に出す（088）
-  if (r.status === "signed" && to === "stopped") await createRecall(c.env.DB, c.var.tenant.id, r, by, reason);
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 });

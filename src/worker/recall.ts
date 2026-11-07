@@ -21,17 +21,16 @@ export function readReason(x: unknown): string | null {
   return typeof x === "string" ? x.trim().slice(0, REASON_MAX) : null;
 }
 
-/** 署名済みを止めたとき、回収の知らせを 1 つ作る。署名の日付は最後の署名の記録から取る */
-export async function createRecall(db: D1Database, tenantId: string, card: { id: string; version: number; body: string }, stoppedBy: string, reason: string, now = new Date()): Promise<number> {
+/** 署名済みを止めたとき、回収の知らせを足す文を作る（足すのは呼び出し側。状態の移りと同じバッチに入れる）。署名の日付は最後の署名の記録から取る。
+ *  直前の文が 1 行も変えていなければ（changes() が 0）足さない */
+export async function recallStatement(db: D1Database, tenantId: string, card: { id: string; version: number; body: string }, stoppedBy: string, reason: string, now = new Date()): Promise<D1PreparedStatement> {
   const sign = await db
     .prepare("SELECT payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'sign' ORDER BY created_at DESC, n DESC LIMIT 1")
     .bind(tenantId, card.id)
     .first<{ payload: string }>();
   const signedAt = sign ? (JSON.parse(sign.payload) as SignPayload).signed_at : null;
   const rule = (JSON.parse(card.body) as { rule: string }).rule;
-  const res = await db
-    .prepare("INSERT INTO recall_notices (tenant_id, card_id, version, signed_at, rule, reason, stopped_by, stopped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(tenantId, card.id, card.version, signedAt, rule, reason, stoppedBy, now.toISOString())
-    .run();
-  return res.meta.last_row_id;
+  return db
+    .prepare("INSERT INTO recall_notices (tenant_id, card_id, version, signed_at, rule, reason, stopped_by, stopped_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0")
+    .bind(tenantId, card.id, card.version, signedAt, rule, reason, stoppedBy, now.toISOString());
 }

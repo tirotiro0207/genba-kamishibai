@@ -8,6 +8,7 @@ import { latestForecasts, pictureOrder, PICTURES_MAX, withWords } from "../share
 import { appendAudit } from "./audit";
 import type { Env } from "./env";
 import { fileKey } from "./files";
+import { actorOf } from "./sign";
 import { normalizeStudent, type PeopleVars, studentGroup } from "./people";
 import type { TenantVars } from "./tenant";
 
@@ -167,6 +168,8 @@ trials.post("/:id/responses", async (c) => {
   const ms = b.ms === undefined || b.ms === null ? null : Number(b.ms);
   if (ms !== null && (!Number.isInteger(ms) || ms < 0 || ms > 3_600_000)) return c.json({ error: "ms が範囲の外" }, 400);
   // 2 つの欄の JSON の答えは、途中で切ると読めなくなるので、欄ごとに詰める（fitAnswer）
+  // 答えは文字だけ。文字でないものは断る（枠が埋まって「済み」になるのを防ぐ）。送らない・null は時間だけの記録として受ける
+  if (b.answer !== undefined && b.answer !== null && typeof b.answer !== "string") return c.json({ error: "answer は文字" }, 400);
   const answer = typeof b.answer === "string" ? fitAnswer(b.answer) : null;
   // 見せたものは割り当てから決める（答える側に選ばせない）。同じ参加者・項目の何回目かで順番の何番目かが決まる
   const done = await c.env.DB.prepare("SELECT count(*) AS n FROM responses WHERE trial_id = ? AND participant = ? AND item = ?").bind(t.id, a.participant, b.item).first<{ n: number }>();
@@ -267,7 +270,7 @@ trials.post("/:id/erase", async (c) => {
     // 採点のための訳（11/7）も消す。答えそのものが消えるので、訳も残さない
     c.env.DB.prepare("DELETE FROM score_ja WHERE trial_id = ?1 AND (target IN (SELECT 'r:' || seq FROM responses WHERE trial_id = ?1 AND participant = ?2) OR target IN (SELECT 'p:' || seq FROM picture_answers WHERE trial_id = ?1 AND participant = ?2))").bind(t.id, p),
   ]);
-  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
+  await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: (c.var as PeopleVars).person ? actorOf((c.var as PeopleVars).person) : "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
   return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
 });
 
