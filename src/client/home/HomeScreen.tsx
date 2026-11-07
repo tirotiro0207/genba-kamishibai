@@ -539,6 +539,7 @@ export function HomeScreen({ tenant }: { tenant: string }) {
             <a className="pick" href={t(tenant, "issue")} data-testid="home-go-issue">発行の管理</a>
             <a className="pick" href={t(tenant, "trials")} data-testid="home-go-trials">試しの回</a>
             <a className="pick" href={t(tenant, "make")} data-testid="home-go-make">資料から作る</a>
+            {role === "supervisor" && <a className="pick" href={t(tenant, "words")} data-testid="home-go-words">会社の言葉</a>}
           </nav>
           <CardsTab tenant={tenant} role={role} />
         </>

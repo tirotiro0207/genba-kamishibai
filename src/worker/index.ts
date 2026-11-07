@@ -10,6 +10,7 @@ import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
 import { assets } from "./assets";
+import { words } from "./words";
 import { guest, guestGate } from "./guest";
 import { publicScoreNames, scoreSlot, scoring } from "./scores";
 import { trials } from "./trials";
@@ -105,6 +106,8 @@ app.route("/api/t/:tenant/read", read);
 app.route("/api/t/:tenant/issue", issue);
 
 app.route("/api/t/:tenant/cards", cards);
+// 会社の言葉（11/7）。AI が覚えた呼び方・言い換え・使わない言い方を監修者が見て消す。関所は words.ts の中（監修者だけ）
+app.route("/api/t/:tenant/words", words);
 // 確認待ちの列と仕分けの入れ替え（061）
 app.route("/api/t/:tenant", queue);
 app.route("/api/t/:tenant/audit", audit);

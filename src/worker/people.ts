@@ -164,6 +164,12 @@ export async function trialsGate(c: Context<{ Bindings: Env; Variables: PeopleVa
   await next();
 }
 
+/** 監修者だけの口の関所（11/7）。会社の言葉の一覧と消す口。役割のしるしが無い・監修者でない役割は 403 */
+export async function supervisorOnlyGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
+  if (c.var.person?.role !== "supervisor") return c.json({ error: "会社の言葉を見たり消したりできるのは監修者だけ" }, 403);
+  await next();
+}
+
 export const people = new Hono<{ Bindings: Env; Variables: PeopleVars }>();
 
 /** 入ったしるしの鍵が無いとき（手元で .dev.vars を書き忘れたとき）の答え。鍵の長さ 0 で署名しようとして 500 にならないように先に断る */

@@ -25,6 +25,7 @@ import { loadPropOverrides } from "./assets/overrides";
 import { PIN_LOST } from "./events";
 import { ENTRY, NEWHIRE, PinGate, REVIEWERS, roleKey, STAFF, SUPERVISORS, TenantPin } from "./pin/TenantPin";
 import { ScreenGuard } from "./Safe";
+import { WordsScreen } from "./words/WordsScreen";
 import { AnswerScreen } from "./trial/AnswerScreen";
 import { ClocksScreen } from "./trial/ClocksScreen";
 import { GradeScreen } from "./trial/GradeScreen";
@@ -60,7 +61,7 @@ function BackBar({ tenant, over }: { tenant: string; over: boolean }) {
 /** 画面ごとに、PIN の画面で選べる役割 */
 function rolesFor(r: string[]) {
   if (r[2] === "read" || r[2] === "student") return NEWHIRE;
-  if (r[2] === "sign") return SUPERVISORS;
+  if (r[2] === "sign" || r[2] === "words") return SUPERVISORS;
   if (r[2] === "issue") return REVIEWERS;
   if (r[2] === "home" || (r[2] === "trial" && (r[4] === "self" || r[4] === "pictures"))) return ENTRY;
   return STAFF;
@@ -172,6 +173,8 @@ export function App() {
   if (r[0] === "t" && r[2] === "trials") body = <TrialsScreen tenant={r[1]} />;
   // #/t/<テナント>/score(/author|/supervisor) ・ 試しの答えの 10 段階の採点（11/7 作者。左に作者・右に監修者のタブ）
   if (r[0] === "t" && r[2] === "score") body = <ScoreScreen tenant={r[1]} grader={r[3] === "author" || r[3] === "supervisor" ? r[3] : undefined} />;
+  // #/t/<テナント>/words ・ 会社の言葉（11/7。監修者だけ。AI が覚えた言い方を見て、まちがいを消す）
+  if (r[0] === "t" && r[2] === "words") body = <WordsScreen tenant={r[1]} />;
   // #/picto/poses ・ 開発用の姿勢の一覧（どの画面からもリンクしない。姿勢の試験 e2e/poses.spec.ts が開く）
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない
