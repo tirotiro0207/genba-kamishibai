@@ -86,4 +86,23 @@ describe("採点の入口: どちらが採点するかを PIN の前に選ぶ（
     const b = (await (await call("/api/t/practice/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "supervisor", slot: 2 }) })).json()) as { token: string };
     expect((await call(`${base}/${t.id}/scoring`, json("GET", b.token))).status).toBe(403);
   });
+  it("① の元の文（文の側に見せたページの画像）を、採点する 2 人だけが読める", async () => {
+    const { sampleCard } = await import("../../tests/fixtures/card");
+    const ids: string[] = [];
+    for (const rule of ["採点 元の文 A", "採点 元の文 B"])
+      ids.push(((await (await call("/api/t/practice/cards", json("POST", null, { card: { ...sampleCard(), rule } }))).json()) as { id: string }).id);
+    for (const p of ["pages/score-a.png", "pages/score-b.png"])
+      expect((await call(`/api/t/practice/files/${p}`, { method: "PUT", headers: { "content-type": "image/png" }, body: new Uint8Array([137, 80, 78, 71, p.endsWith("a.png") ? 1 : 2]) })).status).toBe(201);
+    const t = (await (await call(base, json("POST", null, { design: "cross", participants: [{ id: "v1", group: "ベトナム" }], seed: "score-page" }))).json()) as { id: string };
+    expect((await call(`${base}/${t.id}/material`, json("PUT", null, { A: { card: ids[0], page: "pages/score-a.png" }, B: { card: ids[1], page: "pages/score-b.png" } }))).status).toBe(201);
+    const a = await role("author");
+    const res = await call(`${base}/${t.id}/scoring/page/B`, json("GET", a));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([137, 80, 78, 71, 2]);
+    const sheet = (await (await call(`${base}/${t.id}/scoring`, json("GET", a))).json()) as { items: { item: string; page: boolean }[] };
+    expect(sheet.items.map((x) => x.page)).toEqual([true, true]);
+    expect((await call(`${base}/${t.id}/scoring/page/B`, json("GET", await role("trainer")))).status).toBe(403);
+    expect((await call(`${base}/${t.id}/scoring/page/C`, json("GET", a))).status).toBe(400);
+  });
 });

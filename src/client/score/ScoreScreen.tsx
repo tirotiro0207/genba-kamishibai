@@ -16,7 +16,7 @@ interface Sheet {
   trial: { id: string; created_at: string };
   me: ScoreGrader;
   names: { author: string; supervisor: string };
-  items: { item: "A" | "B"; rule: string; motion: CardMotion | null; words: string }[];
+  items: { item: "A" | "B"; rule: string; motion: CardMotion | null; words: string; page?: boolean }[];
   responses: { target: string; participant: string; group: string; item: "A" | "B"; shown: "card" | "text"; ms: number | null; answer: Fields }[];
   cards: { target: string; id: string; pos: number; rule: string; motion: CardMotion; words: string }[];
   pictures: { target: string; participant: string; group: string; card_id: string; words: boolean; answer: Fields }[];
@@ -164,6 +164,39 @@ function ScoreBox({ value, onSave, label, strict = false }: { value?: { score: n
   );
 }
 
+/** ① の元の文: 「文」の側の参加者に見せたページの画像（11/7 作者）。画像は PIN のしるしが要るので、読んでから見せる */
+function OriginalPage({ tenant, trial, item }: { tenant: string; trial: string; item: "A" | "B" }) {
+  const [src, setSrc] = useState("");
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let url = "";
+    let live = true;
+    fetch(`/api/t/${enc(tenant)}/trials/${enc(trial)}/scoring/page/${item}`, { headers: authHeaders(tenant) })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`);
+        url = URL.createObjectURL(await res.blob());
+        if (live) setSrc(url);
+      })
+      .catch((e: Error) => live && setErr(e.message));
+    return () => {
+      live = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [tenant, trial, item]);
+  return (
+    <figure className="score-page" data-testid={`score-page-${item}`}>
+      <figcaption>元の文（「文で見た」人に見せたページ）</figcaption>
+      {src ? (
+        <a href={src} target="_blank" rel="noreferrer" title="別のタブで大きく開く">
+          <img src={src} alt={`項目 ${item} の元のページ`} />
+        </a>
+      ) : (
+        <p className="score-none">{err ? `ページを読めませんでした: ${err}` : "読み込み中…"}</p>
+      )}
+    </figure>
+  );
+}
+
 function Answer({ a, ja }: { a: Fields; ja?: string }) {
   return (
     <div className="score-answer">
@@ -282,12 +315,16 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
               {ITEM_LABEL[it.item]}
               {it.rule && <>: {it.rule}</>}
             </h3>
-            {it.motion && (
-              <div className="score-card">
-                <Frames motion={it.motion} />
-                {it.words && <p className="score-words">{it.words}</p>}
-              </div>
-            )}
+            <div className="score-pair">
+              {it.motion && (
+                <div className="score-card">
+                  <p className="score-k">カード（「カードで見た」人に見せた絵）</p>
+                  <Frames motion={it.motion} />
+                  {it.words && <p className="score-words">{it.words}</p>}
+                </div>
+              )}
+              {"page" in it && it.page && <OriginalPage tenant={tenant} trial={sheet.trial.id} item={it.item} />}
+            </div>
             <ol className="score-list">
               {sheet.responses
                 .filter((r) => r.item === it.item)

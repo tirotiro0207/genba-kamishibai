@@ -88,7 +88,7 @@ scoring.get("/:id/scoring", async (c) => {
         (["A", "B"] as const).map(async (item) => {
           const row = await c.env.DB.prepare("SELECT body FROM cards WHERE id = ? AND tenant_id = ?").bind(cfg[item].card, c.var.tenant.id).first<{ body: string }>();
           const body = row ? (JSON.parse(row.body) as { rule: string; motion: unknown; words?: { ja?: string } }) : null;
-          return { item, rule: body?.rule ?? "", motion: body?.motion ?? null, words: body?.words?.ja ?? "" };
+          return { item, rule: body?.rule ?? "", motion: body?.motion ?? null, words: body?.words?.ja ?? "", page: !!cfg[item].page };
         }),
       )
     : [];
@@ -116,6 +116,23 @@ scoring.get("/:id/scoring", async (c) => {
     scores: latest,
     ja,
   });
+});
+
+/**
+ * ① の項目で「文」の側の参加者に見せた元のページの画像（11/7 作者「元の文も採点の画面に出す」）。
+ * 採点する 2 人だけが読める。参加者に見せたものと同じ画像を返す
+ */
+scoring.get("/:id/scoring/page/:item", async (c) => {
+  if (!graderOf(c.env, c.var.person)) return c.json({ error: "採点は作者か監修者の役割で入ってください" }, 403);
+  const item = c.req.param("item");
+  if (item !== "A" && item !== "B") return c.json({ error: "項目は A か B" }, 400);
+  const t = await getTrial(c.env.DB, c.var.tenant.id, await resolveTrial(c.env.DB, c.var.tenant.id, c.req.param("id")));
+  if (!t) return c.json({ error: "回が無い" }, 404);
+  const cfg = await readMaterial(c.env, c.var.tenant.id, t.id);
+  if (!cfg) return c.json({ error: "① で見せるものがまだ結ばれていない" }, 404);
+  const obj = await c.env.FILES.get(`t/${c.var.tenant.id}/${cfg[item].page}`);
+  if (!obj) return c.json({ error: "ページの画像が無い" }, 404);
+  return new Response(obj.body, { headers: { "content-type": obj.httpMetadata?.contentType ?? "application/octet-stream", "cache-control": "private, no-store" } });
 });
 
 /** 点とコメントを足す（追記だけ）。点は 1〜10 か空、コメントは 2000 字まで */
