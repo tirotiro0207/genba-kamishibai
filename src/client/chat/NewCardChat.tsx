@@ -17,7 +17,14 @@ interface Rule {
   text: string;
   where: { page: number | null; line: number };
   reasons: { text: string; stated: boolean }[];
+  /** 点検表の項目か・言い換えたか・点検表の中の番号と見出し（前の取り出しには無い） */
+  checklist?: boolean;
+  reworded?: boolean;
+  step?: number | null;
+  parent?: string | null;
 }
+
+const REWORD_ASK = "言い換えた文なので、元の文と合うか確かめてほしい";
 
 const home = (tenant: string) => `#/t/${encodeURIComponent(tenant)}/home`;
 
@@ -29,11 +36,16 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
   const [done, setDone] = useState<number[]>([]);
   const [oked, setOked] = useState(false);
   const [err, setErr] = useState("");
+  // 「監修者に確認」の印と理由（空でない文字があれば付く）。原則の 1 コマで作る項目（11/7 既定）
+  const [ask, setAsk] = useState<Record<number, string | undefined>>({});
+  const [principle, setPrinciple] = useState<Record<number, boolean>>({});
   useEffect(() => {
     // 11/7 作者: 最初から全部に印を付けておき、作らないものだけ外してもらう
     req<{ rules: Rule[] }>(tenant, `/extract/${id}`).then((x) => {
       setRules(x.rules);
       setOn(x.rules.map((_, i) => i));
+      // 言い換えた決まりには、最初から「監修者に確認」の印を付けておく（外せる）
+      setAsk(Object.fromEntries(x.rules.flatMap((r, i) => (r.reworded ? [[i, REWORD_ASK]] : []))));
     }, (e: Error) => setErr(e.message));
   }, [tenant, id]);
   if (err && !rules) return <p className="err">{err}</p>;
@@ -44,6 +56,9 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
   const make = async () => {
     setErr("");
     try {
+      // 印を付けたのに理由が空なら、OK を送る前に止める（直せなくなる前に）
+      const empty = left.find((i) => ask[i] !== undefined && !ask[i]?.trim());
+      if (empty !== undefined) throw new Error("監修者に確かめてほしいことを書いてください");
       if (!oked) {
         await req(tenant, `/extract/${id}/ok`, { method: "POST", body: JSON.stringify({ items: on }) });
         setOked(true);
@@ -51,7 +66,7 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
       let k = done.length;
       for (const item of left) {
         setBusy(`カードを作っています（${k + 1} / ${on.length}）`);
-        await req(tenant, `/extract/${id}/make`, { method: "POST", body: JSON.stringify({ item }) });
+        await req(tenant, `/extract/${id}/make`, { method: "POST", body: JSON.stringify({ item, ask: ask[item]?.trim() || undefined, ...(principle[item] ? { shape: "principle" } : {}) }) });
         k += 1;
         setDone((xs) => [...xs, item]);
       }
@@ -71,6 +86,26 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
               <span className={`chat-kind ${r.kind}`}>{r.kind === "do" ? "する" : "しない"}</span>
               <span className="chat-rule-text">{r.text}</span>
             </label>
+            {(r.checklist || r.reworded) && (
+              <span className="chat-where" data-testid={`chat-tags-${i}`}>
+                {r.checklist && (r.parent && r.step ? `点検表「${r.parent}」の ${r.step} 番目` : "手元の✓")}
+                {r.checklist && r.reworded ? "・" : ""}
+                {r.reworded && "言い換えた"}
+              </span>
+            )}
+            {on.includes(i) && !done.includes(i) && !oked && (
+              <div className="make-ask">
+                <label>
+                  <input type="checkbox" checked={ask[i] !== undefined} disabled={!!busy} onChange={(e) => setAsk((a) => ({ ...a, [i]: e.target.checked ? (r.reworded ? REWORD_ASK : "") : undefined }))} data-testid={`chat-ask-${i}`} />
+                  監修者に確認
+                </label>
+                <label>
+                  <input type="checkbox" checked={!!principle[i]} disabled={!!busy} onChange={(e) => setPrinciple((p) => ({ ...p, [i]: e.target.checked }))} data-testid={`chat-principle-${i}`} />
+                  原則の 1 コマで作る
+                </label>
+                {ask[i] !== undefined && <input value={ask[i]} disabled={!!busy} onChange={(e) => setAsk((a) => ({ ...a, [i]: e.target.value }))} placeholder="何を確かめてほしいか" data-testid={`chat-ask-text-${i}`} />}
+              </div>
+            )}
             <span className="chat-where">{r.where.page ? `${r.where.page} ページ ${r.where.line} 行目` : `${r.where.line} 行目`}{r.reasons.length ? `・理由 ${r.reasons.map((x) => x.text).join("／")}` : ""}</span>
           </li>
         ))}

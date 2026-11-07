@@ -38,3 +38,6 @@
 .chat-attach { width: 44px; font-size: 22px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .chat-send { padding: 0 18px; border: 0; background: var(--accent); color: #fff; font-weight: 700; }
 .chat-send:disabled { opacity: 0.4; cursor: default; }
+.chat-rules .make-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; margin: 4px 0; }
+.chat-rules .make-ask label { display: flex; align-items: center; gap: 6px; }
+.chat-rules .make-ask input:not([type="checkbox"]) { flex: 1; min-width: 200px; }
