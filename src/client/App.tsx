@@ -10,6 +10,8 @@ import { NewCardChat } from "./chat/NewCardChat";
 import { HomeScreen } from "./home/HomeScreen";
 import { IssueScreen } from "./issue/IssueScreen";
 import { LoginScreen } from "./login/LoginScreen";
+import { FlowBackdrop } from "./FlowBackdrop";
+import { FlowTuner, showFlowTuner } from "./FlowTuner";
 import { MakeScreen } from "./make/MakeScreen";
 import { Slide } from "./motion/Slide";
 import { PoseGallery } from "./picto/PoseGallery";
@@ -185,8 +187,13 @@ export function App() {
   const viewerHome = r[2] === "read" && r[0] === "t" && myRole(r[1]) === "newhire";
   const back = r[0] === "t" && !!r[2] && !["home", "student"].includes(r[2]) && !viewerHome && !(r[2] === "trial" && ["self", "pictures", "answer"].includes(r[4]));
   // 画面を切り替えると、紙芝居の絵を抜くように今の画面が動く（076a）。同じ画面の中の段やカードは、それぞれの画面が動かす
+  // ログインしたあと（#/t/…）だけ、斜めに流れる字の背景を敷く（11/7 作者）。入口と公開デモは今のまま
+  const flow = r[0] === "t";
   return (
-    <main data-testid="app">
+    <>
+      {flow && <FlowBackdrop />}
+      {flow && r[2] === "home" && showFlowTuner() && <FlowTuner />}
+      <main data-testid="app" className={flow ? "on-flow" : undefined}>
       {back && <BackBar tenant={r[1]} over={maker} />}
       {maker && <StatsBar tenant={r[1]} />}
       <Slide k={r.slice(0, 4).join("/")}>
@@ -197,6 +204,7 @@ export function App() {
           </PinRescue>
         </ScreenGuard>
       </Slide>
-    </main>
+      </main>
+    </>
   );
 }
