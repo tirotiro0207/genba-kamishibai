@@ -2,7 +2,9 @@
 // 顔の輪郭は 3 つの向きで同じ形のままにして、向きの違いは目・鼻・口の位置だけで出す（輪郭を向きごとに変えると、輪郭の種類 × 向きで崩れる）。
 // 顔に付く部品の横の位置は、全部 landmarks()（向きごとの目印）から取る。マスクを x 0 に決め打ちして、斜めで顔のまん中からずれた失敗をくり返さないため。
 // 目印の数は、初めの顔（standard、半幅 45）の値を 45 で割った係数に顔の半幅を掛けたもの。standard では今までの絵と 1 文字も変わらない。
+import { DEFAULT_RIG, type ExprRig } from "./asset-rules";
 import type { View } from "./character";
+import { faceOverride } from "./prop-override";
 
 export type FaceShape = "standard" | "round" | "slim" | "square";
 /** white（白目に大きな黒目）は動画だけの特別な目。キャラクターを作る画面の選択肢（FACE_OPTIONS）には入れない */
@@ -23,6 +25,24 @@ export type Brows = "none" | "flat" | "arch" | "angled";
  */
 export type Expression = "neutral" | "joy" | "fun" | "anger" | "sad" | "surprise" | "worry" | "pain" | "serious";
 export const EXPRESSIONS: readonly Expression[] = ["neutral", "joy", "fun", "anger", "sad", "surprise", "worry", "pain", "serious"];
+/**
+ * 表情の描き方（11/7 組み替え）: 9 つの表情を、目・眉・口・口の幅の組み合わせで表す（asset-rules.ts の ExprRig）。
+ * 組み替える前と 1 文字も変わらない（tests/asset-face-same.test.ts）。会社が差し替えた表情（face_…）があればその組み合わせで描く
+ */
+const EXPR_RIG: Record<Expression, ExprRig> = {
+  neutral: DEFAULT_RIG,
+  joy: { eyes: "closedArc", brows: "own", mouth: "openSmile", mouthWidth: 1 },
+  fun: { eyes: "open", brows: "own", mouth: "openSmile", mouthWidth: 1 },
+  anger: { eyes: "open", brows: { inner: -43.5, outer: -50 }, mouth: "shout", mouthWidth: 1 },
+  sad: { eyes: "open", brows: { inner: -51, outer: -45.5 }, mouth: "frown", mouthWidth: 1 },
+  surprise: { eyes: "wide", brows: "raised", mouth: "smallO", mouthWidth: 1 },
+  worry: { eyes: "open", brows: { inner: -51, outer: -46 }, mouth: "wave", mouthWidth: 1 },
+  pain: { eyes: "pinched", brows: { inner: -50, outer: -45 }, mouth: "clench", mouthWidth: 1 },
+  serious: { eyes: "open", brows: { inner: -47, outer: -51.5 }, mouth: "flat", mouthWidth: 1 },
+};
+/** 今の表情の組み合わせ（初めの値） */
+export const expressionRig = (ex: Expression): ExprRig => EXPR_RIG[ex];
+const rigOf = (ex: Expression): ExprRig => faceOverride(ex) ?? EXPR_RIG[ex];
 /** 話している口の形（あ・い・う・え・お）。表情の口より先に使う */
 export type Vowel = "a" | "i" | "u" | "e" | "o";
 export const VOWELS: readonly Vowel[] = ["a", "i", "u", "e", "o"];
@@ -121,18 +141,18 @@ const WHITE_DROP = 3;
 const line = (d: string, w = 3.5) => `<path d="${d}" stroke="#000" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
 
 /** 目 1 つ（まつげを含む）。つり目・たれ目は目尻の側を上げ下げする向きに 12° 回す */
-const eyeSvg = (e: Landmarks["eyes"][number], p: FaceParts, view: View, ex: Expression = "neutral") => {
+const eyeSvg = (e: Landmarks["eyes"][number], p: FaceParts, view: View, rig: ExprRig = DEFAULT_RIG) => {
   const [rx, ry] = EYE_SIZE[p.eyeSize];
   const cx = n(e.x);
   // 喜ぶ: 目を閉じて上へ丸い弧（^）。痛い: 目をぎゅっと閉じた「＞ ＜」（くの字の先が鼻の側）
-  if (ex === "joy") return line(`M${n(e.x - rx - 1)} ${EYE_Y + 2}Q${cx} ${n(EYE_Y - ry * 1.5)} ${n(e.x + rx + 1)} ${EYE_Y + 2}`);
-  if (ex === "pain") {
+  if (rig.eyes === "closedArc") return line(`M${n(e.x - rx - 1)} ${EYE_Y + 2}Q${cx} ${n(EYE_Y - ry * 1.5)} ${n(e.x + rx + 1)} ${EYE_Y + 2}`);
+  if (rig.eyes === "pinched") {
     const tip = e.x - e.out * (rx + 1), back = e.x + e.out * (rx + 1);
     return line(`M${n(back)} ${n(EYE_Y - ry * 0.8)}L${n(tip)} ${EYE_Y}L${n(back)} ${n(EYE_Y + ry * 0.8)}`);
   }
   let body: string;
   // 驚く: どの目の形でも、まるく少し大きく見開く
-  if (ex === "surprise") body = `<circle cx="${cx}" cy="${EYE_Y}" r="${n(ry * 1.05)}"/>`;
+  if (rig.eyes === "wide") body = `<circle cx="${cx}" cy="${EYE_Y}" r="${n(ry * 1.05)}"/>`;
   else if (p.eyeShape === "round") body = `<circle cx="${cx}" cy="${EYE_Y}" r="${n(ry * 0.9)}"/>`;
   else if (p.eyeShape === "slit") {
     // 糸目は線 1 本。真横は鼻の点と見分けがつくよう、1.3 倍に長くして少し前上がりにする
@@ -176,21 +196,18 @@ const lashSvg = (e: Landmarks["eyes"][number], rx: number, ry: number, kind: Las
 /** 眉（y −48）。斜めは両方を少し短く（顔が回り込む）、真横は 1 本で前へ長く。上の端は前髪の下の縁（−53 前後）より下に収める */
 /**
  * 表情の眉。眉を選んでいなくても描く（怒り・悲しみは眉が無いと読めない）。
- * [鼻の側の端の y, 外の端の y]。怒りは鼻の側を下げ、悲しみ・困る・痛いは鼻の側を上げ、驚きは全体を上げる
+ * 組み合わせの brows が数 2 つ（鼻の側の端の y・外の端の y）なら直線、raised なら丸く上げた眉（驚き）。own なら顔の部品で選んだ眉。
+ * 怒りは鼻の側を下げ、悲しみ・困る・痛いは鼻の側を上げる
  */
-const MOOD_BROW: Partial<Record<Expression, [number, number]>> = {
-  anger: [-43.5, -50], serious: [-47, -51.5], sad: [-51, -45.5], worry: [-51, -46], pain: [-50, -45], surprise: [-52, -52],
-};
-const browSvg = (lm: Landmarks, kind: Brows, view: View, ex: Expression = "neutral") => {
-  const mb = MOOD_BROW[ex];
-  if (mb) {
+const browSvg = (lm: Landmarks, kind: Brows, view: View, rb: ExprRig["brows"] = "own") => {
+  if (rb !== "own") {
     const h = 7 * lm.k * (view === "quarter" ? 0.8 : 1);
     return lm.eyes.map((e) => {
       const [a, b] = view === "side" ? [e.x - 4 * lm.k, e.x + 8 * lm.k] : [e.x - h, e.x + h];
       // 真横は鼻の側が前（b）。正面・斜めは目尻の反対側
       const inner = view === "side" ? b : e.out > 0 ? a : b, outer = view === "side" ? a : e.out > 0 ? b : a;
-      if (ex === "surprise") return line(`M${n(a)} -49Q${n((a + b) / 2)} -54 ${n(b)} -49`);
-      return line(`M${n(inner)} ${mb[0]}L${n(outer)} ${mb[1]}`, 4);
+      if (rb === "raised") return line(`M${n(a)} -49Q${n((a + b) / 2)} -54 ${n(b)} -49`);
+      return line(`M${n(inner)} ${rb.inner}L${n(outer)} ${rb.outer}`, 4);
     }).join("");
   }
   if (kind === "none") return "";
@@ -209,7 +226,7 @@ const browSvg = (lm: Landmarks, kind: Brows, view: View, ex: Expression = "neutr
  * 口。話している口（あいうえお）があればそれ、無ければ表情の口。口の中は黒く塗る。
  * 口の角の高さ −16 と、笑いの線の下がり（ctrl）は向きごとの目印から
  */
-const mouthSvg = (lm: Landmarks, mood: Mood = {}) => {
+const mouthSvg = (lm: Landmarks, mood: Mood = {}, rig: ExprRig = DEFAULT_RIG) => {
   const { cx, ctrl, hw } = lm.mouth;
   const fillPath = (d: string) => `<path d="${d}" fill="#000" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>`;
   const hole = (rx: number, ry: number, cy = -14) => `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(rx)}" ry="${n(ry)}" fill="#000" stroke="#000" stroke-width="2"/>`;
@@ -220,31 +237,33 @@ const mouthSvg = (lm: Landmarks, mood: Mood = {}) => {
     case "e": return hole(hw * 1.05, 4.2, -14); // 横に広く、あより低い
     case "o": return hole(hw * 0.6, 5.8, -13); // 縦長の丸
   }
-  switch (mood.expression ?? "neutral") {
-    case "joy": case "fun": {
+  // 話す口はいつも顔の口の幅のまま。表情の口だけ、組み合わせの mouthWidth（口の横幅の倍率）を掛ける
+  const w0 = hw * rig.mouthWidth;
+  switch (rig.mouth) {
+    case "openSmile": {
       // 口を開けて笑う（上は平ら、下は丸い）
-      const w = hw * 1.2;
+      const w = w0 * 1.2;
       return fillPath(`M${n(cx - w)} -17Q${n(cx)} -18 ${n(cx + w)} -17Q${n(cx + w * 0.7)} -6 ${n(cx)} -6Q${n(cx - w * 0.7)} -6 ${n(cx - w)} -17Z`);
     }
-    case "anger": {
+    case "shout": {
       // どなる口: 横に広く、口の角が下がった四角に近い形
-      const w = hw * 1.25;
+      const w = w0 * 1.25;
       return fillPath(`M${n(cx - w)} -13Q${n(cx)} -19 ${n(cx + w)} -13L${n(cx + w * 0.6)} -6.5Q${n(cx)} -8 ${n(cx - w * 0.6)} -6.5Z`);
     }
-    case "sad": return line(`M${n(cx - hw)} -10Q${n(cx)} -17 ${n(cx + hw)} -10`); // への字
-    case "serious": return line(`M${n(cx - hw * 0.8)} -14.5H${n(cx + hw * 0.8)}`); // 口を横にまっすぐ結ぶ
-    case "surprise": return hole(Math.max(2.5, hw * 0.45), 4.5, -13); // 小さい「お」
-    case "worry": {
+    case "frown": return line(`M${n(cx - w0)} -10Q${n(cx)} -17 ${n(cx + w0)} -10`); // への字
+    case "flat": return line(`M${n(cx - w0 * 0.8)} -14.5H${n(cx + w0 * 0.8)}`); // 口を横にまっすぐ結ぶ
+    case "smallO": return hole(Math.max(2.5, w0 * 0.45), 4.5, -13); // 小さい「お」
+    case "wave": {
       // 波の口
-      const q = hw / 2;
-      return line(`M${n(cx - hw)} -13Q${n(cx - q)} -16 ${n(cx)} -13T${n(cx + hw)} -13`);
+      const q = w0 / 2;
+      return line(`M${n(cx - w0)} -13Q${n(cx - q)} -16 ${n(cx)} -13T${n(cx + w0)} -13`);
     }
-    case "pain": {
+    case "clench": {
       // 歯を食いしばる: 横長の口に、歯の境目の線
-      const w = hw * 1.05;
+      const w = w0 * 1.05;
       return `<path d="M${n(cx - w)} -16H${n(cx + w)}V-10H${n(cx - w)}Z" fill="#fff" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>` + line(`M${n(cx - w)} -13H${n(cx + w)}`, 2);
     }
-    default: return line(`M${n(cx - hw)} -16Q${n(cx)} ${ctrl} ${n(cx + hw)} -16`);
+    default: return line(`M${n(cx - w0)} -16Q${n(cx)} ${ctrl} ${n(cx + w0)} -16`);
   }
 };
 const beardSvg = (lm: Landmarks, kind: Beard) => {
@@ -297,13 +316,13 @@ const shiftY = (svg: string, dy: number) => (dy && svg ? `<g transform="translat
  * mood は表情と話す口（無ければふつうの笑った口）
  */
 export const faceSvg = (view: View, p: FaceParts, tilt = 0, mood: Mood = {}) => {
-  const ex = mood.expression ?? "neutral";
+  const rig = rigOf(mood.expression ?? "neutral");
   const lm = landmarks(p.face, view, p.faceSize);
   const [nx, ny, nr] = lm.nose;
   return `<path d="${faceOutline(p.face, p.faceSize)}" fill="${SKIN_TONE[p.skin]}" stroke="#000" stroke-width="5" stroke-linejoin="round"/>` +
     (p.beard === "stubble" ? stubbleSvg(p, lm) : "") +
-    shiftY(lm.eyes.map((e) => eyeSvg(e, p, view, ex)).join("") + browSvg(lm, p.brows, view, ex) +
-    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, mood) + beardSvg(lm, p.beard), tilt);
+    shiftY(lm.eyes.map((e) => eyeSvg(e, p, view, rig)).join("") + browSvg(lm, p.brows, view, rig.brows) +
+    `<circle cx="${n(nx)}" cy="${ny}" r="${nr}"/>` + mouthSvg(lm, mood, rig) + beardSvg(lm, p.beard), tilt);
 };
 
 /** 眼鏡（マスクより上、髪の前の層より下に描く）。斜めの奥のレンズは細く、蔓は見える耳へ 1 本 */

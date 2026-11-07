@@ -2,8 +2,10 @@
 // 体・髪・かぶり物の上に重ねる 4 つ目の層で、どの部品も 3 つの向き（正面・斜め・真横）で描ける。
 // 胴の部品は胴の座標（原点＝腰、胴の上の端 −142・下の端 20）、頭の部品は頭の座標（原点＝首の付け根、顔は y −70〜0）で描く。
 // 色は使わず、灰色の明るさと形で見分ける。部品ごとに g の id（part_…）を付け、Illustrator で直したあとに取り込めるようにする。
+import { TORSO_HALF, wearKind, wearSvg } from "./asset-rules";
 import { EAR_BOTTOM, EAR_MARK, EAR_TOP } from "./avatar";
 import type { HeadwearKind, View } from "./character";
+import { wearOverride } from "./prop-override";
 
 /** 胴に重ねる服。並べた順に描く（下に着るものから） */
 export type Garment =
@@ -118,7 +120,7 @@ export const farTone = (tone: string) => {
 };
 
 /** 胴の幅（片側）と、襟の V のまん中（胸の向く側へ寄る） */
-const W = (view: View) => (view === "side" ? 30 : 46);
+const W = (view: View) => TORSO_HALF[view];
 // 真横の 6 は首の位置（character.ts の NECK_X.side）と下地のベストの V のまん中に合わせる。12 だと襟の開きが首の前へずれて浮く
 const CX: Record<View, number> = { front: 0, quarter: 10, side: 6 };
 /** 襟まわりの横の広がり。真横は胸の前の端が近いので半分に縮め（首の幅 22 と同じ広がり）、胴の幅（片側 30）からはみ出さないようにする */
@@ -365,6 +367,13 @@ const GARMENT: Record<Garment, { tone: string; draw: (view: View, tone: string, 
   },
 };
 
+/** 服の名前の一覧（アセットのタブが使う） */
+export const GARMENTS = Object.keys(GARMENT) as Garment[];
+/** 服の初めの明るさ */
+export const garmentTone = (kind: Garment) => GARMENT[kind].tone;
+/** 差し替えを使わない元の服の絵（胴の座標）。tone を渡さなければ初めの明るさ。Claude に直させるときの元の絵に使う */
+export const garmentBase = (view: View, kind: Garment, tone = GARMENT[kind].tone, o: Outfit = {}) => GARMENT[kind].draw(view, tone, o);
+
 /** 首まわり・胸・腰の小物 */
 const neckSvg = (view: View, kind: NonNullable<Outfit["neck"]>, tone = "#222", tw?: "wide" | "slim") => {
   const c = CX[view], w = W(view);
@@ -450,7 +459,12 @@ const rankSvg = (view: View, bars: number) => {
 
 /** 胴の部品（胴の上に重ねる。手前の腕より先に描く） */
 export function outfitTorso(view: View, o: Outfit): string {
-  const wear = (o.wear ?? []).map((g) => part(g.kind, GARMENT[g.kind].draw(view, g.tone ?? GARMENT[g.kind].tone, o))).join("");
+  // 11/7 テナントで服を差し替えているときは、その服の胴の層だけを 3 つの向きの形に入れ替える（体・腕・脚・顔は元のまま）
+  const wear = (o.wear ?? []).map((g) => {
+    const tone = g.tone ?? GARMENT[g.kind].tone;
+    const swap = wearOverride(wearKind(g.kind));
+    return part(g.kind, swap ? wearSvg(swap[view], view, tone) : GARMENT[g.kind].draw(view, tone, o));
+  }).join("");
   return wear + part("neck", o.neck ? neckSvg(view, o.neck, o.neckTone, o.tieWidth) : "") + part("tag", o.tag ? tagSvg(view, o.tag) : "") +
     part("lapel", o.chief || o.pin ? lapelSvg(view, !!o.chief, !!o.pin) : "") +
     part("toolbelt", o.toolBelt ? toolBeltSvg(view) : "") + part("rank", o.rank ? rankSvg(view, o.rank) : "");

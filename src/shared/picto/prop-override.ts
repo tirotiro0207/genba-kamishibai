@@ -1,20 +1,46 @@
-// 小物の差し替え（11/7 作者「アセットをプロンプトで直す・画像を添付して直す」）。
-// テナントごとに、作者か監修者が決めた小物の絵（SVG）を登録しておくと、カードの絵を描くとき（propsSvg）に元の絵の代わりに使う。
-// 差し替えの絵は 0〜100 の正方形の中に描く。床に置く小物は正方形の下の真ん中が置き場所、ほかは真ん中が置き場所。
-// Claude が作った SVG をそのまま画面に入れないように、使ってよい要素と属性だけを残す（sanitizePropSvg）。
+// 差し替えの登録（11/7 作者「アセットをプロンプトで直す・画像を添付して直す」。服と表情も同じ登録に入れる）。
+// テナントごとに、作者か監修者が決めた絵を登録しておくと、カードの絵を描くとき（propsSvg・outfitTorso・faceSvg）に元の絵の代わりに使う。
+// 部類は kind の頭で分ける（asset-rules.ts）: 小物＝そのまま、服＝wear_…、表情＝face_…。
+// 小物の差し替えの絵は 0〜100 の正方形の中に描く。床に置く小物は正方形の下の真ん中が置き場所、ほかは真ん中が置き場所。
+// 服は 3 つの向きの SVG（胴の座標）、表情は部品の組み合わせ（JSON）。
+// Claude が作った SVG をそのまま画面に入れないように、使ってよい要素と属性だけを残し（sanitizePropSvg）、色は灰色に直す（cleanAssetSvg）。
 // このファイルは props.ts を読み込まない（props.ts から読まれるので、輪にしない）
+import { type ExprRig, FACE_PREFIX, grayifySvg, groupOfKind, parseFace, parseWear, type WearShapes } from "./asset-rules";
 
-/** 差し替えの登録: 小物の種類 → 0〜100 の正方形の中の SVG の中身（<svg> の外枠は除いたもの） */
+/** 差し替えの登録: kind → 保存した文字（小物は SVG の中身、服と表情は JSON）。<svg> の外枠は除いたもの */
 const overrides = new Map<string, string>();
+/** 服と表情は、登録のときに 1 回だけ読み取っておく（描くたびに読み直さない）。読めないものは登録しない */
+const wears = new Map<string, WearShapes>();
+const faces = new Map<string, ExprRig>();
 
 /** テナントに入ったときに、そのテナントで決めた差し替えを全部入れ直す（前のテナントの分は消える） */
 export function setPropOverrides(map: Record<string, string> | Map<string, string>) {
   overrides.clear();
-  for (const [k, v] of map instanceof Map ? map : Object.entries(map)) if (v) overrides.set(k, v);
+  wears.clear();
+  faces.clear();
+  for (const [k, v] of map instanceof Map ? map : Object.entries(map)) {
+    if (!v) continue;
+    const g = groupOfKind(k);
+    if (g === "wear") {
+      const w = parseWear(v);
+      if (w) wears.set(k, w);
+      else continue;
+    } else if (g === "face") {
+      const f = parseFace(v);
+      if (f) faces.set(k, f);
+      else continue;
+    } else if (g === null) continue;
+    overrides.set(k, v);
+  }
 }
-export const clearPropOverrides = () => overrides.clear();
+export const clearPropOverrides = () => setPropOverrides({});
+/** 小物の差し替えの SVG（服と表情の kind を渡すと、保存した JSON の文字が返る） */
 export const propOverride = (kind: string): string | undefined => overrides.get(kind);
 export const propOverrideKinds = () => [...overrides.keys()];
+/** 服の差し替え（wear_… の kind）。3 つの向きの形 */
+export const wearOverride = (kind: string): WearShapes | undefined => wears.get(kind);
+/** 表情の差し替え（表情の名前。anger など） */
+export const faceOverride = (expression: string): ExprRig | undefined => faces.get(`${FACE_PREFIX}${expression}`);
 
 const TAGS = new Set(["g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon"]);
 const ATTRS = new Set([
@@ -77,6 +103,9 @@ export function sanitizePropSvg(svg: string): string {
   const body = out.join("");
   return /<(path|rect|circle|ellipse|line|polyline|polygon)\b/.test(body) ? body : "";
 }
+
+/** 差し替えの SVG の仕上げ: 使ってよい要素と属性だけに絞り、色を全部灰色に直す（TONE と none はそのまま）。形が残らなければ空の文字 */
+export const cleanAssetSvg = (svg: string) => grayifySvg(sanitizePropSvg(svg));
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 

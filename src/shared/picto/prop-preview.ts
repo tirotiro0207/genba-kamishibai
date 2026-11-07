@@ -12,7 +12,7 @@ const CANVAS = 200;
 const at = (kind: PropKind) => (ON_FLOOR.has(kind) ? { x: 0.5, y: 0.75 } : { x: 0.5, y: 0.5 });
 
 /** 登録をいったん差し替えて描き、元に戻す（描くのは同期なので、ほかの描き方と混ざらない） */
-function withOverride<T>(kind: PropKind, swap: string | null, f: () => T): T {
+export function withOverride<T>(kind: string, swap: string | null, f: () => T): T {
   const saved = new Map(propOverrideKinds().map((k) => [k, propOverride(k)!]));
   const next = new Map(saved);
   if (swap === null) next.delete(kind);

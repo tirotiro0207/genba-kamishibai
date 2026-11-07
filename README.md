@@ -111,7 +111,7 @@ The app is one Cloudflare Worker (Hono) with D1 (records) and R2 (files), and a 
 | Other tools | `src/worker/mcp.ts` (MCP: drafts only) |
 | On-site check and scoring | `src/worker/trials.ts`, `src/worker/scores.ts`, `src/client/trial/`, `src/client/score/` |
 | Guest space | `src/worker/guest.ts` (one throwaway space per guest, daily caps) |
-| Picture parts | `src/worker/assets.ts`, `src/client/assets/`, `src/shared/picto/prop-override.ts` (versions are append-only; the SVG Claude returns is filtered to safe elements) |
+| Picture parts (props, clothes, expressions) | `src/worker/assets.ts`, `src/client/assets/`, `src/shared/picto/asset-rules.ts`, `src/shared/picto/prop-override.ts`, [docs/assets.md](docs/assets.md) (versions are append-only; the SVG Claude returns is filtered to safe elements and turned gray; expressions are a fixed set of parts, not SVG) |
 | Taking in shared updates | `scripts/intake-check.ts`, `scripts/git-hooks/post-merge`, `.github/workflows/intake.yml`, [docs/sharing.md](docs/sharing.md) |
 
 ### On-site check (2026-11-06)

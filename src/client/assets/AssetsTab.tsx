@@ -1,21 +1,26 @@
 // アセットのタブ（11/7 作者「アセットが見れるところ。プロンプトで編集・画像を添付して直せる」）。作る側のホームに置く。
-// カードの絵に使う小物を一覧で描き、1 つ選ぶと: 今の絵・直したいことの欄・画像の添付（現場の写真・手描き）・「直す」。
-// 直した絵は前と後を並べ、「この絵にする」でこのテナントの差し替えに決める。元の絵や前の版にいつでも戻せる（版は消さない）。
-// 決めるのは作者と監修者だけ。署名済みのカードの見た目も変わるので、使っている枚数を出してから決める
+// カードの絵に使う小物・服・表情を、3 つの見出しに分けて一覧で描き、1 つ選ぶと: 今の絵・直したいことの欄・画像の添付（現場の写真・手描き）・「直す」。
+// 服と表情は 3 つの向き（正面・斜め・真横）の前と後を並べる。直した絵は前と後を並べ、「この絵にする」でこのテナントの差し替えに決める。
+// 元の絵や前の版にいつでも戻せる（版は消さない）。決めるのは作者と監修者だけ。署名済みのカードの見た目も変わるので、使っている枚数を出してから決める
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PROP_JA } from "../../shared/make/script";
-import { ASSET_KINDS, propPreviewSvg } from "../../shared/picto/prop-preview";
-import type { PropKind } from "../../shared/picto/props";
+import { assetPreviewSvg } from "../../shared/picto/asset-catalog";
+import type { AssetGroup } from "../../shared/picto/asset-rules";
+import type { View } from "../../shared/picto/character";
 import { req } from "../make/MakeScreen";
 import { authHeaders } from "../pin/TenantPin";
 import { loadPropOverrides } from "./overrides";
 import "./assets.css";
 
 interface Item {
-  kind: PropKind;
+  kind: string;
+  group: AssetGroup;
+  /** 画面の名前（日本語） */
+  name: string;
+  /** 差し替えの中身（小物は SVG、服は 3 つの向きの JSON、表情は組み合わせの JSON） */
   active: { seq: number; svg: string } | null;
   versions: number;
-  signed: number;
+  /** 使っている署名済みのカードの枚数。服は数えない（null） */
+  signed: number | null;
 }
 interface Version {
   seq: number;
@@ -27,16 +32,43 @@ interface Version {
   created_at: string;
 }
 type Filter = "all" | "changed" | "signed";
+const GROUPS: [AssetGroup, string][] = [
+  ["prop", "小物"],
+  ["wear", "服"],
+  ["face", "表情"],
+];
+const VIEW_JA: Record<View, string> = { front: "正面", quarter: "斜め", side: "真横" };
+/** 服と表情は 3 つの向きで見る。小物は 1 つ */
+const viewsOf = (g: AssetGroup): View[] => (g === "prop" ? ["front"] : ["front", "quarter", "side"]);
+const PLACEHOLDER: Record<AssetGroup, string> = {
+  prop: "例: 持ち手をもっと太く。現場で使っている黄色い工具箱の形に近づけて",
+  wear: "例: 襟を立てて、胸に会社の印の丸を付けて",
+  face: "例: 怒りをもう少し弱く、口は閉じて",
+};
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const IMAGE_MAX = 5 * 1024 * 1024;
 const day = (s: string) => new Date(s).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const ACTOR: Record<string, string> = { author: "作者", supervisor: "監修者", trainer: "教育担当" };
 const actorName = (a: string) => `${ACTOR[a.split(".")[0]] ?? a}${a.startsWith("supervisor") ? ` ${a.split(".")[1]}` : ""}`;
 
-/** 見本の絵（自前の描き方で作った SVG。差し替えは使ってよい要素だけに絞ってある） */
-function Pic({ kind, swap, label }: { kind: PropKind; swap?: string | null; label?: string }) {
-  const svg = useMemo(() => propPreviewSvg(kind, swap), [kind, swap]);
-  return <div className="asset-pic" role="img" aria-label={label ?? PROP_JA[kind]} dangerouslySetInnerHTML={{ __html: svg }} />;
+/** 見本の絵（自前の描き方で作った SVG。差し替えは使ってよい要素だけに絞ってある）。服と表情は view の向きで描く */
+function Pic({ item, swap, label, view = "front" }: { item: Item; swap?: string | null; label?: string; view?: View }) {
+  const kind = item.kind;
+  const svg = useMemo(() => assetPreviewSvg(kind, swap, view), [kind, swap, view]);
+  return <div className="asset-pic" role="img" aria-label={label ?? item.name} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+/** 向きごとの見本を横に並べる（小物は 1 つ） */
+function Pics({ item, swap, label }: { item: Item; swap?: string | null; label?: string }) {
+  return (
+    <div className={item.group === "prop" ? "asset-views" : "asset-views multi"}>
+      {viewsOf(item.group).map((v) => (
+        <div key={v} className="asset-view">
+          <Pic item={item} swap={swap} view={v} label={label && item.group !== "prop" ? `${label}（${VIEW_JA[v]}）` : label} />
+          {item.group !== "prop" && <span className="asset-note">{VIEW_JA[v]}</span>}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function readImage(f: File): Promise<{ media_type: string; data: string; url: string }> {
@@ -53,6 +85,14 @@ function readImage(f: File): Promise<{ media_type: string; data: string; url: st
   });
 }
 
+/** 差し替えると見た目が変わることの知らせ。空なら、署名済みのカードではまだ使っていない */
+const warnText = (item: Item) =>
+  item.signed === null
+    ? "どのカードの人にも効きます（服は使っている枚数を数えていません）"
+    : item.signed > 0
+      ? `この${item.group === "face" ? "表情" : "小物"}を使っている署名済みのカード ${item.signed} 枚の見た目も変わります`
+      : "";
+
 function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string; item: Item; canEdit: boolean; onChanged: () => Promise<void>; onClose: () => void }) {
   const [versions, setVersions] = useState<Version[] | null>(null);
   const [active, setActive] = useState<number | null>(item.active?.seq ?? null);
@@ -63,6 +103,7 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const kind = item.kind;
+  const warn = warnText(item);
   const load = useCallback(async () => {
     const b = await req<{ active: number | null; versions: Version[] }>(tenant, `/assets/${kind}/versions`);
     setVersions(b.versions);
@@ -92,7 +133,7 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
     }
   };
   const choose = async (version: number | null, what: string) => {
-    if (item.signed > 0 && !window.confirm(`この小物を使っている署名済みのカード ${item.signed} 枚の見た目も変わります。${what}か？`)) return;
+    if (warn && !window.confirm(`${warn}。${what}か？`)) return;
     setBusy("choose");
     setErr("");
     try {
@@ -115,26 +156,26 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
   };
 
   return (
-    <section className="asset-detail" data-testid="asset-detail" aria-label={`${PROP_JA[kind]}の絵`}>
+    <section className="asset-detail" data-testid="asset-detail" aria-label={`${item.name}の絵`}>
       <header className="asset-detail-head">
         <h2>
-          {PROP_JA[kind]} <span className="asset-kind">{kind}</span>
+          {item.name} <span className="asset-kind">{kind}</span>
         </h2>
         <button type="button" className="pick" onClick={onClose} data-testid="asset-close">
           一覧に戻る
         </button>
       </header>
-      <p className={item.signed ? "asset-warn" : "asset-note"} data-testid="asset-signed">
-        {item.signed ? `この小物を使っている署名済みのカード ${item.signed} 枚の見た目も変わります` : "署名済みのカードではまだ使っていません"}
+      <p className={warn ? "asset-warn" : "asset-note"} data-testid="asset-signed">
+        {warn || "署名済みのカードではまだ使っていません"}
       </p>
       <div className="asset-compare">
         <figure>
-          <Pic kind={kind} swap={now} />
+          <Pics item={item} swap={now} />
           <figcaption>今の絵{now ? "（差し替え）" : "（元の絵）"}</figcaption>
         </figure>
         {draft && (
           <figure className="asset-after" data-testid="asset-draft">
-            <Pic kind={kind} swap={draft.svg} label="直した絵" />
+            <Pics item={item} swap={draft.svg} label="直した絵" />
             <figcaption>直した絵（まだ決めていない）</figcaption>
           </figure>
         )}
@@ -160,7 +201,7 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
         >
           <label>
             直したいこと
-            <textarea rows={3} value={prompt} maxLength={2000} placeholder="例: 持ち手をもっと太く。現場で使っている黄色い工具箱の形に近づけて" onChange={(e) => setPrompt(e.target.value)} data-testid="asset-prompt" />
+            <textarea rows={3} value={prompt} maxLength={2000} placeholder={PLACEHOLDER[item.group]} onChange={(e) => setPrompt(e.target.value)} data-testid="asset-prompt" />
           </label>
           <label className="asset-file">
             画像を添付（現場の写真・手描き。png・jpg・webp、5 MB まで）
@@ -199,7 +240,7 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
       ) : (
         <ol className="asset-versions" data-testid="asset-versions">
           <li className={active === null ? "on" : ""}>
-            <Pic kind={kind} swap={null} label="元の絵" />
+            <Pic item={item} swap={null} label="元の絵" />
             <div>
               <p>元の絵</p>
               {active === null ? <p className="asset-note">使っている</p> : canEdit && (
@@ -211,7 +252,7 @@ function Detail({ tenant, item, canEdit, onChanged, onClose }: { tenant: string;
           </li>
           {versions.map((v) => (
             <li key={v.seq} className={active === v.seq ? "on" : ""} data-testid={`asset-version-${v.seq}`}>
-              <Pic kind={kind} swap={v.svg} label={`版 ${v.seq}`} />
+              <Pic item={item} swap={v.svg} label={`版 ${v.seq}`} />
               <div>
                 <p>
                   {day(v.created_at)} ・ {actorName(v.actor)}
@@ -240,8 +281,9 @@ export function AssetsTab({ tenant, role }: { tenant: string; role: string }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [group, setGroup] = useState<AssetGroup>("prop");
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<PropKind | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     const b = await req<{ can_edit: boolean; assets: Item[] }>(tenant, "/assets");
@@ -258,12 +300,19 @@ export function AssetsTab({ tenant, role }: { tenant: string; role: string }) {
   if (item) return <Detail tenant={tenant} item={item} canEdit={canEdit} onChanged={load} onClose={() => setOpen(null)} />;
   const word = q.trim().toLowerCase();
   const shown = items
-    .filter((x) => ASSET_KINDS.includes(x.kind))
-    .filter((x) => (filter === "changed" ? !!x.active : filter === "signed" ? x.signed > 0 : true))
-    .filter((x) => !word || x.kind.includes(word) || PROP_JA[x.kind].includes(q.trim()));
+    .filter((x) => x.group === group)
+    .filter((x) => (filter === "changed" ? !!x.active : filter === "signed" ? (x.signed ?? 0) > 0 : true))
+    .filter((x) => !word || x.kind.includes(word) || x.name.includes(q.trim()));
   return (
     <section className="assets" data-testid="assets">
-      <p className="asset-note">カードの絵に使う小物です。押すと、プロンプトや写真で直せます{canEdit ? "" : "（直して決めるのは作者と監修者）"}</p>
+      <p className="asset-note">カードの絵に使う小物・服・表情です。押すと、プロンプトや写真で直せます{canEdit ? "" : "（直して決めるのは作者と監修者）"}</p>
+      <div className="av-seg" role="tablist" aria-label="アセットの種類">
+        {GROUPS.map(([g, label]) => (
+          <button key={g} role="tab" aria-selected={group === g} className={group === g ? "on" : ""} onClick={() => setGroup(g)} data-testid={`asset-group-${g}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="asset-tools">
         <div className="av-seg" role="tablist" aria-label="絞り込み">
           {(
@@ -278,18 +327,24 @@ export function AssetsTab({ tenant, role }: { tenant: string; role: string }) {
             </button>
           ))}
         </div>
-        <input type="search" value={q} placeholder="名前で探す（例: ヘルメット）" onChange={(e) => setQ(e.target.value)} data-testid="asset-search" />
+        <input
+          type="search"
+          value={q}
+          placeholder={group === "prop" ? "名前で探す（例: ヘルメット）" : group === "wear" ? "名前で探す（例: 背広）" : "名前で探す（例: 怒る）"}
+          onChange={(e) => setQ(e.target.value)}
+          data-testid="asset-search"
+        />
       </div>
       <p className="asset-note">{shown.length} 個</p>
       <ul className="asset-grid">
         {shown.map((x) => (
           <li key={x.kind}>
             <button type="button" onClick={() => setOpen(x.kind)} data-testid={`asset-${x.kind}`}>
-              <Pic kind={x.kind} swap={x.active?.svg ?? null} />
-              <span className="asset-name">{PROP_JA[x.kind]}</span>
+              <Pic item={x} swap={x.active?.svg ?? null} />
+              <span className="asset-name">{x.name}</span>
               <span className="asset-tags">
                 {x.active && <span className="asset-tag on">差し替え</span>}
-                {x.signed > 0 && <span className="asset-tag">署名済み {x.signed}</span>}
+                {(x.signed ?? 0) > 0 && <span className="asset-tag">署名済み {x.signed}</span>}
               </span>
             </button>
           </li>
