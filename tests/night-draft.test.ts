@@ -13,10 +13,11 @@ import { sampleCard } from "./fixtures/card";
 // 062: 仕分けで「する」のページ → 取り出し → 下書き → 確かめる AI。全部未承認で確認待ちに入り、赤は列の先頭。止めて走らせ直すと続きから
 const root = join(import.meta.dirname, "..");
 
-function memDb() {
+function memDb(before?: (sql: string, db: DatabaseSync) => void) {
   const db = new DatabaseSync(":memory:");
   for (const f of readdirSync(join(root, "migrations")).filter((x) => x.endsWith(".sql")).sort()) db.exec(readFileSync(join(root, "migrations", f), "utf-8"));
   const d1 = execD1(async (sql) => {
+    before?.(sql, db);
     // batch はまとめて 1 回で来る（D1 と同じく、ひとまとめに流す）
     if (sql.includes(";\n")) {
       db.exec(`BEGIN;\n${sql};\nCOMMIT;`);
@@ -172,5 +173,28 @@ describe("夜間の下書きの走り手（062）", () => {
     const b = await runDrafts({ db: d1, steps: fakeSteps({ usdPerCard: 0.1 }).steps, ...base, runMaxUsd: 0.25 });
     expect(b.made_now).toBe(0);
     expect(db.prepare("SELECT count(*) AS n FROM cards").get()).toEqual({ n: 3 });
+  });
+  it("同じ走り手の番号を別のテナントで使うと、始める前に断る", async () => {
+    const { db, d1 } = memDb();
+    await runDrafts({ db: d1, steps: fakeSteps().steps, ...base, maxCards: 1 });
+    const n = db.prepare("SELECT count(*) AS n FROM night_drafts").get();
+    await expect(runDrafts({ db: d1, steps: fakeSteps().steps, ...base, tenant: "other" })).rejects.toThrow(/別のテナント/);
+    // 断ったあとは何も書いていない
+    expect(db.prepare("SELECT count(*) AS n FROM night_drafts").get()).toEqual(n);
+  });
+
+  it("確認待ちへ移す UPDATE が 0 行（間で状態が変わった）のときは、監査に note つきの状態の行をもう 1 行入れる", async () => {
+    // 移す直前に、ほかの人がカードを止めたことにする
+    const { db, d1 } = memDb((sql, raw) => {
+      if (/^\s*UPDATE cards SET status = 'pending'/.test(sql)) raw.exec("UPDATE cards SET status = 'stopped'");
+    });
+    const s = await runDrafts({ db: d1, steps: fakeSteps().steps, ...base, maxCards: 1 });
+    expect(s.made_now).toBe(1);
+    expect(db.prepare("SELECT status FROM cards").all()).toEqual([{ status: "stopped" }]);
+    const rows = (db.prepare("SELECT payload FROM audit_log WHERE kind = 'status' ORDER BY chain, n").all() as { payload: string }[]).map((r) => JSON.parse(r.payload));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ to: "pending" });
+    expect(rows[0].note).toBeUndefined();
+    expect(rows[1]).toMatchObject({ from: rows[0].from, to: rows[0].from, note: expect.stringContaining("移せなかった") });
   });
 });

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DROP_BLANK, NOTE_WRAP, wrap } from "../scripts/video-draft";
-import { grepOf, SCENES } from "../scripts/video-rec";
+import { grepOf, missingScenes, SCENES } from "../scripts/video-rec";
 import { DRAFT, FLOW_CUTS, fit, share, withRun } from "../src/shared/video/draft-cut";
 
 // 098: 仮の 3 分版のつなぎ方。台本（docs/video.md の 098b の表）と同じ秒割りで、3 分に収まり、字幕は台本の語り
@@ -72,5 +72,19 @@ describe("仮の 3 分版のつなぎ方（098）", () => {
     expect(notes.length).toBeGreaterThan(0);
     notes.forEach((s) => expect(wrap(s.note, NOTE_WRAP).split("\n").length, s.note).toBeLessThanOrEqual(2));
     expect(NOTE_WRAP * 20).toBeLessThanOrEqual(1280 - 2 * 220);
+  });
+
+  it("撮り直し: --list の出力でどのテストの題名にも当たらない場面を返す", () => {
+    expect(missingScenes(["a", "b"], "  x.spec.ts:1:1 › a です")).toEqual(["b"]);
+    // 題名の印（ › ）の無い行は数えない
+    expect(missingScenes(["a"], "a だけの行\nTotal: 1 test")).toEqual(["a"]);
+  });
+
+  it("撮り直し: SCENES の場面は全部、e2e のテストの題名（describe か test）に含まれる", () => {
+    const titles = readdirSync("e2e")
+      .filter((f) => f.endsWith(".spec.ts"))
+      .flatMap((f) => [...readFileSync(`e2e/${f}`, "utf-8").matchAll(/\b(?:test|describe)(?:\.\w+)*\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2]));
+    expect(titles.length).toBeGreaterThan(0);
+    expect(SCENES.filter((s) => !titles.some((t) => t.includes(s)))).toEqual([]);
   });
 });
