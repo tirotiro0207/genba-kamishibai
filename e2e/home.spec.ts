@@ -55,6 +55,8 @@ test("ホーム: キャラクターを作ってから、カードの管理とキ
 
   await page.setViewportSize({ width: 1000, height: 900 });
   await page.goto(`/#/t/${T}/home`);
+  // 入口は「作る側・見る側」の扉（11/7）。作る側を選んでから役を選ぶ
+  await page.getByTestId("home-door-make").click();
   await page.getByTestId("home-as-supervisor-1").click();
 
   // キャラクターを作る画面（初めはデフォルト。カスタムで目を選び、大きさを変えて進む）

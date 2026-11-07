@@ -66,6 +66,9 @@ test("新入社員は ID と PIN で入り、その場で回に加わって ① 
   await pg.waitForTimeout(400);
   await pg.getByTestId("tenant-pin-enter").click();
 
+  // 見る側（11/7）: 入ると署名済みのカードの画面。テストを受ける人だけ、下の帯の「テストを うける」で新入社員だけの画面へ進む
+  await expect(pg).toHaveURL(new RegExp(`#/t/${T}/read$`));
+  await pg.getByTestId("read-go-test").click();
   // 新入社員だけの画面（ID は揃えた形で出る）。作る側の画面へのリンクも、戻る帯も無い
   await expect(pg).toHaveURL(new RegExp(`#/t/${T}/student$`));
   await expect(pg.getByTestId("student-id")).toHaveText("student_C_3");

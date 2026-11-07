@@ -7,9 +7,8 @@ const LIVE = process.env.DEMO_LIVE === "1";
 
 test("入口から完成品を見て、その場で 1 枚作る", async ({ page }) => {
   test.setTimeout(240_000);
-  await page.goto(BASE ? `${BASE}/` : "/");
-  // 入口の画面（11/5）から「ゲストで始める」で公開デモへ
-  await page.getByTestId("login-guest").click();
+  // 入口の画面の「ゲスト」は作る側を試す流れ（11/7）になったので、公開デモ（完成品の画面）へは #/demo で直接入る
+  await page.goto(BASE ? `${BASE}/#/demo` : "/#/demo");
   await expect(page.getByTestId("demo")).toBeVisible();
   await page.waitForTimeout(1500);
 
