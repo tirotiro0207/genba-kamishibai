@@ -6,7 +6,7 @@ README の Quick Start の続き。本番の手順・夜間の一括の道具・
 
 - 手元の Worker の名前は `genba-kamishibai-local`（`wrangler.jsonc` の上の段）。`--env production` を付け忘れて出しても、本番の Worker に手元用の D1 と置き場が載らないように分けた
 - 本番は `npx wrangler deploy --env production` で出し、名前は `genba-kamishibai` のまま。DB は `genba-kamishibai-prod`、置き場は `genba-kamishibai-prod-files`
-- 本番の D1 に表の変更を当てるのは作者: `npx wrangler d1 migrations apply DB --remote --env production`。11/7 の点検の直しで `0029_guards.sql`・`0030_posts_morning.sql`・`0031_company_words_ruby.sql` を足した（中身は [api.md](api.md) の「表」）。点検の直しの束では本番に触っていない
+- 本番の D1 に表の変更を当てるのは作者: `npx wrangler d1 migrations apply DB --remote --env production`。11/7 の点検の直しで `0029_guards.sql`・`0030_posts_morning.sql`・`0031_company_words_ruby.sql` を足した（中身は [api.md](api.md) の「表」）。3 つとも 11/7 に本番へ当て、同じ日に本番の Worker も出した。0031 で消えたのは 430 行中 1 行（消す前に写しを取った）
 - 本番の MCP の鍵は、作者が `npx tsx scripts/add-mcp-key.ts <会社> --remote` で作り、本番の `/mcp/<テナント>` に鍵で入れることを確かめる（まだ確かめていない）
 
 ## 本番の公開の置き場（PUBLIC_DEMO）で通すもの
