@@ -6,7 +6,7 @@
 切り方の表は git の外に置く（素材のフォルダ名とファイル名を公開物に書かないため）。形:
   { "<場面>": [ {"src": "<素材の置き場からの相対パス、または rec:<録画の相対パス>>",
                  "a": 使い始めの秒, "b": 使い終わりの秒（静止画は無し）, "out": 動画の中の秒,
-                 "blur": [[x, y, w, h], ...],   # ぼかす所（画面に対する割合 0〜1）
+                 "blur": [[x, y, w, h(, fade)], ...],   # ぼかす所（画面に対する割合 0〜1。fade は下の端をなだらかにする幅）
                  "keep": [x, y, w, h],          # これがあれば、ここ以外を全部ぼかす（人の顔を残さない）
                  "crop": [x, y, w, h],          # 切り抜く所（割合。16:9 に近い形で）
                  "crop_to": [x, y],             # あれば、切り抜く所の左上を b の秒までにここへ動かす（カメラが動く映像を追う）
@@ -32,7 +32,7 @@ def src_path(s: str) -> str:
 
 
 def px(r, w, h):
-    x, y, bw, bh = r
+    x, y, bw, bh = r[:4]
     X, Y = int(x * w) // 2 * 2, int(y * h) // 2 * 2
     return X, Y, max(2, int(bw * w) // 2 * 2), max(2, int(bh * h) // 2 * 2)
 
@@ -100,7 +100,14 @@ def part(p: dict, tmp: str, i: int) -> str:
         n += 1
     for r in p.get("blur", []):
         b = px(r, w, h)
-        g.append(f"{cur}split[ba{n}][bb{n}];[bb{n}]crop={b[2]}:{b[3]}:{b[0]}:{b[1]},boxblur={BLUR}:3[bc{n}];[ba{n}][bc{n}]overlay={b[0]}:{b[1]}[v{n}]")
+        if len(r) > 4:  # 5 つ目は下の端をなだらかにする幅（高さに対する割合）。境目が線に見えないように、ぼかしを下へ少しずつ薄くする
+            f = max(2, int(r[4] * h) // 2 * 2)
+            bh = min(b[3] + f, h - b[1])
+            g.append(f"{cur}split[ba{n}][bb{n}];[bb{n}]crop={b[2]}:{bh}:{b[0]}:{b[1]},boxblur={BLUR}:3,format=yuva444p,"
+                     f"geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='if(lt(Y,{b[3]}),255,255*clip(({bh}-Y)/{f},0,1))'[bc{n}];"
+                     f"[ba{n}][bc{n}]overlay={b[0]}:{b[1]}:format=auto[v{n}]")
+        else:
+            g.append(f"{cur}split[ba{n}][bb{n}];[bb{n}]crop={b[2]}:{b[3]}:{b[0]}:{b[1]},boxblur={BLUR}:3[bc{n}];[ba{n}][bc{n}]overlay={b[0]}:{b[1]}[v{n}]")
         cur = f"[v{n}]"
         n += 1
     pre = "".join(f"drawbox=x={b[0]}:y={b[1]}:w={b[2]}:h={b[3]}:color=white:t=fill," for b in (px(r, w, h) for r in p.get("white", [])))
