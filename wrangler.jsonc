@@ -20,7 +20,7 @@
     "production": {
       "name": "genba-kamishibai",
       // PUBLIC_NAMES: 公開デモでも名前を出してよい枠（公開に同意した人だけ。名前そのものは secret）
-      "vars": { "PUBLIC_DEMO": "1", "PUBLIC_NAMES": "author.1,supervisor.1" },
+      "vars": { "PUBLIC_DEMO": "1", "PUBLIC_NAMES": "author.1,supervisor.1,supervisor.2" },
       "d1_databases": [
         { "binding": "DB", "database_name": "genba-kamishibai-prod", "database_id": "251a60b5-672b-4082-9cd9-3e936d0f6ba6", "migrations_dir": "migrations" }
       ],
