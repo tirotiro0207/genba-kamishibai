@@ -1,9 +1,10 @@
 // 30 項目（調整用の 20 ＋最後の確認用の 10）を、確定版の正解で 2 つのモデルに解かせる（090・101）。
 // 最後の確認用の 10 は、まずファイルと 1 項目ずつのハッシュが eval/holdout_hashes_v1r8.json と一致するかを見てから流す。
+// 10 項目の置き場はコードに書かず、流すときに EVAL_HOLDOUT で渡す（プロンプトを直すコードとテストからは読まない決まり）。
 // 中身は画面に出さず、数だけを docs/numbers.md に足す。
 //
-//   npx tsx scripts/eval30.ts --check       # ハッシュの一致だけを見る（API を呼ばない）
-//   npx tsx scripts/eval30.ts --run-paid    # 2 つのモデルで流す（費用の上限は MAX_USD）
+//   EVAL_HOLDOUT=<10 項目のファイル> npx tsx scripts/eval30.ts --check       # ハッシュの一致だけを見る（API を呼ばない）
+//   EVAL_HOLDOUT=<10 項目のファイル> npx tsx scripts/eval30.ts --run-paid    # 2 つのモデルで流す（費用の上限は MAX_USD）
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +16,12 @@ import { makeClient } from "../src/node/client";
 import { FileCallLog } from "../src/node/file-log";
 import { loadTuneItems, ROOT, type TuneItem, watchedHash } from "./eval-hook";
 
-const HOLDOUT_FILE = "eval/holdout/items_holdout_v1r8.json";
+/** 最後の確認用の 10 項目のファイル（流すときに環境変数で渡す） */
+const holdoutFile = () => {
+  const f = process.env.EVAL_HOLDOUT;
+  if (!f) throw new Error("EVAL_HOLDOUT に最後の確認用の 10 項目のファイルを入れて流す");
+  return f;
+};
 const HASH_FILE = "eval/holdout_hashes_v1r8.json";
 const NUMBERS = "docs/numbers.md";
 export const MODELS = ["claude-opus-5-5", "claude-fable-5-1"] as const;
@@ -37,7 +43,7 @@ const sha = (b: string | Buffer) => createHash("sha256").update(b).digest("hex")
 
 /** 最後の確認用の 10 項目を読み、ファイルと 1 項目ずつのハッシュが一致するかを返す（中身は返すが表には出さない） */
 export function loadHoldout(root = ROOT) {
-  const raw = readFileSync(join(root, HOLDOUT_FILE));
+  const raw = readFileSync(join(root, holdoutFile()));
   const want = JSON.parse(readFileSync(join(root, HASH_FILE), "utf-8")) as { file_sha256: string; items: { no: number; sha256: string }[] };
   const items = JSON.parse(raw.toString("utf-8")) as TuneItem[];
   const fileOk = sha(raw) === want.file_sha256;
