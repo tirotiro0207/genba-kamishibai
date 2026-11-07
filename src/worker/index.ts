@@ -9,6 +9,7 @@ import { files } from "./files";
 import { mcpApp } from "./mcp";
 import { pairs } from "./pairs";
 import { reset } from "./reset";
+import { scoring } from "./scores";
 import { trials } from "./trials";
 import { signSession, tenantGuard, type TenantRow, type TenantVars, verifyPin, verifySession } from "./tenant";
 import { auditGate, cardsGate, NO_SECRET, noNewhireGate, type PeopleVars, people, personGuard, roleRequiredGate, trialsGate } from "./people";
@@ -103,6 +104,8 @@ app.route("/api/t/:tenant/files", files);
 app.route("/api/t/:tenant/extract", extract);
 // 新しいカードを作るチャット（11/5）。添付と言葉の指示から取り出しをやり直す
 app.route("/api/t/:tenant/chats", chats);
+// 試しの答えの 10 段階の採点（11/7。作者と監修者）
+app.route("/api/t/:tenant/trials", scoring);
 app.route("/api/t/:tenant/trials", trials);
 // ○× の組（093a）
 app.route("/api/t/:tenant/pairs", pairs);

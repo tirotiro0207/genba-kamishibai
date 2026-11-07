@@ -16,6 +16,7 @@ import { PoseGallery } from "./picto/PoseGallery";
 import { PoseScreen } from "./pose/PoseScreen";
 import { QueueScreen } from "./queue/QueueScreen";
 import { ReadScreen } from "./read/ReadScreen";
+import { ScoreScreen } from "./score/ScoreScreen";
 import { RouteScreen } from "./route/RouteScreen";
 import { SignScreen } from "./sign/SignScreen";
 import { StudentScreen } from "./student/StudentScreen";
@@ -160,6 +161,8 @@ export function App() {
   if (r[0] === "t" && r[2] === "student") body = <StudentScreen tenant={r[1]} />;
   // #/t/<テナント>/trials ・ 試しの回の一覧（11/6。ホームから押してたどり着く）
   if (r[0] === "t" && r[2] === "trials") body = <TrialsScreen tenant={r[1]} />;
+  // #/t/<テナント>/score(/author|/supervisor) ・ 試しの答えの 10 段階の採点（11/7 作者。左に作者・右に監修者のタブ）
+  if (r[0] === "t" && r[2] === "score") body = <ScoreScreen tenant={r[1]} grader={r[3] === "author" || r[3] === "supervisor" ? r[3] : undefined} />;
   // #/picto/poses ・ 開発用の姿勢の一覧（どの画面からもリンクしない。姿勢の試験 e2e/poses.spec.ts が開く）
   if (r[0] === "picto" && r[1] === "poses") body = <PoseGallery />;
   // 作る側の画面の上には、いつも出しておく数字（048）。新入社員の閲覧と、試しの回の画面には出さない

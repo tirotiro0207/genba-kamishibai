@@ -20,7 +20,7 @@ interface TrialRow {
   created_at: string;
 }
 
-async function getTrial(db: D1Database, tenantId: string, id: string) {
+export async function getTrial(db: D1Database, tenantId: string, id: string) {
   const t = await db.prepare("SELECT id, seed, participants, created_at FROM trials WHERE id = ? AND tenant_id = ?").bind(id, tenantId).first<TrialRow>();
   return t ? withJoins(db, t) : null;
 }
@@ -43,7 +43,7 @@ export const participantIds = (raw: string) => {
   return Array.isArray(p) ? p : p.people.map((x) => x.id);
 };
 
-const view = (t: TrialRow) => {
+export const view = (t: TrialRow) => {
   const p = JSON.parse(t.participants) as Stored;
   if (Array.isArray(p)) return { id: t.id, seed: t.seed, created_at: t.created_at, design: "order" as const, participants: p, assignments: assign(t.seed, p) };
   // その場で加わった人（11/6・set を持つ）は加わったときの組のまま。前もって並べた人は今までどおり種から分ける
@@ -264,6 +264,8 @@ trials.post("/:id/erase", async (c) => {
     c.env.DB.prepare("UPDATE grades SET answer_ja = NULL, erased = 1 WHERE trial_id = ? AND erased = 0 AND response_seq IN (SELECT seq FROM responses WHERE trial_id = ? AND participant = ?)").bind(t.id, t.id, p),
     c.env.DB.prepare("UPDATE responses SET answer = NULL, ms = NULL, erased = 1 WHERE trial_id = ? AND participant = ? AND erased = 0").bind(t.id, p),
     c.env.DB.prepare("UPDATE picture_answers SET answer = NULL, erased = 1 WHERE trial_id = ? AND participant = ? AND erased = 0").bind(t.id, p),
+    // 採点のための訳（11/7）も消す。答えそのものが消えるので、訳も残さない
+    c.env.DB.prepare("DELETE FROM score_ja WHERE trial_id = ?1 AND (target IN (SELECT 'r:' || seq FROM responses WHERE trial_id = ?1 AND participant = ?2) OR target IN (SELECT 'p:' || seq FROM picture_answers WHERE trial_id = ?1 AND participant = ?2))").bind(t.id, p),
   ]);
   await appendAudit(c.env.DB, c.var.tenant.id, { card_id: null, kind: "erase", actor: "system", payload: { trial: t.id, participant: p, responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
   return c.json({ erased: { responses: r.meta.changes, grades: g.meta.changes, pictures: pa.meta.changes } });
@@ -271,7 +273,7 @@ trials.post("/:id/erase", async (c) => {
 
 // 絵だけの 8 枚と 2 項目と教育担当の勘（059）。止めた（回収した）カードは見せない。
 // 文つきかどうかは回に結んだ順（pos）で決めるので、止めたカードを抜いても、ほかのカードの文つきは変わらない
-const pictureCards = async (db: D1Database, trialId: string) =>
+export const pictureCards = async (db: D1Database, trialId: string) =>
   (await db.prepare("SELECT tc.card_id AS id, tc.pos, c.body FROM trial_cards tc JOIN cards c ON c.id = tc.card_id WHERE tc.trial_id = ? AND c.status != 'stopped' ORDER BY tc.pos").bind(trialId).all<{ id: string; pos: number; body: string }>()).results.map((r) => {
     const body = JSON.parse(r.body) as { rule: string; motion: unknown; words?: { ja?: string } };
     return { id: r.id, pos: r.pos, rule: body.rule, motion: body.motion, words: body.words?.ja ?? "" };
@@ -398,7 +400,7 @@ type MaterialItem = { card: string; page: string };
 type MaterialConfig = { A: MaterialItem; B: MaterialItem };
 const materialKey = (tenantId: string, trialId: string) => `t/${tenantId}/trials/${trialId}/material.json`;
 
-async function readMaterial(env: Env, tenantId: string, trialId: string): Promise<MaterialConfig | null> {
+export async function readMaterial(env: Env, tenantId: string, trialId: string): Promise<MaterialConfig | null> {
   const obj = await env.FILES.get(materialKey(tenantId, trialId));
   return obj ? ((await obj.json()) as MaterialConfig) : null;
 }

@@ -1,0 +1,54 @@
+import { env, exports } from "cloudflare:workers";
+import { describe, expect, it } from "vitest";
+
+const call = (path: string, init?: RequestInit) => exports.default.fetch(`http://local${path}`, init);
+const base = "/api/t/practice/trials";
+async function role(r: "author" | "supervisor" | "trainer") {
+  const b = (await (await call("/api/t/practice/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: r, slot: 1 }) })).json()) as { token: string };
+  return b.token;
+}
+const json = (method: string, token: string | null, body?: unknown): RequestInit => ({
+  method,
+  headers: { "content-type": "application/json", ...(token ? { "x-role": token } : {}) },
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+async function answered() {
+  const t = (await (await call(base, json("POST", null, { participants: ["staff-alpha"], seed: "score" }))).json()) as { id: string };
+  const r = (await (await call(`${base}/${t.id}/responses`, json("POST", null, { participant: "staff-alpha", item: "B", answer: JSON.stringify({ ja: "", own: "dừng lại" }) }))).json()) as { seq: number };
+  return { id: t.id, seq: r.seq };
+}
+
+describe("試しの答えの 10 段階の採点（11/7）", () => {
+  it("作者と監修者が別々に付け、自分の点だけが見える", async () => {
+    const t = await answered();
+    const [a, s] = [await role("author"), await role("supervisor")];
+    expect((await call(`${base}/${t.id}/scores`, json("POST", a, { target: `r:${t.seq}`, score: 7, comment: "止まるは伝わった" }))).status).toBe(201);
+    expect((await call(`${base}/${t.id}/scores`, json("POST", s, { target: `r:${t.seq}`, score: 3 }))).status).toBe(201);
+    const sa = (await (await call(`${base}/${t.id}/scoring`, json("GET", a))).json()) as { me: string; scores: Record<string, { score: number; comment: string }>; responses: { target: string }[] };
+    expect(sa.me).toBe("author");
+    expect(sa.scores[`r:${t.seq}`]).toEqual({ score: 7, comment: "止まるは伝わった" });
+    expect(sa.responses.map((r) => r.target)).toContain(`r:${t.seq}`);
+    const ss = (await (await call(`${base}/${t.id}/scoring`, json("GET", s))).json()) as { scores: Record<string, { score: number }> };
+    expect(ss.scores[`r:${t.seq}`].score).toBe(3);
+  });
+
+  it("点は 1〜10 だけ。ほかの役割と、別の回の答えは断る。記録は追記だけ", async () => {
+    const t = await answered();
+    const a = await role("author");
+    expect((await call(`${base}/${t.id}/scores`, json("POST", a, { target: `r:${t.seq}`, score: 11 }))).status).toBe(400);
+    expect((await call(`${base}/${t.id}/scores`, json("POST", a, { target: `r:${t.seq}`, score: 0 }))).status).toBe(400);
+    expect((await call(`${base}/${t.id}/scores`, json("POST", await role("trainer"), { target: `r:${t.seq}`, score: 5 }))).status).toBe(403);
+    const other = await answered();
+    expect((await call(`${base}/${t.id}/scores`, json("POST", a, { target: `r:${other.seq}`, score: 5 }))).status).toBe(400);
+    await call(`${base}/${t.id}/scores`, json("POST", a, { target: `r:${t.seq}`, score: 5 }));
+    await expect(env.DB.prepare("UPDATE scores SET score = 1 WHERE trial_id = ?").bind(t.id).run()).rejects.toThrow(/append only/);
+    await expect(env.DB.prepare("DELETE FROM scores WHERE trial_id = ?").bind(t.id).run()).rejects.toThrow(/append only/);
+  });
+
+  it("latest で答えのある新しい回を開く", async () => {
+    const t = await answered();
+    const b = (await (await call(`${base}/latest/scoring`, json("GET", await role("supervisor")))).json()) as { trial: { id: string } };
+    expect(b.trial.id).toBe(t.id);
+  });
+});

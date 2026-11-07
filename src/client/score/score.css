@@ -1,0 +1,43 @@
+/* 試しの答えの 10 段階の採点（11/7） */
+.score { display: flex; flex-direction: column; gap: 16px; max-width: 900px; margin: 0 auto; }
+.score h1 { margin: 0; font-size: 24px; }
+.score-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.score-tabs a { display: flex; flex-direction: column; gap: 4px; padding: 18px 16px; border: 2px solid var(--line); border-radius: 10px; text-decoration: none; color: var(--fg); background: var(--bg); }
+.score-tabs a.on { border-color: var(--accent); box-shadow: inset 0 -4px 0 var(--accent); }
+.score-role { font-size: 14px; color: var(--muted); }
+.score-name { font-size: 22px; font-weight: 700; min-height: 1.2em; }
+.score-lead { margin: 0; color: var(--muted); }
+.score-sheet { display: flex; flex-direction: column; gap: 24px; }
+.score-guide { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.score-guide p { margin: 0; }
+.score-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--muted); }
+.score-legend b { color: var(--fg); }
+.score-part { display: flex; flex-direction: column; gap: 16px; }
+.score-part h2 { margin: 0; font-size: 20px; border-bottom: 2px solid var(--fg); padding-bottom: 4px; }
+.score-item { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.score-item h3 { margin: 0; font-size: 18px; }
+.score-card .read-frames { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); max-width: 640px; }
+.score-words { margin: 6px 0 0; color: var(--muted); }
+.score-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.score-list > li { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.score-who { margin: 0; font-size: 15px; }
+.score-answer p { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.score-k { display: inline-block; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin-right: 8px; }
+.score-ja { color: var(--muted); }
+.score-none { color: var(--muted); margin: 0; }
+.tag { font-weight: 700; padding: 0 6px; border-radius: 4px; }
+.tag.pic { background: #e6f4ee; color: #075; }
+.tag.words { background: #fdf3d6; color: #7a5a00; }
+.score-box { display: flex; flex-direction: column; gap: 6px; background: color-mix(in srgb, var(--fg) 4%, var(--bg)); border-radius: 8px; padding: 10px; }
+.score-cap { margin: 0; font-size: 14px; color: var(--muted); }
+.score-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.score-scale button { font: inherit; font-size: 18px; padding: 10px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.score-scale button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.score-box textarea { font-size: 16px; resize: vertical; }
+.score-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.score-save { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.score-save:disabled { opacity: 0.5; cursor: default; }
+.score-state { font-size: 14px; color: var(--muted); }
+.score-state.saved { color: var(--accent); }
+.score-state.err { color: var(--err); }
+@media (max-width: 640px) { .score-scale button { font-size: 15px; padding: 8px 0; } .score-name { font-size: 18px; } }

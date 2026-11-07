@@ -96,7 +96,8 @@ const has = (key: string) => {
 };
 
 /** roles に選べる役割（value は「役割.番号」）。1 つなら選ぶ欄を出さない */
-export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; onDone: () => void; roles?: readonly { value: string; label: string }[] }) {
+/** tenantOnly: 会社の PIN の段だけで onDone を呼ぶ（採点の入口 11/7。役割はタブを押してから選ぶ） */
+export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false }: { tenant: string; onDone: () => void; roles?: readonly { value: string; label: string }[]; tenantOnly?: boolean }) {
   const [step, setStep] = useState<"tenant" | "role" | "student">(() => (has(tokenKey(tenant)) ? (roles.length === 1 && roles[0].value.startsWith("newhire") ? "student" : "role") : "tenant"));
   const [who, setWho] = useState<string>(roles[0].value);
   // 新入社員の ID（11/6 作者）。student_V_1 の形。前もって作らず、入ったときにその場で決まる
@@ -157,7 +158,8 @@ export function TenantPin({ tenant, onDone, roles = STAFF }: { tenant: string; o
         } catch {
           // 保存が使えない端末は、閉じれば消える
         }
-        setStep(roles.length === 1 && isStudent ? "student" : "role");
+        if (tenantOnly) onDone();
+        else setStep(roles.length === 1 && isStudent ? "student" : "role");
       } else onDone();
     } catch (x) {
       setErr((x as Error).message);
