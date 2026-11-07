@@ -12,7 +12,7 @@ import { summarize } from "../shared/stats";
 import { bodyAt, type EditRow, UndoError, undoTarget } from "../shared/undo";
 import { type Evidence, hasEvidence, verifyCard } from "../shared/verify/formal";
 import { D1CallLog } from "./api-log";
-import { appendAudit, appendAuditIf } from "./audit";
+import { type AuditInput, appendAudit, appendAuditIf } from "./audit";
 import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, shownName } from "./people";
@@ -310,12 +310,13 @@ cards.post("/:id/verify", async (c) => {
 const reopenReason = (r: CardRow, why: string) => `直したため（版 ${r.version} → ${r.version + 1}）: ${why}`.slice(0, 200);
 /** 直しの書き込み（appendAuditIf）と同じバッチに入れる回収の知らせ。署名済みが外れるときだけ。途中で落ちても「署名は外れたのに知らせが無い」を作らない */
 async function recallOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string): Promise<D1PreparedStatement[]> {
-  return r.status === "signed" && r.status !== to ? [await recallStatement(db, tenantId, r, by, reopenReason(r, why))] : [];
+  if (r.status !== "signed" || r.status === to) return [];
+  const reason = reopenReason(r, why);
+  return [await recallStatement(db, tenantId, r, by, reason), ...(await bundleRecallStatements(db, tenantId, r, by, reason, new Date(), "直して署名が外れた"))];
 }
-async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: CardStatus, by: string, why: string) {
-  if (r.status === to) return;
-  await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason: reopenReason(r, why) } });
-}
+/** 状態が移った 1 行（移ったときだけ）。直しの行と同じバッチに入れる */
+const reopenEntry = (r: CardRow, to: CardStatus, by: string, why: string): AuditInput[] =>
+  r.status === to ? [] : [{ card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason: reopenReason(r, why) } }];
 
 // 重さ（11/7 既定・作者の確認待ち）: 監修者が確認・署名の前に「命に関わる / それ以外」を決める。重さは本文に入る（指紋に入る）ので版を 1 つ上げ、
 // ④ に直しの 1 行（fields: weight）を残す。絵は変わらないので、状態はそのままにし、今の版の確かめる AI の証拠を新しい版へ引き継ぐ（③ に carried_from 付きで足す）。
@@ -354,7 +355,7 @@ cards.put("/:id/weight", async (c) => {
 });
 
 // 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。
-// 署名済みも直せる。直すと署名が外れ、前の版に回収の知らせが出る（reopenOnEdit）。配るには確かめ直して署名し直す
+// 署名済みも直せる。直すと署名が外れ、前の版に回収の知らせが出る（recallOnEdit。移りの行は reopenEntry で直しと同じバッチ）。配るには確かめ直して署名し直す
 cards.put("/:id", async (c) => {
   const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
   if (!r) return c.json({ error: "カードが無い" }, 404);
@@ -395,12 +396,10 @@ async function saveEdit(c: Ctx, r: CardRow, card: CardBody, reason: string, extr
     kind: "edit",
     actor: by,
     payload: { ...extra, from_version: r.version, to_version: r.version + 1, fields: changed, before: Object.fromEntries(changed.map((k) => [k, before[k] ?? null])), after: Object.fromEntries(changed.map((k) => [k, card[k] ?? null])), by, edited_at: new Date().toISOString(), reason },
-  }, await recallOnEdit(c.env.DB, c.var.tenant.id, r, status, by, reason));
+  }, await recallOnEdit(c.env.DB, c.var.tenant.id, r, status, by, reason), [...reopenEntry(r, status, by, reason), ...(reasons.length ? [{ card_id: r.id, kind: "ai_draft" as const, actor: "system", payload: { version: r.version + 1, reasons } }] : [])]);
   if (!entry) return c.json({ error: "ほかの直しと重なった。読み直して" }, 409);
   // 会社の言葉（085）: 直しの前と後から、言い換えと使わない言い方を積む
   await addEditWords(c.env.DB, c.var.tenant.id, r.id, before as unknown as Record<string, unknown>, card as unknown as Record<string, unknown>);
-  await reopenOnEdit(c.env.DB, c.var.tenant.id, r, status, by, reason);
-  if (reasons.length) await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "ai_draft", actor: "system", payload: { version: r.version + 1, reasons } });
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));
 }
 
@@ -500,10 +499,9 @@ cards.post("/:id/redo", async (c) => {
     kind: "edit",
     actor: whoOf(c, "maker"),
     payload: { request: "redone", from_n: b.n, from_version: r.version, to_version: r.version + 1, frame: ask.frame, parts: out.targets.parts, figures: out.targets.figures, props: out.targets.props, before: key(before), after: key(out.body), count },
-  }, await recallOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text));
+  }, await recallOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text), reopenEntry(r, status, whoOf(c, "maker"), ask.text));
   if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
   // 署名済み・停止のカードを作り直したときは、署名が外れて前の版に回収の知らせが出る（11/5。知らせは上の書き込みと同じバッチ）
-  await reopenOnEdit(db, tid, r, status, whoOf(c, "maker"), ask.text);
   return c.json({ ...cardView((await getCard(db, tid, r.id))!), redo: { ...out.targets, count, left: REDO_MAX - count } });
 });
 

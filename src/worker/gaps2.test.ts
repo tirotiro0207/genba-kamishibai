@@ -163,3 +163,45 @@ describe("口ごとの返事", () => {
     expect(await empty.json()).toEqual({ trial: null });
   });
 });
+
+describe("署名が外れる直しの記録", () => {
+  it("「状態が移った」の行が書けなければ、直しごと戻る（版も直しの行も増えない）", async () => {
+    const id = await newCard();
+    expect((await send("POST", `${base}/${id}/status`, { to: "pending" })).status).toBe(200);
+    await env.DB.prepare("CREATE TRIGGER IF NOT EXISTS t_status_fail BEFORE INSERT ON audit_log WHEN new.kind = 'status' AND new.payload LIKE '%状態の行を落とす%' BEGIN SELECT RAISE(ABORT, 'status fail'); END").run();
+    try {
+      const res = await send("PUT", `${base}/${id}`, { card: { ...sampleCard(), why: "感電するから" }, reason: "状態の行を落とす" });
+      expect(res.status).not.toBe(200);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS t_status_fail").run();
+    }
+    expect((await env.DB.prepare("SELECT version, status FROM cards WHERE id = ?").bind(id).first())).toEqual({ version: 1, status: "pending" });
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM audit_log WHERE card_id = ? AND kind = 'edit'").bind(id).first<{ n: number }>())!.n).toBe(0);
+  });
+
+  it("直しの行・状態の行・知らせが 1 つのバッチで入り、連鎖は切れない", async () => {
+    const id = await newCard();
+    expect((await send("POST", `${base}/${id}/status`, { to: "pending" })).status).toBe(200);
+    expect((await send("PUT", `${base}/${id}`, { card: { ...sampleCard(), why: "感電するから" }, reason: "直す" })).status).toBe(200);
+    const rows = (await env.DB.prepare("SELECT kind, n FROM audit_log WHERE card_id = ? ORDER BY n").bind(id).all<{ kind: string; n: number }>()).results;
+    const kinds = rows.map((x) => x.kind);
+    expect(kinds.slice(-3)).toEqual(["status", "edit", "status"]);
+    const last2 = rows.slice(-2);
+    expect(last2[1].n).toBe(last2[0].n + 1);
+    const v = (await (await send("GET", "/api/t/practice/audit/verify")).json()) as { ok: boolean };
+    expect(v.ok).toBe(true);
+  });
+
+  it("署名済みの 1 枚を直して下書きに戻すと、同じ束の署名済みの枚にも回収の知らせが出る（知らせだけ）", async () => {
+    const parent = "盤に触る前に検電する";
+    const ids = [await newCard({ id: "b-edit", order: 1, total: 3, parent }), await newCard({ id: "b-edit", order: 2, total: 3, parent }), await newCard({ id: "b-edit", order: 3, total: 3, parent })];
+    for (const id of ids) await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(id).run();
+    const sup = H({ "x-role": await role("supervisor") });
+    const res = await send("PUT", `${base}/${ids[0]}`, { card: { ...sampleCard(), why: "感電するから", bundle: { id: "b-edit", order: 1, total: 3, parent } }, reason: "理由を直す" }, sup);
+    expect(res.status, await res.clone().text()).toBe(200);
+    for (const id of ids) expect((await notices(id)).length, id).toBe(1);
+    expect((await notices(ids[2]))[0].reason).toContain("直して署名が外れた");
+    expect(await statusOf(ids[0])).toMatch(/draft/);
+    expect(await statusOf(ids[1])).toBe("signed");
+  });
+});

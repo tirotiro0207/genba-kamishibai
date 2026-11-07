@@ -53,11 +53,11 @@ export async function appendAudit(db: D1Database, tenantId: string, input: Audit
  * post は同じバッチの末尾に足す文（回収の知らせなど。記録の行が入ったときだけ入る文にする）。
  * pre が 1 行も変えなければ記録は足さずに null を返す。記録が足せなければ pre も戻る（「移ったのに記録が無い」を作らない）
  */
-export async function appendAuditIf(db: D1Database, tenantId: string, pre: D1PreparedStatement, input: AuditInput, post: D1PreparedStatement[] = []): Promise<AuditEntry | null> {
-  return appendAuditWith(db, tenantId, input, pre, post);
+export async function appendAuditIf(db: D1Database, tenantId: string, pre: D1PreparedStatement, input: AuditInput, post: D1PreparedStatement[] = [], rest: AuditInput[] = []): Promise<AuditEntry | null> {
+  return appendAuditWith(db, tenantId, input, pre, post, rest);
 }
 
-async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInput, pre: D1PreparedStatement | null, post: D1PreparedStatement[] = []): Promise<AuditEntry | null> {
+async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInput, pre: D1PreparedStatement | null, post: D1PreparedStatement[] = [], rest: AuditInput[] = []): Promise<AuditEntry | null> {
   const chain = await currentChain(db, tenantId);
   const payload = JSON.parse(canonical(input.payload ?? null));
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -72,10 +72,20 @@ async function appendAuditWith(db: D1Database, tenantId: string, input: AuditInp
           .run();
         return { ...draft, hash };
       }
-      // changes() は直前の文（pre）が変えた行の数。0 なら記録の行も足さない
+      // changes() は直前の文（pre）が変えた行の数。0 なら記録の行も足さない。
+      // rest（「状態が移った」の行など）は、連鎖の番号と前のハッシュを先に計算して、続けて同じバッチに入れる（各行は直前の行が入ったときだけ入る）
+      const more: D1PreparedStatement[] = [];
+      let prev = { n: draft.n, hash };
+      for (const x of rest) {
+        const d = { tenant_id: tenantId, chain, n: prev.n + 1, card_id: x.card_id, kind: x.kind, actor: x.actor, payload: JSON.parse(canonical(x.payload ?? null)), created_at: new Date().toISOString(), prev_hash: prev.hash };
+        const h = await entryHash(d);
+        more.push(db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0").bind(tenantId, chain, d.n, d.card_id, d.kind, d.actor, canonical(d.payload), d.created_at, d.prev_hash, h));
+        prev = { n: d.n, hash: h };
+      }
       const [moved] = await db.batch([
         pre,
         db.prepare("INSERT INTO audit_log (tenant_id, chain, n, card_id, kind, actor, payload, created_at, prev_hash, hash) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0").bind(...values),
+        ...more,
         ...post,
       ]);
       return moved.meta.changes ? { ...draft, hash } : null;
