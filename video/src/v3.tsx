@@ -88,7 +88,6 @@ const CUES3: [number, number, string][] = [
   [91.2, 98.3, "人が直して、もう一度確かめた"],
   [98.5, 104.6, "人が直して署名したものだけが届く"],
   [105.0, 110.0, "訳さない。絵と、ふりがなの付いたやさしい日本語で伝える"],
-  [110.3, 120.8, "新入社員 9 人で試した"],
   [121.0, 129.6, "監修者が、カードを承認した"],
   [130.3, 137.0, "ベテランの職人に、壁に貼って使ってもらった"],
   [137.2, 144.2, "「絵があって分かりやすい」「朝礼で使いたい」"],
@@ -97,7 +96,23 @@ const CUES3: [number, number, string][] = [
   [166.5, 172.0, "電気工事士は、街の明かりを守っている。その人たちを、紙芝居で守る"],
   [172.5, 178.5, "事故を、1 件でも減らすために"],
 ];
-const SUB_Y = 706;
+const SUB_Y = 704;
+const SUB_FS = 48;
+const SUB_LH = 56;
+const SUB_MAX = 24;
+/** 1 行に収まらない字幕を、真ん中にいちばん近い句読点のあとで 2 行に分ける（無ければ真ん中で） */
+const splitSub = (text: string): string[] => {
+  if (text.length <= SUB_MAX) return [text];
+  let cut = Math.ceil(text.length / 2);
+  let best = Infinity;
+  [...text].forEach((ch, i) => {
+    if ("、。」".includes(ch) && i + 1 < text.length && Math.abs(i + 1 - text.length / 2) < best) {
+      best = Math.abs(i + 1 - text.length / 2);
+      cut = i + 1;
+    }
+  });
+  return [text.slice(0, cut), text.slice(cut)];
+};
 const Subtitle3: React.FC<{ t: number }> = ({ t }) => {
   const cue = CUES3.find((c) => t >= c[0] && t < c[1]);
   if (!cue) return null;
@@ -107,12 +122,31 @@ const Subtitle3: React.FC<{ t: number }> = ({ t }) => {
   const o = 1 - prog(t, b - 0.25, 0.25);
   // 冒頭（事故の写真と事例シート）は、画面の下 3 分の 1 の真ん中に 2 倍の大きさで出す（写真の重さに負けないように）
   const big = a < 26;
+  if (big) {
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, opacity: o }}>
+        <text x={W / 2} y={610} textAnchor="middle" fontFamily={FONT_PEN} fontSize={40} fontWeight={700} fill="#fffaf0" stroke="#241c45" strokeWidth={9} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
+          <tspan>{text.slice(0, n)}</tspan>
+          <tspan fill="none" stroke="none">{text.slice(n)}</tspan>
+        </text>
+      </svg>
+    );
+  }
+  // 0:26 からは、書き出し（1920×1080）で字の高さが 64 px 前後になる大きさ。白に黒の縁。長い字幕は句読点で 2 行に分ける
+  const lines = splitSub(text);
+  let used = 0;
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, opacity: o }}>
-      <text x={W / 2} y={big ? 610 : SUB_Y} textAnchor="middle" fontFamily={FONT_PEN} fontSize={big ? 40 : 20} fontWeight={700} fill="#fffaf0" stroke="#241c45" strokeWidth={big ? 9 : 5} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
-        <tspan>{text.slice(0, n)}</tspan>
-        <tspan fill="none" stroke="none">{text.slice(n)}</tspan>
-      </text>
+      {lines.map((line, i) => {
+        const k = Math.max(0, Math.min(line.length, n - used));
+        used += line.length;
+        return (
+          <text key={i} x={W / 2} y={SUB_Y - (lines.length - 1 - i) * SUB_LH} textAnchor="middle" fontFamily={FONT_PEN} fontSize={SUB_FS} fontWeight={700} fill="#fff" stroke="#000" strokeWidth={8} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
+            <tspan>{line.slice(0, k)}</tspan>
+            <tspan fill="none" stroke="none">{line.slice(k)}</tspan>
+          </text>
+        );
+      })}
     </svg>
   );
 };
