@@ -31,3 +31,24 @@ describe("動きの決まりの警告（エラーにしない）", () => {
     expect(motionRuleWarnings({ keyframes: [{ figures: [{}] }] } as unknown as MotionJson)).toEqual([]);
   });
 });
+
+describe("動きの決まりの警告: 数え方と壊れた入り", () => {
+  const bad = vary("walk", { arm_near_upper: 45 });
+  const ok = vary("walk", { arm_near_lower: 20 });
+
+  it("同じキーフレームに 2 人いれば、外れた人だけ figure の番号で数える", () => {
+    const m: MotionJson = { keyframes: [{ t: 0, mark: true, figures: [fig(ok), fig(bad), fig(bad)], props: [] }] };
+    expect(motionRuleWarnings(m).map((w) => [w.keyframe, w.figure])).toEqual([[0, 1], [0, 2]]);
+    expect(motionRuleLine(motionRuleWarnings(m))).toBe("決まりから外れた姿勢が 2 人");
+  });
+
+  it("動きが無い・null・keyframes が配列でないときも例外にせず空を返す", () => {
+    for (const v of [undefined, null, { keyframes: null }, { keyframes: "x" }, { keyframes: [null, { figures: null }] }])
+      expect(motionRuleWarnings(v as unknown as MotionJson)).toEqual([]);
+  });
+
+  it("angles の無い人は数えない（画面が止まらない）", () => {
+    const m = { keyframes: [{ t: 0, mark: true, figures: [{ role: "worker" }, null], props: [] }] };
+    expect(motionRuleWarnings(m as unknown as MotionJson)).toEqual([]);
+  });
+});
