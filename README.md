@@ -156,6 +156,7 @@ The extraction was tested on 30 items cut from Japanese laws and public material
 - The "why" is usually not written in the source. The AI left it out; the supervisors added who and what the rule protects.
 - Plain rewording can change the meaning (for example, "six months of continuous work" read as "never taking a day off").
 - Tuning on 20 items raised their score from 0.81 to 0.96, but the 10 held-out items only moved from 0.79 to 0.80. The gain did not carry over.
+- The final run on all 30 items, against the answers after the supervisors' review (the 10 held-out items were checked against their stored hashes first): Opus 5.5, the model the product uses, matched 58 of the 86 answer points (21 more of them only in wording), missed 28, added 6 that are not in the answers, and made **0 dangerous misreadings** (0.69 USD). Fable 5.1 matched 61, missed 25, added 7, also 0 dangerous (1.81 USD, about 2.6 times the cost). Numbers: [docs/numbers.md](docs/numbers.md), script `scripts/eval30.ts`.
 - Examples taken from the test material make scores look better without showing real ability, so prompt examples come from outside it, and every prompt is checked for overlap with it.
 
 Because of this, a supervisor's check is a step the system depends on, not an extra. Details: [docs/lessons-extraction.md](docs/lessons-extraction.md).
