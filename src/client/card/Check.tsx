@@ -2,7 +2,7 @@
 // 「確かめる AI に見せる」は、コマを端末で PNG にしてサーバーに送る。確かめる AI を呼んで証拠を残すのはサーバーだけ。
 // 帯の色は 3 色だけ（緑・黄・赤。赤は「危険」と同じ赤）。危ない読み違いのカードは、直して確かめ直すまで OK を押せない（048）。
 import { useState } from "react";
-import type { CardBody, CardStatus } from "../../shared/card";
+import { type CardBody, type CardStatus, type CardWeight, WEIGHT_LABEL, WEIGHTS } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { renderFrame, SIZE } from "../../shared/picto/scene";
 import type { Evidence } from "../../shared/verify/formal";
@@ -69,6 +69,9 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
     await req(tenant, `${path}/verify`, { method: "POST", body: JSON.stringify({ frames }) });
   });
   const move = (to: CardStatus) => run(to, () => req(tenant, `${path}/status`, { method: "POST", body: JSON.stringify({ to }) }));
+  // 重さ（11/7 既定）: 監修者が OK・署名の前に決める。本文に入るので版が 1 つ上がる（絵は変わらないので、確かめる AI の証拠は引き継ぐ）
+  const setWeight = (w: CardWeight) => run(`weight-${w}`, () => req(tenant, `${path}/weight`, { method: "PUT", body: JSON.stringify({ weight: w, version: card.version }) }));
+  const weight = card.body.weight;
 
   return (
     <section className="card-check" data-testid="card-check" data-evidence={ev ? "1" : "0"}>
@@ -99,6 +102,16 @@ export function Check({ tenant, card, onChange }: { tenant: string; card: Checke
           <strong>確認待ち</strong>
           <span>確かめる AI の証拠（どの絵を見て・何点で・なぜか）がまだ無いので、OK を押せません</span>
         </p>
+      )}
+      {(card.status === "pending" || card.status === "ok") && (
+        <fieldset className="card-weight" data-testid="card-weight" data-weight={weight ?? ""}>
+          <legend>重さ（監修者が決める）{weight ? "" : "・まだ決めていない（それ以外として出る）"}</legend>
+          {WEIGHTS.map((w) => (
+            <button key={w} className={`pick${weight === w ? " on" : ""}${w === "life" ? " danger" : ""}`} onClick={setWeight(w)} disabled={!!busy || weight === w} data-testid={`card-weight-${w}`} aria-pressed={weight === w}>
+              {WEIGHT_LABEL[w]}
+            </button>
+          ))}
+        </fieldset>
       )}
       <div className="card-actions">
         <button className="card-show" onClick={verify} disabled={!!busy} data-testid="card-verify">

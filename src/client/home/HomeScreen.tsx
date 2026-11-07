@@ -4,7 +4,26 @@
 // まとめを押すと開いて、編集する（絵のカードの画面へ）・承認に出す・署名する・止めるが出る。止めるは画面の中の確認の窓で、もう一度確かめる。
 // 消すボタンは置かない（11/5 作者。消すと、そのカードに残したノウハウと記録が消えるため。要らないカードは止める）。署名したカードは、署名した人を状態の札の下に出す
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { STATUS_LABEL, type CardStatus } from "../../shared/card";
+import { type CardBody, STATUS_LABEL, type CardStatus, WEIGHT_LABEL } from "../../shared/card";
+
+/** 一覧の小さな印（11/7）: 命に関わる・原則の 1 コマ・束（どの決まりの何枚目か）。同じ束のカードが一覧で分かる */
+function KindTags({ body }: { body: Pick<CardBody, "weight" | "shape" | "bundle"> }) {
+  return (
+    <>
+      {body.weight === "life" && (
+        <small className="home-tag life" data-testid="home-tag-life">
+          {WEIGHT_LABEL.life}
+        </small>
+      )}
+      {body.shape === "principle" && <small className="home-tag">原則の 1 コマ</small>}
+      {body.bundle && (
+        <small className="home-tag" data-testid="home-tag-bundle" title={body.bundle.parent}>
+          束 {body.bundle.order}/{body.bundle.total}: {body.bundle.parent}
+        </small>
+      )}
+    </>
+  );
+}
 import { characterSvg } from "../../shared/picto/character";
 import { STANDING } from "../../shared/picto/skeleton";
 import { AvatarSetup } from "../avatar/AvatarSetup";
@@ -24,7 +43,7 @@ interface Card {
   created_at: string;
   updated_at: string;
   ask: string | null;
-  body: { rule: string; why?: string; frames: unknown[]; words?: { ja: string; vi: string }; statements?: Statement[] };
+  body: { rule: string; why?: string; frames: unknown[]; words?: { ja: string; vi: string }; statements?: Statement[] } & Pick<CardBody, "weight" | "shape" | "bundle">;
   /** 最後の署名（署名したことが無ければ null） */
   signed: { role: string; slot: number; name: string; at: string } | null;
 }
@@ -385,7 +404,10 @@ function CardsTab({ tenant, role }: { tenant: string; role: string }) {
               <li key={c.id} className={open === c.id ? "open" : ""}>
                 <button className="home-row" onClick={() => setOpen(open === c.id ? null : c.id)} aria-expanded={open === c.id} data-testid={`home-card-${c.id}`}>
                   <span className="home-date">{day(c.created_at)}</span>
-                  <span className="home-rule">{c.body.rule}</span>
+                  <span className="home-rule">
+                    {c.body.rule}
+                    <KindTags body={c.body} />
+                  </span>
                   <span className="home-state">
                     <span className={`home-chip st-${c.status}`} data-testid={`home-status-${c.id}`}>
                       {STATUS_LABEL[c.status]}

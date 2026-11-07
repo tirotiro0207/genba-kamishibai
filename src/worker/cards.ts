@@ -2,7 +2,7 @@
 // どの読み書きもテナントで絞る。署名は署名の記録（051a・sign.ts の /:id/sign）からだけ行い、ここの状態の変更では受け付けない。
 // 作ると監査の記録に ①元の文のどこから ②作る側が何をしたか、直すと ④、状態を移すとその 1 行が足される。
 import { type Context, Hono } from "hono";
-import { type CardBody, type CardStatus, canMove, STATUSES, validateCard } from "../shared/card";
+import { type CardBody, type CardStatus, canMove, STATUSES, validateCard, WEIGHTS, type CardWeight } from "../shared/card";
 import { aiDraftReasons } from "../shared/make/ai-draft";
 import { type FixRequest, validateFix } from "../shared/fix";
 import type { Term } from "../shared/make/words";
@@ -311,6 +311,42 @@ async function reopenOnEdit(db: D1Database, tenantId: string, r: CardRow, to: Ca
   await appendAudit(db, tenantId, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, reason } });
   if (r.status === "signed") await createRecall(db, tenantId, r, by, reason);
 }
+
+// 重さ（11/7 既定・作者の確認待ち）: 監修者が確認・署名の前に「命に関わる / それ以外」を決める。重さは本文に入る（指紋に入る）ので版を 1 つ上げ、
+// ④ に直しの 1 行（fields: weight）を残す。絵は変わらないので、状態はそのままにし、今の版の確かめる AI の証拠を新しい版へ引き継ぐ（③ に carried_from 付きで足す）。
+// 署名済み・停止のカードは受けない（署名済みに書き足すと指紋が変わって閲覧から外れるため。変えるなら直す道で版を上げて署名し直す）
+cards.put("/:id/weight", async (c) => {
+  const p = (c.var as PeopleVars).person;
+  if (p?.role !== "supervisor") return c.json({ error: "重さは監修者が決める" }, 403);
+  const r = await getCard(c.env.DB, c.var.tenant.id, c.req.param("id"));
+  if (!r) return c.json({ error: "カードが無い" }, 404);
+  const b = await c.req.json<{ weight?: unknown; version?: unknown }>().catch(() => ({}) as { weight?: unknown; version?: unknown });
+  if (!WEIGHTS.includes(b.weight as CardWeight)) return c.json({ error: "weight は life（命に関わる）か normal（それ以外）" }, 400);
+  if (b.version !== undefined && b.version !== r.version) return c.json({ error: `画面の版 ${String(b.version)} と今の版 ${r.version} が違う。読み直して` }, 409);
+  if (r.status === "signed" || r.status === "stopped") return c.json({ error: "署名済みか停止したカードの重さは、ここでは変えない（直して版を上げ、署名し直す）" }, 409);
+  const before = JSON.parse(r.body) as CardBody;
+  const weight = b.weight as CardWeight;
+  if (before.weight === weight) return c.json({ ...cardView(r), changed: [] });
+  const card: CardBody = { ...before, weight };
+  const by = whoOf(c);
+  const evidence = await currentEvidence(c.env.DB, c.var.tenant.id, r);
+  const update = c.env.DB.prepare("UPDATE cards SET body = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND version = ?").bind(JSON.stringify(card), r.id, c.var.tenant.id, r.version);
+  const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, update, {
+    card_id: r.id,
+    kind: "edit",
+    actor: by,
+    payload: { from_version: r.version, to_version: r.version + 1, fields: ["weight"], before: { weight: before.weight ?? null }, after: { weight }, by, edited_at: new Date().toISOString(), reason: `重さを決めた: ${weight === "life" ? "命に関わる" : "それ以外"}` },
+  });
+  if (!entry) return c.json({ error: "ほかの直しと重なった。読み直して" }, 409);
+  if (evidence) {
+    const last = await c.env.DB.prepare("SELECT actor, payload FROM audit_log WHERE tenant_id = ? AND card_id = ? AND kind = 'verify' AND json_extract(payload, '$.version') = ? ORDER BY created_at DESC, n DESC LIMIT 1")
+      .bind(c.var.tenant.id, r.id, r.version)
+      .first<{ actor: string; payload: string }>();
+    const png = last ? (JSON.parse(last.payload) as { png_sha256?: unknown }).png_sha256 : undefined;
+    await appendAudit(c.env.DB, c.var.tenant.id, { card_id: r.id, kind: "verify", actor: last?.actor ?? evidence.agent, payload: { version: r.version + 1, evidence, ...(png ? { png_sha256: png } : {}), carried_from: r.version } });
+  }
+  return c.json({ ...cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!), changed: ["weight"] });
+});
 
 // 中身を直すと版が 1 つ上がり、未承認の下書きに戻る（AI が書いた文が残っていれば AI 下書き）。
 // 署名済みも直せる。直すと署名が外れ、前の版に回収の知らせが出る（reopenOnEdit）。配るには確かめ直して署名し直す

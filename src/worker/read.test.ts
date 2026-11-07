@@ -35,7 +35,7 @@ describe("新入社員の閲覧の入口（028）", () => {
   it("経路や部品の理由は返さない", async () => {
     const id = await cardWith("signed", "028 経路なし");
     const c = (await (await call(`/api/t/practice/read/cards/${id}`)).json()) as Record<string, unknown>;
-    expect(Object.keys(c).sort()).toEqual(["frames", "id", "motion", "rule", "why", "words"]);
+    expect(Object.keys(c).sort()).toEqual(["bundle", "frames", "id", "motion", "rule", "shape", "weight", "why", "words"]);
     expect(JSON.stringify(c)).not.toContain("sources");
   });
 

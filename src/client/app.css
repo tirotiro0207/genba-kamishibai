@@ -35,6 +35,11 @@ select, input, textarea { font: inherit; font-size: 18px; padding: 8px; color: v
 .grading > a.big { display: inline-block; text-decoration: none; }
 .read { display: flex; flex-direction: column; gap: 12px; max-width: 720px; margin: 0 auto; }
 .read-pos { margin: 0; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* 命に関わるカード（11/7）: 赤い縁は絵の面の外（コマの並びの外側）に置く。絵の中の赤は禁止の印だけ */
+.read-life .read-frames { outline: 6px solid var(--err); outline-offset: 4px; border-radius: 8px; }
+.read-weight { margin: 0; align-self: flex-start; padding: 2px 10px; border-radius: 4px; background: var(--err); color: #fff; font-weight: 700; }
+.read-bundle { margin: 0; color: var(--muted); font-weight: 700; }
+.read-frames.single { grid-template-columns: 1fr; }
 .read-frames { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .read-frame { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .read-frame svg { display: block; width: 100%; height: auto; }

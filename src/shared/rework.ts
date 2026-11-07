@@ -42,7 +42,8 @@ export function ruleOf(body: CardBody): OkRule {
 export function reworkParams(body: CardBody, text: string, frame: number | null, fix?: string): Anthropic.MessageCreateParamsNonStreaming {
   if (body.motion.kind !== "keyframes") throw new ReworkError("動きの HTML のカードは、言葉で直せない", 400);
   const m = body.motion.json;
-  const base = makerParams(ruleOf(body), body.statements, fix);
+  // 原則の 1 コマのカード（11/7）は、直しても 1 コマのまま
+  const base = makerParams(ruleOf(body), body.statements, fix, undefined, undefined, undefined, undefined, body.shape === "principle" ? { shape: "principle" } : {});
   const k = frame === null ? -1 : keyIndexAt(m, body.frames[frame]?.t ?? -1);
   const now = `今の絵（このカードの絵の JSON。コマは ${body.frames.length} 枚）:\n${JSON.stringify({ motion: m, parts: body.parts.map((p) => ({ ...p.target, statement: p.statement, reason: p.reason })) })}`;
   const scope = frame === null ? "直す範囲: カード全体" : `直す範囲: ${frame + 1} コマ目だけ（keyframes[${k}]）`;

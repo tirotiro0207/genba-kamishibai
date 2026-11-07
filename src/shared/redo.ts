@@ -124,7 +124,7 @@ export async function redoCard(deps: GuardedDeps, purpose: Purpose, body: CardBo
   if (msg.stop_reason !== "end_turn") throw new RedoError(`作り直しが最後まで返らなかった: ${msg.stop_reason}`, 502);
   const got = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as FrameJson;
   const json = mergeRedo(m, keyIndex, got, targets);
-  const errs = validateMotion(json);
+  const errs = validateMotion(json, { single: body.shape === "principle" });
   if (errs.length) throw new RedoError(`作り直した絵が範囲の外: ${errs.slice(0, 3).join(" / ")}`, 502);
   return { body: { ...body, motion: { kind: "keyframes", json } }, targets, keyIndex };
 }

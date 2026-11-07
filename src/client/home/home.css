@@ -96,3 +96,6 @@
 .orig-item .route-src { margin: 6px 0 0; }
 .orig-item .make-lines { font-size: 14px; max-height: none; }
 .orig-more { align-self: flex-start; background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 0; }
+/* 一覧の小さな印（11/7）: 命に関わる・原則・束 */
+.home-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid #999; border-radius: 4px; font-size: 12px; color: #444; }
+.home-tag.life { border-color: #c22; background: #c22; color: #fff; font-weight: 700; }

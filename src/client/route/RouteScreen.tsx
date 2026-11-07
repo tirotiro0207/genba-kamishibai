@@ -22,7 +22,8 @@ const speechKey = (input: string) => `speech:${input}`;
 
 export async function loadTexts(tenant: string, body: CardBody): Promise<Texts> {
   const out: Texts = {};
-  const refs = body.statements.flatMap((s) => s.sources);
+  // 過去の事故（accident）の出どころは、文そのものを持っているので読みに行かない
+  const refs = body.statements.flatMap((s) => s.sources).filter((r): r is Exclude<SourceRef, { kind: "accident" }> => r.kind !== "accident");
   await Promise.all(
     [...new Map(refs.map((r) => [r.kind === "doc" ? docKey(r.doc, r.page) : speechKey(r.input), r])).entries()].map(async ([k, r]) => {
       try {
@@ -41,10 +42,25 @@ export async function loadTexts(tenant: string, body: CardBody): Promise<Texts> 
   return out;
 }
 
-const whereOf = (r: SourceRef) => (r.kind === "doc" ? `${r.doc} ${r.page} ページ ${r.line}${r.line_end ? `〜${r.line_end}` : ""} 行` : `話した言葉 ${r.start + 1}〜${r.end} 字`);
+const whereOf = (r: SourceRef) =>
+  r.kind === "doc" ? `${r.doc} ${r.page} ページ ${r.line}${r.line_end ? `〜${r.line_end}` : ""} 行` : r.kind === "speech" ? `話した言葉 ${r.start + 1}〜${r.end} 字` : `過去の事故${r.date ? `（${r.date}）` : ""}`;
 
 /** 1 つの元の位置。資料は前後 3 行を添えて該当の行を光らせ、話した言葉は字の範囲を光らせる */
 export function Source({ r, texts }: { r: SourceRef; texts: Texts }) {
+  // 過去の事故と原因（11/7）: 何が起きたか・原因を、そのまま出す
+  if (r.kind === "accident")
+    return (
+      <figure className="route-src" data-testid="route-accident">
+        <figcaption className="route-where">{whereOf(r)}</figcaption>
+        <p className="route-speech">
+          <b>何が: </b>
+          {r.title}
+          <br />
+          <b>原因: </b>
+          {r.cause}
+        </p>
+      </figure>
+    );
   if (r.kind === "doc") {
     const lines = texts[docKey(r.doc, r.page)];
     const end = r.line_end ?? r.line;
