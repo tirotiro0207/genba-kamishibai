@@ -26,7 +26,7 @@ export function hasScript(body: unknown): boolean {
 }
 
 /**
- * 脚本のあるカードの行だけを残す（11/6）。11/5 より前の作り方のカードには脚本が無く、監修者がそれを見て数字を出さないようにする。
+ * 脚本のあるカードの行だけを残す（11/6）。脚本の有無で分けたいとき（method: "script"）に使う。11/6 に前の作り方へ戻したので、今のカードには脚本が無く、既定ではこれで外さない。
  * 外した行は黙って落とさず、脚本の無い行と本文の JSON が読めない行に分けて ID を返す
  */
 export function scriptedOnly<R extends { id: string; body: string }>(rows: R[]): { kept: R[]; noScript: string[]; broken: string[] } {

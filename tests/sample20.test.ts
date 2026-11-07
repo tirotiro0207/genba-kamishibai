@@ -92,12 +92,23 @@ describe("20 枚の選び方と記入欄（064）", () => {
     expect(hasScript(null)).toBe(false);
   });
 
-  it("脚本の無いカードは既定で外し、外した枚数を返す。足りないときは short が立つ。--include-noscript なら入れる（11/6）", async () => {
+  it("既定は脚本の有無で外さない（11/6 以降のカードには脚本が無い）。本文が壊れたカードだけ外す", async () => {
+    const { db, exec } = memExec();
+    const card = db.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)");
+    ids.slice(0, 30).forEach((id, i) => card.run(id, "practice", i === 29 ? "{壊れた" : JSON.stringify({ rule: `決まり ${i}` })));
+    const r = await makeForm(exec, "practice", "s1");
+    expect(r.method).toBe("all");
+    expect(r.eligible).toBe(29);
+    expect(r.droppedNoScript).toBe(0);
+    expect(r.picked).toHaveLength(20);
+    expect(r.short).toBe(false);
+  });
+  it("--method script なら、脚本の無いカードは外し、外した枚数を返す。足りないときは short が立つ。--include-noscript なら入れる（11/6）", async () => {
     const { db, exec } = memExec();
     const card = db.prepare("INSERT INTO cards (id, tenant_id, body) VALUES (?, ?, ?)");
     // 30 枚のうち脚本のあるのは 12 枚、脚本の無いのは 17 枚、本文の壊れたのが 1 枚
     ids.slice(0, 30).forEach((id, i) => card.run(id, "practice", i === 29 ? "{壊れた" : JSON.stringify(i < 12 ? { rule: `決まり ${i}`, script } : { rule: `古い ${i}` })));
-    const r = await makeForm(exec, "practice", "s1");
+    const r = await makeForm(exec, "practice", "s1", { method: "script" });
     expect(r.total).toBe(30);
     expect(r.eligible).toBe(12);
     expect(r.droppedNoScript).toBe(17);

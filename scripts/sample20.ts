@@ -5,8 +5,8 @@
 //   npx tsx scripts/sample20.ts --read <記入した CSV>                                                                       # 集計する
 //
 // --run があれば、その夜間の一括で作ったカード（night_drafts の card_id）から選ぶ。無ければテナントのカード全部から選ぶ。
-// 脚本（body.script）の無いカード（11/5 より前の作り方）は選ぶ前に外す。外した枚数は標準出力と seed.json に出す。
-// 古いカードも入れたいときだけ --include-noscript を付ける（11/6）。
+// 既定は脚本（body.script）の有無で外さない（11/6 に前の作り方へ戻したので、今のカードには脚本が無い）。脚本のあるカードだけにするときは --method script。
+// 外した枚数は標準出力と seed.json に出す。
 // 脚本の無い前の作り方のカードだけから選ぶときは --method noscript（11/6 作者が前の作り方に戻すと決めたため）。
 // --status <状態> でその状態のカードだけ、--exclude <番号,番号> でその番号のカードを外す（当日のテストの枚を除くため）
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ export interface FormOptions {
   run?: string;
   /** 脚本の無いカードも選ぶ候補に入れる（11/6） */
   includeNoScript?: boolean;
-  /** script: 脚本のあるカードだけ（既定）・noscript: 脚本の無いカードだけ・all: 両方（11/6） */
+  /** all: 両方（既定）・script: 脚本のあるカードだけ・noscript: 脚本の無いカードだけ（11/6） */
   method?: "script" | "noscript" | "all";
   /** この状態のカードだけ（例: pending） */
   status?: string;
@@ -35,7 +35,8 @@ export async function makeForm(exec: Exec, tenant: string, seed: string, opts: F
   const ex = new Set(opts.exclude ?? []);
   const all = fetched.filter((r) => (!opts.status || r.status === opts.status) && !ex.has(r.id));
   const f = scriptedOnly(all);
-  const method = opts.method ?? (opts.includeNoScript ? "all" : "script");
+  // 既定は脚本の有無で外さない（11/6 に前の作り方へ戻したので、今のカードには脚本が無い）。脚本のあるカードだけにしたいときは method: "script"
+  const method = opts.method ?? "all";
   // 本文の JSON が読めないカードは見出しも出せないので、どれでも外す
   const rows = method === "all" ? all.filter((r) => !f.broken.includes(r.id)) : method === "noscript" ? all.filter((r) => f.noScript.includes(r.id)) : f.kept;
   const title = new Map(rows.map((r) => [r.id, String((JSON.parse(r.body) as { rule?: string }).rule ?? "")]));
