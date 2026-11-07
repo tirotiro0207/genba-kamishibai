@@ -1,0 +1,14 @@
+#!/bin/sh
+# 取り込みの見張り（scripts/intake-check.ts）。npm run intake:install で .git/hooks/post-merge に写す
+# git merge / git pull で入ってきた更新に、精度に効くファイルがあれば、型・単体テストと 20 個の評価の要るかを調べる。
+# post-merge は merge を取り消せないので、落ちたら戻し方を出す
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 0
+npx tsx scripts/intake-check.ts --base ORIG_HEAD --head HEAD
+code=$?
+if [ "$code" = 1 ] || [ "$code" = 3 ]; then
+  echo "取り込んだ更新で精度の確認が通らなかった（記録: eval/intake-log.md）。戻すなら: git reset --merge ORIG_HEAD" >&2
+elif [ "$code" = 2 ]; then
+  echo "20 個の評価がまだ。流すなら: npm run intake -- --run-paid（Claude の API を呼ぶ）" >&2
+fi
+exit 0

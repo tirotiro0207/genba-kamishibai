@@ -1,0 +1,27 @@
+# 取り込みの見張り（11/7）。共有された更新の PR で、精度に効くファイル（取り出しのプロンプト・採点・評価データ・絵の部品など）が
+# 変わったかを見分け、20 個の評価の結果が PR に入っているか、前の点より下がっていないかを調べる。
+# CI では Claude の API を呼ばない（鍵を渡さない）。評価の結果が無ければ「評価が要る」で止め、鍵を持つ人が手元で流す。
+# 型と単体テストは test.yml が流す
+name: intake
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  accuracy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: 取り込みの見張り
+        run: npx tsx scripts/intake-check.ts --ci --base "origin/${{ github.base_ref }}" --head HEAD --source "PR ${{ github.event.number }}"

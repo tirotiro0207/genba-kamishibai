@@ -9,7 +9,9 @@
     "typecheck": "tsc",
     "public-check": "tsx scripts/public-check-all.ts",
     "progress": "python -X utf8 tools/progress.py",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "intake": "tsx scripts/intake-check.ts",
+    "intake:install": "tsx scripts/install-intake-hook.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.12",
