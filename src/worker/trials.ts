@@ -116,7 +116,7 @@ trials.post("/:id/join", async (c) => {
   const b = await c.req.json<{ participant?: unknown }>().catch(() => ({}) as { participant?: unknown });
   const me = person?.role === "newhire" ? (person.student ?? null) : normalizeStudent(b.participant);
   if (!me) return c.json({ error: "ID は student_V_1 の形" }, 400);
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const t = await getTrial(c.env.DB, c.var.tenant.id, c.req.param("id"));
     if (!t) return c.json({ error: "回が無い" }, 404);
     const p = JSON.parse(t.participants) as Stored;
@@ -126,9 +126,16 @@ trials.post("/:id/join", async (c) => {
     if (had) return c.json({ participant: me, group: had.group, set: had.set });
     if (p.people.length >= 200) return c.json({ error: "この回は 200 人まで" }, 409);
     const group = studentGroup(me);
-    const set = joinSet(t.seed, group, v.assignments.filter((a) => a.group === group).map((a) => a.set));
-    // 同じ人が同時に押したときは 1 行だけ入る（主キー）。入らなければ読み直して、入った方の組を返す
-    const res = await c.env.DB.prepare("INSERT OR IGNORE INTO trial_joins (trial_id, tenant_id, participant, grp, set_no) VALUES (?, ?, ?, ?, ?)").bind(t.id, c.var.tenant.id, me, group, set).run();
+    const same = v.assignments.filter((a) => a.group === group);
+    const set = joinSet(t.seed, group, same.map((a) => a.set));
+    // 読んだときの「同じ国籍でその場で加わった人数」のままのときだけ入れる（11/7 作者）。
+    // 別の人が同時に加わって数が変わっていたら入らないので、読み直して組を決め直す（先に入った人の組は変えない）。
+    // 同じ人が同時に押したときも 1 行だけ入る（主キー）。入らなければ読み直して、入った方の組を返す
+    // p.people は前もって並べた人（組なし）と、その場で加わった人（組つき。withJoins が足す）
+    const joined = p.people.filter((x) => x.group === group && x.set).length;
+    const res = await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO trial_joins (trial_id, tenant_id, participant, grp, set_no) SELECT ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM trial_joins WHERE trial_id = ? AND grp = ?) = ?",
+    ).bind(t.id, c.var.tenant.id, me, group, set, t.id, group, joined).run();
     if (res.meta.changes) return c.json({ participant: me, group, set }, 201);
   }
   return c.json({ error: "加われなかった。もう一度押す" }, 409);

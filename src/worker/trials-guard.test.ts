@@ -91,3 +91,13 @@ describe("○× の組を同時に結ぶ", () => {
     expect(rs.map((r) => r.status).sort()).toEqual([201, 409]);
   });
 });
+
+describe("その場で同時に加わる（83・11/7）", () => {
+  it("同じ国籍の 4 人が同時に加わっても、組は 2 人と 2 人に分かれる", async () => {
+    const t = (await (await call(base, req("POST", { design: "cross", participants: [] }))).json()) as { id: string };
+    const rs = await Promise.all([1, 2, 3, 4].map((i) => call(`${base}/${t.id}/join`, req("POST", { participant: `student_V_${40 + i}` }))));
+    const sets = await Promise.all(rs.map(async (r) => ((await r.json()) as { set: 1 | 2 }).set));
+    expect(rs.every((r) => r.status === 201)).toBe(true);
+    expect(sets.filter((s) => s === 1).length).toBe(2);
+  });
+});
