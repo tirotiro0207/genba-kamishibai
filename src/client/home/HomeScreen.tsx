@@ -265,7 +265,7 @@ function CardDetail({ tenant, card, role, labels, onChanged }: { tenant: string;
       <p className="home-meta">
         {card.body.frames.length} コマ ・ 版 {card.version} ・ 最後に変えた日 {day(card.updated_at)}
       </p>
-      {s === "signed" && <p className="home-meta">署名済みのカードも直せます。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "カードを止められるのは監修者だけです。" : ""}</p>}
+      {s === "signed" && <p className="home-meta">署名済みのカードを直せるのは監修者だけです。直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。{role !== "supervisor" ? "カードを止められるのも監修者だけです。" : ""}</p>}
       <div className="home-actions">
         <a className="pick" href={t(tenant, `card/${card.id}`)} data-testid="home-edit">
           編集する（絵のカード）

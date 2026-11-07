@@ -276,22 +276,23 @@ describe("同時の直しと、署名済みを直したとき", () => {
 
   it("署名済みのカードを戻す・言葉で直す・その 1 枚を作り直すと、下書きに戻り回収の知らせが 1 つ出る", async () => {
     // 戻す: 先に 1 回直して版 2 にし、署名済みにしてから戻す
+    const supH = H({ "x-role": await role("supervisor") });
     const u = await newCard();
     await send("PUT", `${base}/${u}`, { card: { ...sampleCard(), why: "感電するから" }, reason: "理由を直す" });
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(u).run();
-    expect((await send("POST", `${base}/${u}/undo`, {})).status).toBe(200);
+    expect((await send("POST", `${base}/${u}/undo`, {}, supH)).status).toBe(200);
     expect(await statusOf(u)).toMatchObject({ status: "draft", version: 3 });
     expect(await recalls(u)).toBe(1);
 
     const w = await signedCard();
-    const rw = await send("POST", `${base}/${w}/rework`, { text: "手を出す形にして" });
+    const rw = await send("POST", `${base}/${w}/rework`, { text: "手を出す形にして" }, supH);
     expect(rw.status, await rw.clone().text()).toBe(200);
     expect((await statusOf(w)).status).toMatch(/draft/);
     expect(await recalls(w)).toBe(1);
 
     const r = await signedCard();
-    const fix = (await (await send("POST", `${base}/${r}/fix`, { frame: 0, box: { x: 0.66, y: 0.52, w: 0.18, h: 0.16 }, text: "もっとはっきり" })).json()) as { n: number };
-    const rd = await send("POST", `${base}/${r}/redo`, { n: fix.n });
+    const fix = (await (await send("POST", `${base}/${r}/fix`, { frame: 0, box: { x: 0.66, y: 0.52, w: 0.18, h: 0.16 }, text: "もっとはっきり" }, supH)).json()) as { n: number };
+    const rd = await send("POST", `${base}/${r}/redo`, { n: fix.n }, supH);
     expect(rd.status, await rd.clone().text()).toBe(200);
     expect((await statusOf(r)).status).toMatch(/draft/);
     expect(await recalls(r)).toBe(1);

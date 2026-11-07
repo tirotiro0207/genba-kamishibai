@@ -45,7 +45,8 @@ describe("カードの保存と状態（019）", () => {
     expect(r).toMatchObject({ status: "draft", version: 2 });
     await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(c.id).run();
     const again = { ...fixed, why: "感電して大けがをするおそれがあるから" };
-    const r2 = (await (await call(`${base}/${c.id}`, json("PUT", { card: again, reason: "理由の言い方を直す" }))).json()) as { status: string; version: number };
+    const supH = { "content-type": "application/json", "x-role": await signRole("test-secret", "practice", { role: "supervisor", slot: 1 }) };
+    const r2 = (await (await call(`${base}/${c.id}`, { ...json("PUT", { card: again, reason: "理由の言い方を直す" }), headers: supH })).json()) as { status: string; version: number };
     expect(r2).toMatchObject({ status: "draft", version: 3 });
     const recall = await env.DB.prepare("SELECT version, reason FROM recall_notices WHERE card_id = ?").bind(c.id).first<{ version: number; reason: string }>();
     expect(recall).toMatchObject({ version: 2, reason: expect.stringContaining("直したため（版 2 → 3）") });
@@ -96,7 +97,7 @@ describe("枠と指示（044a）", () => {
     const c = await newCard();
     for (const st of ["signed", "stopped"]) {
       await env.DB.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(st, c.id).run();
-      expect((await fix(c.id, { frame: 0, box, text: "x" })).status).toBe(202);
+      expect((await call(`${base}/${c.id}/fix`, { ...json("POST", { frame: 0, box, text: "x" }), headers: { "content-type": "application/json", "x-role": await signRole("test-secret", "practice", { role: "supervisor", slot: 1 }) } })).status).toBe(202);
       expect(((await (await call(`${base}/${c.id}`)).json()) as { status: string }).status).toBe(st);
     }
   });

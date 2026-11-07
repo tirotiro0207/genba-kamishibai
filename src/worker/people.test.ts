@@ -58,6 +58,31 @@ describe("利用者と役割（030b）", () => {
     expect((await call(`/api/t/practice/cards/${id}/status`, req("POST", { to: "stopped", reason: "テストで止める" }, sup))).status).toBeLessThan(300);
   });
 
+  it("署名済み・止めたカードを直せるのは監修者だけ。下書き・確認待ち・OK は今までどおり（11/7）", async () => {
+    const as = async (role: string) => ({ "x-role": (await login("practice", role)).body.token! });
+    const id = await okCard();
+    const fixed = { ...sampleCard(), why: "感電して大けがをするから" };
+    const paths: [string, string, unknown][] = [
+      ["PUT", `/api/t/practice/cards/${id}`, { card: fixed, reason: "直す" }],
+      ["POST", `/api/t/practice/cards/${id}/undo`, {}],
+      ["POST", `/api/t/practice/cards/${id}/redo`, { n: 1 }],
+      ["POST", `/api/t/practice/cards/${id}/rework`, { text: "直して" }],
+      ["POST", `/api/t/practice/cards/${id}/fix`, {}],
+      ["POST", `/api/t/practice/cards/${id}/accident`, {}],
+    ];
+    // OK のカードは誰でも直せる（関所で止まらない）
+    expect((await call(paths[0][1], req("PUT", paths[0][2], await as("trainer")))).status).toBe(200);
+    for (const st of ["signed", "stopped"]) {
+      await env.DB.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(st, id).run();
+      for (const role of ["author", "trainer"]) for (const [m, path, body] of paths) expect((await call(path, req(m, body, await as(role)))).status, `${st} ${role} ${m} ${path}`).toBe(403);
+      for (const [m, path, body] of paths) expect((await call(path, req(m, body))).status, `${st} 役割なし ${m} ${path}`).toBe(403);
+    }
+    // 監修者は関所を通る（直せる）
+    await env.DB.prepare("UPDATE cards SET status = 'signed' WHERE id = ?").bind(id).run();
+    const r = await call(paths[0][1], req("PUT", { card: { ...fixed, why: "感電して大けがを負うから" }, reason: "直す" }, await as("supervisor")));
+    expect(r.status).toBe(200);
+  });
+
   it("新入社員はカードの API に入れない", async () => {
     const nh = { "x-role": (await login("practice", "newhire")).body.token! };
     expect((await call("/api/t/practice/cards", req("GET", undefined, nh))).status).toBe(403);

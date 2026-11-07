@@ -127,6 +127,11 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
   const [tries, setTries] = useState(0);
+  // 役割（11/7 作者: 署名済み・止めたカードを直せるのは監修者だけ）。読めなければ null のまま（直す口は出さず、置き場の 403 に任せる）
+  const [role, setRole] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    req<{ role: string | null }>(tenant, "/me").then((m) => setRole(m.role), () => setRole(null));
+  }, [tenant, tries]);
   // 見せ方（11/6 作者「横一列の紙芝居 4 コマでも見られるように」）。スライド（1 コマずつ送る）と 4 コマ（横 1 列）を切り替える
   const [layout, setLayout] = useState<"slide" | "strip">(() => {
     try {
@@ -169,6 +174,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
   if (err) return <p className="err">{err}</p>;
   if (!card) return <p>読み込み中…</p>;
   const b = card.body;
+  const locked = (card.status === "signed" || card.status === "stopped") && role !== "supervisor";
   return (
     <article className={`card${layout === "strip" ? " card-wide" : ""}`} data-testid="card" data-card={card.id} data-status={card.status}>
       <Band card={card} />
@@ -182,7 +188,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
           <span>危ない行為をしてよいと読める絵です。直して確かめ直すまで OK できません</span>
         </p>
       )}
-      <TextEdit tenant={tenant} card={card} onSaved={setCard} />
+      {!locked && <TextEdit tenant={tenant} card={card} onSaved={setCard} />}
       {b.motion.kind === "keyframes" && (
         <div className="av-seg card-layout" role="tablist" aria-label="見せ方">
           <button role="tab" aria-selected={layout === "slide"} className={layout === "slide" ? "on" : ""} onClick={() => pickLayout("slide")} data-testid="card-layout-slide">
@@ -224,7 +230,12 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
         </nav>
       )}
       {/* 絵の直し方の入口（11/6 作者「プロンプトで直す・つまみで直すが見つからない」）。前は「文を見る」を開かないと出なかった */}
-      <nav className="card-fixes" aria-label="絵を直す" data-testid="card-fixes">
+      {locked && (
+        <p className="card-note" data-testid="card-locked-note">
+          {card.status === "signed" ? "署名済み" : "止めた"}のカードを直せるのは監修者だけです
+        </p>
+      )}
+      {!locked && <nav className="card-fixes" aria-label="絵を直す" data-testid="card-fixes">
         <span>絵を直す</span>
         <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}/words`} data-testid="card-fix-words">
           言葉（プロンプト）で直す
@@ -242,7 +253,7 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
         <a className="pick" href={`#/t/${encodeURIComponent(tenant)}/fold/${encodeURIComponent(card.id)}`} data-testid="card-to-fold">
           折りたたみを見る
         </a>
-      </nav>
+      </nav>}
       {/* 公開デモのカードは見るだけ（置き場が確かめ・確認を 403 で断る）。押せないボタンは出さない */}
       {tenant === "demo" ? (
         <p className="card-note" data-testid="card-check-demo">
@@ -279,10 +290,12 @@ export function CardScreen({ tenant, cardId }: { tenant: string; cardId: string 
             経路を見る（部品 → 元の文）
           </a>
           {/* 署名済み・停止のカードも直せる（11/5 作者）。直すと新しい版の下書きになり、署名が外れる */}
-          <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}`} data-testid="card-fix">
-            枠で囲んで直す
-          </a>
-          {card.status === "signed" && <p className="card-note" data-testid="card-fix-note">直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。配るには、確かめ直して署名し直します。</p>}
+          {!locked && (
+            <a className="card-show" href={`#/t/${encodeURIComponent(tenant)}/fix/${encodeURIComponent(card.id)}`} data-testid="card-fix">
+              枠で囲んで直す
+            </a>
+          )}
+          {card.status === "signed" && !locked && <p className="card-note" data-testid="card-fix-note">直すと署名が外れて新しい版の下書きになり、前の版には回収の知らせが出ます。配るには、確かめ直して署名し直します。</p>}
           <button className="card-show" onClick={() => setOpen(false)} data-testid="card-hide">
             閉じる
           </button>

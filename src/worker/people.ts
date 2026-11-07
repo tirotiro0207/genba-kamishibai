@@ -90,10 +90,19 @@ export async function roleRequiredGate(c: Context<{ Bindings: Env; Variables: Pe
   await next();
 }
 
+/** 本文を書き換える口: PUT /cards/:id、POST /cards/:id/(undo|redo|rework|fix|accident)。[1] がカードの番号、[2] が POST の口の名前 */
+const EDIT_PATH = /\/cards\/(?!glossary(?:\/|$))([^/]+?)(?:\/(undo|redo|rework|fix|accident))?$/;
+
 /** カードの API の関所。新入社員は入れない。署名と停止は監修者だけ。止めるときは理由が要る */
 export async function cardsGate(c: Context<{ Bindings: Env; Variables: PeopleVars }>, next: Next) {
   const p = c.var.person;
   if (p?.role === "newhire") return c.json({ error: "新入社員は署名済みのカードの入口から読む" }, 403);
+  // 署名済み・止めたカードの本文を変える口は、監修者だけ（11/7 作者）。直す・戻す・やり直す・言葉で直す・枠の直し・事故の出どころ
+  const edit = c.req.path.match(EDIT_PATH);
+  if (edit && p?.role !== "supervisor" && (c.req.method === "PUT" ? !edit[2] : c.req.method === "POST" && !!edit[2])) {
+    const row = await c.env.DB.prepare("SELECT status FROM cards WHERE id = ? AND tenant_id = ?").bind(edit[1], c.var.tenant.id).first<{ status: string }>();
+    if (row && (row.status === "signed" || row.status === "stopped")) return c.json({ error: "署名済みか止めたカードを直せるのは監修者だけ" }, 403);
+  }
   if (c.req.method === "POST" && /\/cards\/[^/]+\/status$/.test(c.req.path)) {
     const { to } = await c.req.json<{ to?: string }>().catch(() => ({ to: undefined }));
     if ((to === "signed" || to === "stopped") && p?.role !== "supervisor") return c.json({ error: "署名と停止は監修者だけ" }, 403);
