@@ -32,6 +32,15 @@ app.onError((e, c) => {
   return c.json({ error: "サーバーで止まった" }, 500);
 });
 
+// 本文が JSON の null だと、各口の .catch() をすり抜けて分割代入で落ち、500 になる。入口でまとめて 400 にする
+app.use("/api/*", async (c, next) => {
+  if (c.req.method !== "GET" && c.req.method !== "HEAD" && (c.req.header("content-type") ?? "").includes("json")) {
+    const body = await c.req.raw.clone().text();
+    if (body.trim() === "null") return c.json({ error: "本文が空（null）" }, 400);
+  }
+  await next();
+});
+
 app.get("/api/health", async (c) => {
   const row = await c.env.DB.prepare("SELECT count(*) AS n FROM tenants").first<{ n: number }>();
   return c.json({ ok: true, tenants: row?.n ?? 0 });

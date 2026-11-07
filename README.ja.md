@@ -178,8 +178,7 @@ npm test
 手元でアプリを動かすときは、`.dev.vars` に `SESSION_SECRET`（長い乱数の文字列）と `ANTHROPIC_API_KEY` を書きます。`SESSION_SECRET` は必ず要ります。無いと役割で入れません。API の鍵が無くてもアプリは起動して画面は全部開きますが、Claude の呼び出し（取り出し・カードの作成・確かめ）は 503 になります。`SESSION_SECRET` だけで始めるとき:
 
 ```bash
-node -e "require('fs').writeFileSync('.dev.vars', 'SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '
-')"
+node -e "require('fs').writeFileSync('.dev.vars', 'SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '\n')"
 ```
 
 ファイルは Node が自分で書くので、bash でも Windows PowerShell でも同じに動きます（`> .dev.vars` で書くと、Windows PowerShell 5 は UTF-16 で書き、wrangler が読めずに `SESSION_SECRET` が無いことになります）。`.dev.vars` は上書きされます。

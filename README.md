@@ -178,8 +178,7 @@ Tests marked 【手元限定】 (local only) need files under `private/` or the 
 To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. `SESSION_SECRET` is required: without it, signing in with a role fails. Without the API key the app still starts and every screen opens, but calls to Claude (extraction, card making, checking) return 503. To start with only `SESSION_SECRET`:
 
 ```bash
-node -e "require('fs').writeFileSync('.dev.vars', 'SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '
-')"
+node -e "require('fs').writeFileSync('.dev.vars', 'SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '\n')"
 ```
 
 Node writes the file itself, so this works the same in bash and in Windows PowerShell (with `> .dev.vars`, Windows PowerShell 5 writes UTF-16, which wrangler cannot read, and `SESSION_SECRET` looks missing). It overwrites `.dev.vars`.

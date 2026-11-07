@@ -40,3 +40,6 @@ eval/holdout/
 .claude/worktrees/
 .codex/
 *.tmp.ts
+
+# 手元のプレビューの設定（各自の環境）
+.claude/launch.json
