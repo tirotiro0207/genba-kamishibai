@@ -16,7 +16,7 @@ import { appendAudit, appendAuditIf } from "./audit";
 import { claudeClient, dayBudget } from "./claude-client";
 import { addCompanyWords, addEditWords, callsFromTerms } from "./company-words";
 import { type PeopleVars, shownName } from "./people";
-import { readReason, recallStatement } from "./recall";
+import { bundleRecallStatements, readReason, recallStatement } from "./recall";
 import { cleanupCardSessions, listUsedExemplars, sessionDeleter } from "./exemplars";
 import { actorOf as personActor, recordOpen, signatureOf, signCard } from "./sign";
 import type { Env } from "./env";
@@ -560,7 +560,7 @@ cards.post("/:id/status", async (c) => {
   const move = c.env.DB.prepare("UPDATE cards SET status = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(to, r.id, c.var.tenant.id, r.status);
   const by = whoOf(c);
   // 署名済みを止めたら、印刷したカードを回収できるよう、版と署名の日付つきの知らせを教育担当に出す（088）。移りと記録と知らせを同じバッチで書く
-  const post = r.status === "signed" && to === "stopped" ? [await recallStatement(c.env.DB, c.var.tenant.id, r, by, reason)] : [];
+  const post = r.status === "signed" && to === "stopped" ? [await recallStatement(c.env.DB, c.var.tenant.id, r, by, reason), ...(await bundleRecallStatements(c.env.DB, c.var.tenant.id, r, by, reason))] : [];
   const entry = await appendAuditIf(c.env.DB, c.var.tenant.id, move, { card_id: r.id, kind: "status", actor: by, payload: { version: r.version, from: r.status, to, ...(to === "stopped" ? { reason } : {}) } }, post);
   if (!entry) return c.json({ error: "ほかの操作と重なった。読み直して" }, 409);
   return c.json(cardView((await getCard(c.env.DB, c.var.tenant.id, r.id))!));

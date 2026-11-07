@@ -34,3 +34,18 @@ export async function recallStatement(db: D1Database, tenantId: string, card: { 
     .prepare("INSERT INTO recall_notices (tenant_id, card_id, version, signed_at, rule, reason, stopped_by, stopped_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0")
     .bind(tenantId, card.id, card.version, signedAt, rule, reason, stoppedBy, now.toISOString());
 }
+
+/** 束の 1 枚を止めたとき、同じ束の署名済みの枚にも回収の知らせを出す文を作る（知らせだけ。ほかの枚の状態は止めない）。
+ *  自分の分の文の直後に続けて同じバッチへ入れる（各文は直前の文が 1 行足したときだけ足すので、移りが空振りなら全部足さない） */
+export async function bundleRecallStatements(db: D1Database, tenantId: string, card: { id: string; body: string }, stoppedBy: string, reason: string, now = new Date()): Promise<D1PreparedStatement[]> {
+  const bundle = (JSON.parse(card.body) as { bundle?: { id?: string } }).bundle;
+  if (!bundle?.id) return [];
+  const { results } = await db
+    .prepare("SELECT id, version, body FROM cards WHERE tenant_id = ? AND status = 'signed' AND id <> ? AND json_extract(body, '$.bundle.id') = ? ORDER BY json_extract(body, '$.bundle.order'), id")
+    .bind(tenantId, card.id, bundle.id)
+    .all<{ id: string; version: number; body: string }>();
+  const why = `同じ束の別の 1 枚（${card.id}）を止めたため: ${reason}`.slice(0, REASON_MAX);
+  const out: D1PreparedStatement[] = [];
+  for (const sib of results) out.push(await recallStatement(db, tenantId, sib, stoppedBy, why, now));
+  return out;
+}
