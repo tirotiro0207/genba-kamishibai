@@ -50,10 +50,17 @@ export async function companySql(p: Pins, name: string): Promise<string> {
   return rows.join("\n") + "\n";
 }
 
+/** 会社のテナントに使えない名前。最初から入っている公開の置き場（demo・practice）と、ゲストの使い捨て（guest-）。上書きすると公開の置き場が会社に化ける */
+export const RESERVED_TENANTS = ["demo", "practice"] as const;
+export function checkTenantName(tenant: string): void {
+  if (!/^[a-z][a-z0-9-]{1,30}$/.test(tenant)) throw new Error("テナントの名前は英小文字・数字・-");
+  if ((RESERVED_TENANTS as readonly string[]).includes(tenant) || tenant.startsWith("guest-")) throw new Error(`テナントの名前 ${tenant} は公開の置き場やゲスト用に決まっているので、会社には使えない`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const tenant = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--handle") ?? "company";
-  if (!/^[a-z][a-z0-9-]{1,30}$/.test(tenant)) throw new Error("テナントの名前は英小文字・数字・-");
+  checkTenantName(tenant);
   const remote = args.includes("--remote");
   const path = pinsPath(tenant, remote);
   const pins = !args.includes("--new") && existsSync(path) ? (JSON.parse(readFileSync(path, "utf-8")) as Pins) : newPins(tenant);
