@@ -3,7 +3,7 @@
 // 返事の決まりに印を付けて「選んだ決まりでカードを作る」を押すと、1 つずつ下書きのカードになる（今までの /extract の OK と作成を使う）
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { req } from "../make/MakeScreen";
-import { ACCEPT, type Attached, readAttachment } from "./files";
+import { ACCEPT, ACCEPT_LABEL, type Attached, readAttachment } from "./files";
 import "./chat.css";
 
 type Msg = { role: "user"; text: string; files: string[]; at: string } | { role: "assistant"; text: string; extraction?: string; rules?: number; at: string };
@@ -30,7 +30,11 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
   const [oked, setOked] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
-    req<{ rules: Rule[] }>(tenant, `/extract/${id}`).then((x) => setRules(x.rules), (e: Error) => setErr(e.message));
+    // 11/7 作者: 最初から全部に印を付けておき、作らないものだけ外してもらう
+    req<{ rules: Rule[] }>(tenant, `/extract/${id}`).then((x) => {
+      setRules(x.rules);
+      setOn(x.rules.map((_, i) => i));
+    }, (e: Error) => setErr(e.message));
   }, [tenant, id]);
   if (err && !rules) return <p className="err">{err}</p>;
   if (!rules) return <p className="chat-wait">読み込み中…</p>;
@@ -79,7 +83,7 @@ function Rules({ tenant, id, latest }: { tenant: string; id: string; latest: boo
       {/* 全部できるまでは押せるボタンを残す。途中で失敗したら、残りだけを作り直す */}
       {(on.length === 0 || left.length > 0) && (
         <button className="big go chat-make" disabled={!on.length || !!busy} onClick={make} data-testid="chat-make">
-          {busy || (!on.length ? "カードにする決まりを選んでください" : made > 0 ? `残りの ${left.length} 個でカードを作り直す` : `選んだ決まり ${on.length} 個でカードを作る`)}
+          {busy || (!on.length ? "カードにする決まりにチェックを付けてください" : made > 0 ? `残りの ${left.length} 枚を作り直す` : `これらのカードを作成する（${on.length} 枚）`)}
         </button>
       )}
       {err && <p className="err">{err}</p>}
@@ -163,7 +167,7 @@ export function NewCardChat({ tenant, chatId }: { tenant: string; chatId?: strin
         {msgs.length === 0 && (
           <div className="chat-hello">
             <p>資料を添付するか、カードにしたい決まりを書いてください。</p>
-            <p className="chat-sub">PDF・Word・文字のファイルを添付できます。送ったあとも「この決まりは外して」「理由も入れて」のように、言葉で直していけます。</p>
+            <p className="chat-sub">{ACCEPT_LABEL}を添付できます（貼り紙や注意書きの紙は、写真を撮ってそのまま添付できます）。送ると、カードにする決まりを箇条書きで返します。送ったあとも「この決まりは外して」「理由も入れて」のように、言葉で直していけます。</p>
           </div>
         )}
         {msgs.map((m, i) => (
@@ -171,7 +175,7 @@ export function NewCardChat({ tenant, chatId }: { tenant: string; chatId?: strin
             {m.role === "user" && m.files.length > 0 && (
               <div className="chat-chips">
                 {m.files.map((f) => (
-                  <span key={f} className="chat-chip">📄 {f}</span>
+                  <span key={f} className="chat-chip">{/\.(jpe?g|png|webp|gif)$/i.test(f) ? "🖼" : "📄"} {f}</span>
                 ))}
               </div>
             )}
@@ -195,7 +199,7 @@ export function NewCardChat({ tenant, chatId }: { tenant: string; chatId?: strin
           </div>
         )}
         <div className="chat-row">
-          <button className="chat-attach" onClick={() => pick.current?.click()} aria-label="ファイルを添付" title="PDF・Word・文字のファイル" data-testid="chat-attach">
+          <button className="chat-attach" onClick={() => pick.current?.click()} aria-label="ファイルを添付" title={ACCEPT_LABEL} data-testid="chat-attach">
             ＋
           </button>
           <input ref={pick} type="file" accept={ACCEPT} multiple hidden onChange={(e) => void attach(e.target.files)} data-testid="chat-file" />

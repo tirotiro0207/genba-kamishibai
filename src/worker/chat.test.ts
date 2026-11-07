@@ -60,6 +60,13 @@ describe("新しいカードを作るチャット", () => {
     expect(String(sent.at(-1)?.messages[0].content)).not.toContain("作る人の指示");
   });
 
+  it("写真（貼り紙）の文字は 1 枚 1 ページで返す。写真でないものは断る（11/7）", async () => {
+    const img = await call(`${base}/image`, { method: "POST", headers: { "content-type": "image/jpeg" }, body: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]) });
+    expect(img.status).toBe(200);
+    expect(((await img.json()) as { pages: unknown }).pages).toEqual([{ page: 1, lines: 3 }]);
+    expect(JSON.stringify(sent.at(-1)?.messages[0].content)).toContain('"media_type":"image/jpeg"');
+    expect((await call(`${base}/image`, { method: "POST", headers: { "content-type": "application/pdf" }, body: "x" })).status).toBe(400);
+  });
   it("PDF はページごとの文字にして返す。PDF でないもの・新入社員・空の送信は断る", async () => {
     const pdf = await call(`${base}/pdf`, { method: "POST", headers: { "content-type": "application/pdf" }, body: "%PDF-1.7 test" });
     expect(pdf.status).toBe(200);

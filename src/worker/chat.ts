@@ -131,7 +131,10 @@ chats.post("/:id/messages", async (c) => {
       const x = await runExtraction(c.env, tid, joined.text, joined.source, focus);
       reply = {
         role: "assistant",
-        text: x.rules.length ? `決まりを ${x.rules.length} 個取り出しました。カードにする決まりを選んでください。変えたいときは、そのまま言葉で指示してください` : "決まりが見つかりませんでした。資料を足すか、取り出したい決まりを言葉で教えてください",
+        // 11/7 作者: 箇条書きで「これらのカードを作成する」でいいかを聞く。全部に印を付けた状態で出し、作らないものは印を外してもらう
+        text: x.rules.length
+          ? `次の ${x.rules.length} 個の決まりを、それぞれ 1 枚のカードにします。これでいいですか？ 作らないものはチェックを外してください（チェックで操作できます）。変えたいときは、そのまま言葉で指示してください`
+          : "決まりが見つかりませんでした。資料を足すか、取り出したい決まりを言葉で教えてください",
         extraction: x.id,
         rules: x.rules.length,
         at: new Date().toISOString(),
@@ -145,6 +148,47 @@ chats.post("/:id/messages", async (c) => {
   messages.push(reply);
   await save();
   return c.json(view((await getChat(db, tid, r.id))!), 201);
+});
+
+/** 写真の大きさの上限（Claude に渡せる 1 枚の大きさ）。画面の側で長い辺 2000px の JPEG に縮めてから送る */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
+/**
+ * 写真の文字（11/7 作者「注意事項の紙の写真を撮って載せる人もいる」）。貼り紙・掲示・手書きのメモの写真を Claude に読ませ、
+ * 見えるとおりの文字にする。1 枚を 1 ページとして返す（PDF と同じ形）
+ */
+chats.post("/image", async (c) => {
+  const type = (c.req.header("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (!IMAGE_TYPES.includes(type as (typeof IMAGE_TYPES)[number])) return c.json({ error: "写真は JPEG・PNG・WebP・GIF" }, 400);
+  const buf = await c.req.arrayBuffer();
+  if (!buf.byteLength || buf.byteLength > IMAGE_MAX_BYTES) return c.json({ error: `写真は 1 バイト〜${IMAGE_MAX_BYTES / 1024 / 1024} MB` }, 400);
+  const client = claudeClient(c.env);
+  if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
+  const msg = await guardedCall(
+    { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) },
+    {
+      purpose: "app",
+      label: "写真の文字（チャット）",
+      params: {
+        model: PDF_MODEL,
+        max_tokens: 8000,
+        system: "渡した写真（貼り紙・掲示・注意書き・手書きのメモなど）に写っている文字を、見えるとおりに写す。言い換え・要約・足し算をしない。読めない所は「（読めない）」と書く。表は 1 行ずつ、項目を「・」で区切る。図の中の文字も写す。文字が無ければ空の文字を返す。",
+        output_config: { format: { type: "json_schema", schema: PDF_SCHEMA } },
+        messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: type, data: base64(buf) } }, { type: "text", text: "この写真の文字を写してください（1 枚を 1 ページとして）" }] }],
+      } as unknown as Parameters<typeof guardedCall>[1]["params"],
+    },
+  );
+  const out = msg.content.find((b) => b.type === "text");
+  let pages: { page: number; text: string }[];
+  try {
+    pages = (JSON.parse(out && out.type === "text" ? out.text : "{}") as { pages?: { page: number; text: string }[] }).pages ?? [];
+  } catch {
+    return c.json({ error: "写真の文字を読めなかった" }, 502);
+  }
+  const text = pages.map((p) => p.text.replaceAll("\r\n", "\n").trim()).filter(Boolean).join("\n");
+  if (!text) return c.json({ error: "写真に文字が見つからなかった" }, 422);
+  return c.json({ text, pages: [{ page: 1, lines: text.split("\n").length }] });
 });
 
 const PDF_SCHEMA = {
