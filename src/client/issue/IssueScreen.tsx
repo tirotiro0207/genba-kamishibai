@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CardBody } from "../../shared/card";
 import { exportPrinciples, exportSheet } from "../../shared/export";
+import { loadPropOverrides } from "../assets/overrides";
 import { req } from "../make/MakeScreen";
 import { REVIEWERS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./issue.css";
@@ -96,6 +97,8 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
     try {
       const { token } = await req<{ token: string }>(tenant, "/login", { method: "POST", body: JSON.stringify({ role, slot: Number(slot), pin: pin || undefined }) });
       sessionStorage.setItem(`role:${tenant}`, token);
+      // 役割で入ったら差し替えを読む（同じ画面のまま入るので、道筋の変わりを待たない）
+      void loadPropOverrides(tenant);
       onDone();
     } catch (e) {
       setErr((e as Error).message);

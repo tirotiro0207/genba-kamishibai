@@ -27,6 +27,7 @@ function KindTags({ body }: { body: Pick<CardBody, "weight" | "shape" | "bundle"
 import { characterSvg } from "../../shared/picto/character";
 import { STANDING } from "../../shared/picto/skeleton";
 import { AssetsTab } from "../assets/AssetsTab";
+import { loadPropOverrides } from "../assets/overrides";
 import { AvatarSetup } from "../avatar/AvatarSetup";
 import { type Avatar, loadAvatar } from "../avatar/store";
 import { req } from "../make/MakeScreen";
@@ -115,6 +116,8 @@ function RolePick({ tenant, onDone }: { tenant: string; onDone: () => void }) {
     try {
       const { token } = await req<{ token: string }>(tenant, "/login", { method: "POST", body: JSON.stringify({ role, slot: Number(slot), ...(id ? { student: id } : {}) }) });
       sessionStorage.setItem(`role:${tenant}`, token);
+      // 役割で入ったら差し替えを読む（同じ画面のまま入るので、道筋の変わりを待たない）
+      void loadPropOverrides(tenant);
       onDone();
     } catch (e) {
       setErr((e as Error).message);

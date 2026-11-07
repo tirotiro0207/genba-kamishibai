@@ -8,8 +8,11 @@ let loaded: string | null = null;
 /** そのテナントの差し替えを読み込む。force が無ければ同じテナントは 1 回だけ */
 export async function loadPropOverrides(tenant: string, force = false): Promise<void> {
   if (!force && loaded === tenant) return;
+  // まだ役割で入っていなければ読まない（PIN の画面の前に 401・403 を出さない。入ったあとの画面の移りで読み直す）
+  const headers = authHeaders(tenant);
+  if (!headers["x-role"]) return;
   try {
-    const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/assets/active`, { headers: authHeaders(tenant) });
+    const res = await fetch(`/api/t/${encodeURIComponent(tenant)}/assets/active`, { headers });
     if (!res.ok) {
       clearPropOverrides();
       loaded = null;

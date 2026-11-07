@@ -2,6 +2,7 @@
 // ほかの画面（req）がそれを付けて API を呼ぶ。PIN そのものはどこにも残さない。
 // 会社のテナントは、テナントの PIN のあとに役割の PIN でも入る（052 の続き）。役割のしるしは role:<テナント> に残す。
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { loadPropOverrides } from "../assets/overrides";
 import { Backdrop } from "../login/Backdrop";
 import { RolePicker } from "./RolePicker";
 import "./pin.css";
@@ -161,7 +162,11 @@ export function TenantPin({ tenant, onDone, roles = STAFF, tenantOnly = false, n
         }
         if (tenantOnly) onDone();
         else setStep(roles.length === 1 && isStudent ? "student" : "role");
-      } else onDone();
+      } else {
+        // 役割で入ったら差し替えを読む（同じ画面のまま入るので、道筋の変わりを待たない）
+        void loadPropOverrides(tenant);
+        onDone();
+      }
     } catch (x) {
       setErr((x as Error).message);
     } finally {

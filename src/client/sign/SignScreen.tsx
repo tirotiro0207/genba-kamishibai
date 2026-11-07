@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { type CardBody, type CardStatus, STATUS_LABEL } from "../../shared/card";
 import { cutFrames } from "../../shared/picto/motion";
 import { frameSvg } from "../Safe";
+import { loadPropOverrides } from "../assets/overrides";
 import { req } from "../make/MakeScreen";
 import { SUPERVISORS, TenantPin, useNeedsTenantPin } from "../pin/TenantPin";
 import "./sign.css";
@@ -51,6 +52,8 @@ function SupervisorPick({ tenant, onDone }: { tenant: string; onDone: () => void
       } catch {
         throw new Error("この端末では入ったしるしを残せない");
       }
+      // 役割で入ったら差し替えを読む（同じ画面のまま入るので、道筋の変わりを待たない）
+      void loadPropOverrides(tenant);
       onDone();
     } catch (e) {
       setErr((e as Error).message);
