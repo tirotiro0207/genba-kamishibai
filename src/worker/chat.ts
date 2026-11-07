@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { BudgetExceededError, guardedCall } from "../shared/claude";
 import { D1CallLog } from "./api-log";
+import { MAX_TOKENS_NO_STREAM } from "./assets";
 import { claudeClient, dayBudget } from "./claude-client";
 import type { Env } from "./env";
 import { ExtractError, type InputSource, MAX_INPUT_CHARS, runExtraction } from "./extract";
@@ -224,7 +225,7 @@ chats.post("/pdf", async (c) => {
       label: "PDF の文字（チャット）",
       params: {
         model: PDF_MODEL,
-        max_tokens: 32000,
+        max_tokens: MAX_TOKENS_NO_STREAM,
         system: "渡した PDF の文字を、ページごとに、見えるとおりに写す。言い換え・要約・足し算をしない。表は 1 行ずつ、項目を「・」で区切る。図の中の文字も写す。ページの番号は PDF の 1 枚目を 1 とする。",
         output_config: { format: { type: "json_schema", schema: PDF_SCHEMA } },
         messages: [{ role: "user", content: [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64(buf) } }, { type: "text", text: "この PDF の文字をページごとに写してください" }] }],

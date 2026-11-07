@@ -72,6 +72,8 @@ describe("新しいカードを作るチャット", () => {
     expect(pdf.status).toBe(200);
     expect(await pdf.json()).toEqual({ text: "表紙\n盤に触る前に検電する\n感電のおそれ", pages: [{ page: 1, lines: 1 }, { page: 2, lines: 2 }] });
     expect(JSON.stringify(sent.at(-1)?.messages[0].content)).toContain('"media_type":"application/pdf"');
+    // SDK は流し読みでない呼び出しで約 21,333 を超える長さを、呼ぶ前に止める
+    expect(sent.at(-1)?.max_tokens).toBeLessThanOrEqual(21333);
     expect((await call(`${base}/pdf`, { method: "POST", body: "hello" })).status).toBe(400);
     const nh = await signRole("test-secret", "practice", { role: "newhire", slot: 1 });
     expect((await call(base, json("POST", undefined, { "x-role": nh }))).status).toBe(403);
