@@ -157,11 +157,11 @@ INDUSTRY_DRAFTS.push(
   ] },
   { id: "26", name: "塗装", roles: [
     r("班長", "lead", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff" })),
-    r("作業員", "new", "hood", top("coverall", "#fff", { mask: true, pants: "#fff" })),
+    r("作業員", "worker", "hood", top("coverall", "#fff", { mask: true, pants: "#fff" })),
   ] },
   { id: "27", name: "電子部品の組み立て", roles: [
     r("班長", "lead", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff", boots: "#fff" })),
-    r("作業員", "new", "hood", top("coverall", "#fff", { mask: true, pants: "#fff", boots: "#fff" })),
+    r("作業員", "worker", "hood", top("coverall", "#fff", { mask: true, pants: "#fff", boots: "#fff" })),
   ] },
   { id: "28", name: "縫製・繊維", roles: [
     r("班長", "lead", "none", top("polo", "#eee", { wear: [{ kind: "apronLong", tone: "#333" }], armband: true })),
