@@ -37,6 +37,9 @@ class ToolError extends Error {}
 const WRITE_TOOLS = new Set(["doc_to_cards", "extract_rules", "make_drafts"]);
 const READ_ONLY_NOTE = "\n公開の置き場のこのテナントは見るだけです。使えるのは list_documents と get_card で、取り出し・カードの作成は会社のテナントの鍵で呼んでください。";
 
+/** カードの形。principle なら原則・心がまえの 1 コマ、story（既定）なら 3〜4 コマ。作る API の shape にそのまま渡す */
+const SHAPE_PROP = { type: "string", enum: ["principle", "story"], description: "principle にすると原則・心がまえの 1 コマのカードにする（既定は story の 3〜4 コマ）" };
+
 const TOOLS = [
   {
     name: "list_documents",
@@ -56,6 +59,7 @@ const TOOLS = [
         focus: { type: "string", description: "取り出すときに気にしてほしいこと（例: 新入社員が最初の週に守ること）" },
         pick: { type: "string", description: "この言葉を含む決まりだけをカードにする" },
         max_cards: { type: "integer", minimum: 1, maximum: MAX_CARDS, description: `作る枚数の上限（既定 3・最大 ${MAX_CARDS}）` },
+        shape: SHAPE_PROP,
       },
       additionalProperties: false,
     },
@@ -82,6 +86,7 @@ const TOOLS = [
       properties: {
         extraction: { type: "string" },
         items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: MAX_CARDS },
+        shape: SHAPE_PROP,
       },
       required: ["extraction", "items"],
       additionalProperties: false,
@@ -129,11 +134,18 @@ async function extractRules(api: Api, a: Record<string, unknown>) {
   return api<{ id: string; rules: Rule[] }>("POST", "/extract", { text, source, focus });
 }
 
-async function makeDrafts(api: Api, screen: (id: string) => string, extraction: string, items: number[]) {
+/** 道具の引数の shape（principle か story）。無ければ undefined、ほかの値は断る */
+function shapeArg(a: Record<string, unknown>): "principle" | "story" | undefined {
+  if (a.shape === undefined) return undefined;
+  if (a.shape !== "principle" && a.shape !== "story") throw new ToolError("shape は principle か story");
+  return a.shape;
+}
+
+async function makeDrafts(api: Api, screen: (id: string) => string, extraction: string, items: number[], shape?: "principle" | "story") {
   await api("POST", `/extract/${extraction}/ok`, { items });
   const cards = [];
   for (const item of items) {
-    const c = await api<CardOut>("POST", `/extract/${extraction}/make`, { item });
+    const c = await api<CardOut>("POST", `/extract/${extraction}/make`, { item, ...(shape ? { shape } : {}) });
     cards.push({ item, id: c.id, status: c.status, rule: c.body.rule, why: c.body.why, screen: screen(c.id) });
   }
   return cards;
@@ -160,11 +172,13 @@ async function runTool(name: string, a: Record<string, unknown>, api: Api, scree
     const items = a.items;
     if (typeof a.extraction !== "string" || !Array.isArray(items) || !items.length || items.length > MAX_CARDS || !items.every((i) => Number.isInteger(i) && i >= 0))
       throw new ToolError(`extraction と、決まりの番号の並び（1〜${MAX_CARDS} 個）を渡してください`);
-    return { cards: await makeDrafts(api, screen, a.extraction, [...new Set(items as number[])]), note: NOTE };
+    const shape = shapeArg(a);
+    return { cards: await makeDrafts(api, screen, a.extraction, [...new Set(items as number[])], shape), note: NOTE };
   }
   if (name === "doc_to_cards") {
     const max = a.max_cards === undefined ? 3 : a.max_cards;
     if (!Number.isInteger(max) || (max as number) < 1 || (max as number) > MAX_CARDS) throw new ToolError(`max_cards は 1〜${MAX_CARDS}`);
+    const shape = shapeArg(a);
     const x = await extractRules(api, a);
     const pick = typeof a.pick === "string" && a.pick.trim() ? a.pick.trim() : "";
     const items = x.rules
@@ -173,7 +187,7 @@ async function runTool(name: string, a: Record<string, unknown>, api: Api, scree
       .slice(0, max as number)
       .map(({ i }) => i);
     if (!items.length) return { extraction: x.id, rules: ruleList(x.rules), cards: [], note: pick ? `「${pick}」を含む決まりが無かった` : "決まりが取り出せなかった" };
-    return { extraction: x.id, rules: x.rules.length, cards: await makeDrafts(api, screen, x.id, items), note: NOTE };
+    return { extraction: x.id, rules: x.rules.length, cards: await makeDrafts(api, screen, x.id, items, shape), note: NOTE };
   }
   if (name === "get_card") {
     if (typeof a.card !== "string" || !/^[0-9a-f-]+$/.test(a.card)) throw new ToolError("card はカードの番号");

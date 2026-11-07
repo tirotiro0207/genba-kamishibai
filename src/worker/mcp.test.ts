@@ -37,6 +37,9 @@ describe("MCP サーバー", () => {
           if (isScriptCall(p.system)) return reply(scriptReply(p.system));
           if (String(p.system).includes("言葉」の欄")) return reply({ ja: "けんでん します。", vi: "Kiểm tra điện.", terms: [] });
           if (String(p.system).includes("カードの下ごしらえ")) return reply({ rules: [RULE("盤に触る前に検電する", 2), RULE("脚立は二人で使う", 3)] });
+          // 原則の 1 コマは、キーフレーム 1 つ・印 1 か所
+          if (String(p.system).includes("原則（いつも守る心がまえ）の 1 コマ"))
+            return reply({ motion: { keyframes: [{ ...MOTION.keyframes[0], t: 0, mark: true }] }, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s1", reason: "盤" }], why: "足元の物につまずくから" });
           return reply({ motion: MOTION, parts: [{ type: "figure", index: 0, statement: "s1", reason: "人" }, { type: "prop", index: 0, statement: "s1", reason: "検電器" }, { type: "prop", index: 1, statement: "s2", reason: "盤" }], why: null });
         },
       },
@@ -106,6 +109,17 @@ describe("MCP サーバー", () => {
     expect((made.result!.structuredContent!.cards as { status: string }[])[0].status).toBe("draft");
     expect((await tool("mcp-co", "make_drafts", { extraction, items: [0, 1, 2, 3, 4, 5] }, keys.co)).result?.isError).toBe(true);
     expect((await tool("mcp-co", "doc_to_cards", { text: TEXT, max_cards: 9 }, keys.co)).result?.isError).toBe(true);
+  });
+
+  it("shape に principle を渡すと、原則の 1 コマのカードになる（doc_to_cards・make_drafts とも）。ほかの値は断る", async () => {
+    const x = await tool("mcp-co", "extract_rules", { text: TEXT }, keys.co);
+    const { extraction } = x.result!.structuredContent as { extraction: string };
+    const body = async (id: string) => JSON.parse((await env.DB.prepare("SELECT body FROM cards WHERE id = ?").bind(id).first<{ body: string }>())!.body) as { shape?: string };
+    const made = await tool("mcp-co", "make_drafts", { extraction, items: [0], shape: "principle" }, keys.co);
+    expect((await body((made.result!.structuredContent!.cards as { id: string }[])[0].id)).shape).toBe("principle");
+    const doc = await tool("mcp-co", "doc_to_cards", { text: TEXT, max_cards: 1, shape: "principle" }, keys.co);
+    expect((await body((doc.result!.structuredContent!.cards as { id: string }[])[0].id)).shape).toBe("principle");
+    expect((await tool("mcp-co", "doc_to_cards", { text: TEXT, shape: "x" }, keys.co)).result?.isError).toBe(true);
   });
 
   it("署名の呼び出しは断り、カードは下書きのまま。中で呼べる口に署名と状態の変更は無い", async () => {
