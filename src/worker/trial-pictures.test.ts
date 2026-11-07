@@ -67,7 +67,7 @@ describe("記録アプリの 8 枚と教育担当の勘（059）", () => {
     await expect(env.DB.prepare("UPDATE forecasts SET rate = 0 WHERE trial_id = ?").bind(t.id).run()).rejects.toThrow(/append only/);
     await expect(env.DB.prepare("DELETE FROM picture_answers WHERE trial_id = ?").bind(t.id).run()).rejects.toThrow(/append only/);
     expect((await call(`${base}/${t.id}/forecasts`, json("PUT", { card_id: ids[0], rate: 1 }))).status).toBe(405);
-  });
+  }, 30_000); // 全部を一度に流すと 5 秒を超えることがあるので長めに待つ
 
   it("2 項目の訳はテナントの中にだけ置き、公開デモには置けない。やめた人の絵の答えも消せる", async () => {
     const { t } = await setup("059-items");
