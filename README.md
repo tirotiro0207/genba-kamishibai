@@ -12,9 +12,11 @@ English | [日本語](README.ja.md)
   - Look at the signed cards one by one, open the route from a picture back to its source sentence, and make a card from a short rule of your own (the demo has a daily cap).
   - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only".
 - Company tenants are private. They open with two PINs: the tenant PIN, then the PIN of your role (author, supervisor, trainer or new hire).
-  - Inside a company there are two doors (being built, 11/7): the **maker side** (author, supervisors, trainer: cards, characters, picture parts) and the **reader side** (new hires and anyone on site), which shows signed cards only.
+  - Inside a company there are two doors: the **maker side** (author, supervisors, trainer) with three tabs, cards / characters / picture parts, and the **reader side** (new hires and anyone on site), which shows signed cards only. A test, when there is one, is reached from the bottom of the reader side.
+  - New cards are made in a chat: attach PDF, Word, Excel, plain text or a photo of a paper notice, and say what you want. The reply is a bullet list of rules, all checked; untick what you do not want and press "make these cards".
+  - Picture parts: every prop used in the pictures is listed. Write what to change and attach a photo or a sketch; Claude redraws the part, the old and new are shown side by side, and only an author or supervisor can adopt it for the company. Every version is kept.
   - Scoring the on-site answers: `#/t/<tenant>/score`. The author's tab is on the left, the supervisor's on the right. Each gives every answer a score from 1 to 10 and a comment, and cannot see the other's scores (append-only).
-- A guest entrance to try the maker side without a company (being built, 11/7): for now, electrical work is the only industry that can be chosen; the others are locked.
+- "Try as a guest" on the first screen makes a throwaway space just for you and opens the maker side as the author (no reader side). When making your character, electrical work is the only industry that can be chosen for now; the others are listed but locked. Guests have a daily cap on AI calls.
 
 ![Compass: from rules in text and in people's heads (start) to signed cards (end). Quality goes up, quantity (information) goes right](docs/img/shinro.en.svg)
 
@@ -108,6 +110,9 @@ The app is one Cloudflare Worker (Hono) with D1 (records) and R2 (files), and a 
 | Overnight sorting and drafting | `src/node/night*.ts`, `src/node/managed-sort.ts` |
 | Other tools | `src/worker/mcp.ts` (MCP: drafts only) |
 | On-site check and scoring | `src/worker/trials.ts`, `src/worker/scores.ts`, `src/client/trial/`, `src/client/score/` |
+| Guest space | `src/worker/guest.ts` (one throwaway space per guest, daily caps) |
+| Picture parts | `src/worker/assets.ts`, `src/client/assets/`, `src/shared/picto/prop-override.ts` (versions are append-only; the SVG Claude returns is filtered to safe elements) |
+| Taking in shared updates | `scripts/intake-check.ts`, `scripts/git-hooks/post-merge`, `.github/workflows/intake.yml`, [docs/sharing.md](docs/sharing.md) |
 
 ### On-site check (2026-11-06)
 
@@ -272,8 +277,8 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 ## Not built
 
 - Results of the on-site check with new hires — **not built** (scoring by two graders is under way)
-- Separate maker and reader doors inside a company tenant, a guest entrance for the maker side, and a "picture parts" tab where a part can be fixed with a prompt and an attached image — **being built** (11/7)
-- A hook that re-runs the evaluation every time a shared update from another company or contributor is merged, so that the scores cannot quietly drop — **being built** (11/7)
+- Picture parts: only props can be redrawn for now (not poses, hair or clothes), and the redrawn part is used in pictures drawn in the browser, not yet in exports or video stills — **not built**
+- The paid part of the intake check (re-running the 20 tuning items) runs only when asked with `--run-paid`; CI never calls the API and stops with "evaluation needed" instead — by design, not a gap
 - The 2-minute and 3-minute videos — **not built**
 - A screen to list, edit and delete a company's own words (they are saved and mixed into the examples for the next card, but there is no screen) — **not built**
 - Skills for electrical work and labor conditions (`skills/`): drafts only, not connected to any call yet — **not built**
