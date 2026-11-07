@@ -53,6 +53,11 @@ test("採点の入口から作者と監修者がそれぞれ点とコメント�
   await expect(page.getByTestId("score-sheet")).toBeVisible();
   await expect(page.getByTestId(/^score-r:/).first().getByTestId("score-comment")).toHaveValue("検電は伝わった");
   await expect(page.getByTestId(/^score-r:/).last().getByTestId("score-comment")).toHaveValue("止まるは伝わっていない");
+  // 点だけ・コメントだけの箱はオレンジ。最後に全部保存を押すと、付け忘れがある間は終わりにしない
+  await expect(page.getByTestId(/^score-r:/).last().getByTestId("score-box")).toHaveClass(/missing/);
+  await page.getByTestId("score-finish").click();
+  await expect(page.getByTestId("score-final")).toContainText("付け忘れが");
+  await expect(page.locator(".score-box.missing").first()).toBeVisible();
 
   // 監修者のタブ → 監修者の PIN → 作者の点は見えない
   await page.getByTestId("score-tab-supervisor").click();

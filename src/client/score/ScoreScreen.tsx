@@ -78,7 +78,7 @@ const flushAll = () => Promise.all([...flushers].map((f) => f())).then(() => und
 export const AUTOSAVE_MS = 10_000;
 
 /** 点（1〜10）とコメント。点を押したとき・コメントの欄を出たとき・10 秒ごとに、残していなければ自動で残す */
-function ScoreBox({ value, onSave, label }: { value?: { score: number | null; comment: string }; onSave: (score: number | null, comment: string) => Promise<void>; label: string }) {
+function ScoreBox({ value, onSave, label, strict = false }: { value?: { score: number | null; comment: string }; onSave: (score: number | null, comment: string) => Promise<void>; label: string; strict?: boolean }) {
   const [score, setScore] = useState<number | null>(value?.score ?? null);
   const [comment, setComment] = useState(value?.comment ?? "");
   const [state, setState] = useState<"" | "busy" | "saved" | "err">("");
@@ -116,8 +116,13 @@ function ScoreBox({ value, onSave, label }: { value?: { score: number | null; co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const dirty = unsaved();
+  // 付け忘れ（11/7 作者「点やコメントの付け忘れはオレンジに」）。片方だけ付けた箱はいつも、最後に全部保存を押したあとは手を付けていない箱もオレンジにする
+  const noScore = score === null, noComment = comment.trim() === "";
+  const missing = noScore || noComment;
+  const shown = missing && (strict || noScore !== noComment);
   return (
-    <div className="score-box" data-testid="score-box" data-unsaved={dirty ? "1" : "0"}>
+    <div className={`score-box${shown ? " missing" : ""}`} data-testid="score-box" data-unsaved={dirty ? "1" : "0"} data-missing={missing ? "1" : "0"}>
+      {shown && <p className="score-missing">{noScore && noComment ? "点とコメントがまだです" : noScore ? "点がまだです" : "コメントがまだです"}</p>}
       <p className="score-cap">{label}</p>
       <div className="score-scale" role="radiogroup" aria-label={label}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -174,6 +179,28 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [scores, setScores] = useState(sheet.scores);
+  // 最後に全部保存（11/7 作者）。付け忘れがあれば終わりにせず、オレンジの箱へ連れていく
+  const [strict, setStrict] = useState(false);
+  const [final, setFinal] = useState<{ ok: boolean; text: string } | null>(null);
+  const finish = async () => {
+    setStrict(true);
+    setFinal(null);
+    await flushAll();
+    // 箱の data-missing / data-unsaved は今の中身から出しているので、そのまま数えられる
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    const miss = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="score-box"][data-missing="1"]'));
+    const unsaved = document.querySelectorAll('[data-testid="score-box"][data-unsaved="1"]').length;
+    if (miss.length) {
+      setFinal({ ok: false, text: `付け忘れが ${miss.length} 件あります（オレンジの枠）。全部付けてから、もう一度押してください` });
+      miss[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (unsaved) {
+      setFinal({ ok: false, text: `まだ残せていないものが ${unsaved} 件あります。通信を確かめて、もう一度押してください` });
+      return;
+    }
+    setFinal({ ok: true, text: `全部保存しました（${targets.length} 件）。お疲れさまでした` });
+  };
   // 10 秒ごとと、画面を離れる・隠れるときに、残していない箱を全部残す
   useEffect(() => {
     const id = window.setInterval(() => void flushAll(), AUTOSAVE_MS);
@@ -271,7 +298,7 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
                       {r.ms !== null && <> ・ {Math.round(r.ms / 1000)} 秒</>}
                     </p>
                     <Answer a={r.answer} ja={sheet.ja[r.target]} />
-                    <ScoreBox label="どれだけ伝わっているか" value={scores[r.target]} onSave={save(r.target)} />
+                    <ScoreBox label="どれだけ伝わっているか" value={scores[r.target]} onSave={save(r.target)} strict={strict} />
                   </li>
                 ))}
             </ol>
@@ -292,7 +319,7 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
               <Frames motion={c.motion} />
               {c.words && <p className="score-words">文つきの人に見せた文: {c.words}</p>}
             </div>
-            <ScoreBox label="このカードは、絵だけでどれだけ伝わるか" value={scores[c.target]} onSave={save(c.target)} />
+            <ScoreBox label="このカードは、絵だけでどれだけ伝わるか" value={scores[c.target]} onSave={save(c.target)} strict={strict} />
             <ol className="score-list">
               {sheet.pictures
                 .filter((p) => p.card_id === c.id)
@@ -302,13 +329,24 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
                       {who(p.participant, p.group)}・<b className={p.words ? "tag words" : "tag pic"}>{p.words ? "文つき" : "絵だけ"}</b>
                     </p>
                     <Answer a={p.answer} ja={sheet.ja[p.target]} />
-                    <ScoreBox label="どれだけ伝わっているか" value={scores[p.target]} onSave={save(p.target)} />
+                    <ScoreBox label="どれだけ伝わっているか" value={scores[p.target]} onSave={save(p.target)} strict={strict} />
                   </li>
                 ))}
             </ol>
           </div>
         ))}
       </section>
+
+      <div className="score-final">
+        <button type="button" className="big go" onClick={() => void finish()} data-testid="score-finish">
+          最後に全部保存する
+        </button>
+        {final && (
+          <p className={final.ok ? "saved" : "score-missing"} data-testid="score-final">
+            {final.text}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
