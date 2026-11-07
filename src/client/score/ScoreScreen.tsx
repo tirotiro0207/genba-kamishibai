@@ -69,23 +69,55 @@ const hasToken = (tenant: string) => {
   }
 };
 
-/** 点（1〜10）とコメント。点を押すとすぐ残す。コメントは「残す」で残す */
+/**
+ * 残していない箱を全部残す仕組み（11/7 作者「保存できていないものがあった。コメントの外を押したとき・次の点を選んだとき・10 秒ごとに一括で保存」）。
+ * 箱ごとに「残していなければ残す」関数を登録しておき、どこかで点を押したとき・コメントの欄を出たとき・10 秒ごと・画面を離れるときに全部呼ぶ
+ */
+const flushers = new Set<() => Promise<void>>();
+const flushAll = () => Promise.all([...flushers].map((f) => f())).then(() => undefined);
+export const AUTOSAVE_MS = 10_000;
+
+/** 点（1〜10）とコメント。点を押したとき・コメントの欄を出たとき・10 秒ごとに、残していなければ自動で残す */
 function ScoreBox({ value, onSave, label }: { value?: { score: number | null; comment: string }; onSave: (score: number | null, comment: string) => Promise<void>; label: string }) {
   const [score, setScore] = useState<number | null>(value?.score ?? null);
   const [comment, setComment] = useState(value?.comment ?? "");
   const [state, setState] = useState<"" | "busy" | "saved" | "err">("");
-  const dirty = comment.trim() !== (value?.comment ?? "").trim();
-  const save = async (s: number | null, cm: string) => {
+  // 最後に残せた中身（サーバーの値）。これと違えば「残していない」
+  const saved = useRef({ score: value?.score ?? null, comment: (value?.comment ?? "").trim() });
+  const now = useRef({ score, comment });
+  now.current = { score, comment };
+  const busy = useRef(false);
+  const unsaved = () => {
+    const x = now.current;
+    return (x.score !== null || x.comment.trim() !== "") && (x.score !== saved.current.score || x.comment.trim() !== saved.current.comment);
+  };
+  const save = async () => {
+    if (busy.current || !unsaved()) return;
+    busy.current = true;
+    const x = { score: now.current.score, comment: now.current.comment.trim() };
     setState("busy");
     try {
-      await onSave(s, cm);
+      await onSave(x.score, x.comment);
+      saved.current = x;
       setState("saved");
     } catch {
       setState("err");
+    } finally {
+      busy.current = false;
     }
+    // 残しているあいだに書き足していれば、続けて残す
+    if (unsaved()) void save();
   };
+  useEffect(() => {
+    flushers.add(save);
+    return () => {
+      flushers.delete(save);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const dirty = unsaved();
   return (
-    <div className="score-box" data-testid="score-box">
+    <div className="score-box" data-testid="score-box" data-unsaved={dirty ? "1" : "0"}>
       <p className="score-cap">{label}</p>
       <div className="score-scale" role="radiogroup" aria-label={label}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -96,22 +128,32 @@ function ScoreBox({ value, onSave, label }: { value?: { score: number | null; co
             aria-checked={score === n}
             className={score === n ? "on" : ""}
             data-score={n}
-            disabled={state === "busy"}
             onClick={() => {
               setScore(n);
-              void save(n, comment);
+              now.current = { score: n, comment: now.current.comment };
+              // この箱と、ほかの残していない箱を全部残す
+              void flushAll();
             }}
           >
             {n}
           </button>
         ))}
       </div>
-      <textarea value={comment} rows={2} placeholder="コメント（どこが伝わった・伝わらなかった、危ない読み違いか など）" onChange={(e) => setComment(e.target.value)} data-testid="score-comment" />
+      <textarea
+        value={comment}
+        rows={2}
+        placeholder="コメント（どこが伝わった・伝わらなかった、危ない読み違いか など）"
+        onChange={(e) => setComment(e.target.value)}
+        onBlur={() => void flushAll()}
+        data-testid="score-comment"
+      />
       <div className="score-foot">
-        <button type="button" className="score-save" disabled={state === "busy" || !dirty} onClick={() => void save(score, comment)} data-testid="score-save">
-          コメントを残す
+        <button type="button" className="score-save" disabled={state === "busy" || !dirty} onClick={() => void flushAll()} data-testid="score-save">
+          今すぐ残す
         </button>
-        <span className={`score-state ${state}`}>{state === "busy" ? "残しています…" : state === "saved" ? "残しました" : state === "err" ? "残せませんでした。もう一度押してください" : value?.score ? "前に付けた点" : ""}</span>
+        <span className={`score-state ${state}`} data-testid="score-state">
+          {state === "busy" ? "残しています…" : dirty ? (state === "err" ? "残せませんでした。自動でやり直します" : "まだ残していません（自動で残します）") : state === "saved" ? "残しました" : value?.score ? "前に付けた点" : ""}
+        </span>
       </div>
     </div>
   );
@@ -132,6 +174,22 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [scores, setScores] = useState(sheet.scores);
+  // 10 秒ごとと、画面を離れる・隠れるときに、残していない箱を全部残す
+  useEffect(() => {
+    const id = window.setInterval(() => void flushAll(), AUTOSAVE_MS);
+    const hide = () => {
+      if (document.visibilityState === "hidden") void flushAll();
+    };
+    const leave = () => void flushAll();
+    document.addEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", leave);
+      void flushAll();
+    };
+  }, []);
   useEffect(() => setScores(sheet.scores), [sheet.scores]);
   const save = (target: string) => async (score: number | null, comment: string) => {
     await call(tenant, `trials/${sheet.trial.id}/scores`, { method: "POST", body: JSON.stringify({ target, score, comment }) });

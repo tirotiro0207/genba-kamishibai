@@ -36,10 +36,23 @@ test("採点の入口から作者と監修者がそれぞれ点とコメント�
   const box = page.getByTestId(/^score-r:/).first().getByTestId("score-box");
   await box.locator('[data-score="8"]').click();
   await expect(box).toContainText("残しました");
+  // コメントを書いて欄の外を押すと、ボタンを押さなくても残る
   await box.getByTestId("score-comment").fill("検電は伝わった");
-  await box.getByTestId("score-save").click();
+  await expect(box).toHaveAttribute("data-unsaved", "1");
+  await page.getByRole("heading", { name: "試しの答えの採点" }).click();
+  await expect(box).toHaveAttribute("data-unsaved", "0");
   await expect(box).toContainText("残しました");
   await expect(page.getByTestId("score-done")).toHaveText("1");
+  // コメントだけ書いて何も押さなくても、10 秒ごとに残る
+  const quiet = page.getByTestId(/^score-r:/).last().getByTestId("score-box");
+  await quiet.getByTestId("score-comment").fill("止まるは伝わっていない");
+  await expect(quiet).toHaveAttribute("data-unsaved", "1");
+  await expect(quiet).toHaveAttribute("data-unsaved", "0", { timeout: 15_000 });
+  // 読み直しても残っている
+  await page.reload();
+  await expect(page.getByTestId("score-sheet")).toBeVisible();
+  await expect(page.getByTestId(/^score-r:/).first().getByTestId("score-comment")).toHaveValue("検電は伝わった");
+  await expect(page.getByTestId(/^score-r:/).last().getByTestId("score-comment")).toHaveValue("止まるは伝わっていない");
 
   // 監修者のタブ → 監修者の PIN → 作者の点は見えない
   await page.getByTestId("score-tab-supervisor").click();
