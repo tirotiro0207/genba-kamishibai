@@ -29,7 +29,7 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 - On a construction site, the safety rules live in written manuals and in the heads of veteran workers.
 - New hires from abroad often cannot read those rules in Japanese text.
 - The people who train them have no time to make teaching material that actually gets through.
-- Accidents happen at the edge where confidence turns into overconfidence. Veterans are readers of the rules too, not only the people who carry them in their heads; a card posted where the work happens is a second guard next to the screen.
+- Accidents happen at the edge where confidence turns into overconfidence. Veterans are readers of the rules too, not only the people who carry them in their heads. A kamishibai card on the site wall stands beside the hazard-prediction sheets and safety notices as one more layer of protection: even when you already know the rule, just having it there in sight every day tightens your attention.
 
 ## Why I built this
 
@@ -46,7 +46,7 @@ From [docs/compass.md](docs/compass.md), the axis the project comes back to when
 - **Change in quantity: fold, do not cut.** A reader sees less at once, but a card holds what its source said (card ≈ source). The picture is the information folded up; unfold it and every part has a **route** back to the line it came from, so every card can return to its source.
 - **No translation.** The card's words are plain Japanese with furigana, written to the national guideline for plain Japanese (three steps: [docs/yasashii-nihongo.md](docs/yasashii-nihongo.md)). A supervisor signs only what they can read, and the same card keeps working as nationalities increase.
 - **A person signs; the server enforces it.** Claude drafts and checks. Only a supervisor's signature lets a card reach readers, and the server refuses unsigned, stopped or changed-after-signing cards.
-- **Veterans read too.** Accidents come where confidence turns into overconfidence. The same card is read at the morning meeting and posted where the work happens, as a second guard next to the screen.
+- **Veterans read too.** Accidents come where confidence turns into overconfidence. The same card is read at the morning meeting and posted on the site wall, next to the hazard-prediction sheets and safety notices; even people who know the rule get a little sharper each time it catches their eye.
 - **Kamishibai.** Cards are shown one at a time, and the screen moves like a picture pulled from a kamishibai frame.
 
 ## What it does
