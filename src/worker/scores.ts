@@ -3,7 +3,7 @@
 // 採点者は入った役割で決まる（作者 → author・監修者 → supervisor）。もう 1 人の点は見せない（相談せずに付けるため）。
 // 母語の欄の答えは、採点する人が読めるように Claude で日本語の参考の訳を付けて、答えごとに 1 回だけ残す
 import { Hono } from "hono";
-import { unpackAnswer } from "../shared/answer-fields";
+import { needsJapanese, unpackAnswer } from "../shared/answer-fields";
 import { guardedCall } from "../shared/claude";
 import { withWords } from "../shared/picture-order";
 import { D1CallLog } from "./api-log";
@@ -26,7 +26,6 @@ export const scoreNames = (env: Env) => ({
 const graderOf = (env: Env, p: { role: string; slot: number } | null | undefined): ScoreGrader | null =>
   p?.role === "author" ? "author" : p?.role === "supervisor" && p.slot === scoreSlot(env) ? "supervisor" : null;
 export const TRANSLATE_MODEL = "claude-sonnet-5-5";
-const JA_RE = /[぀-ヿ一-鿿]/;
 
 interface Row {
   target: string;
@@ -36,7 +35,9 @@ interface Row {
 }
 
 /** 日本語の訳が要る答え: 母語の欄に字がある、または日本語の欄に日本語の字が無い */
-export const needsJa = (a: { ja: string; own: string }) => !!a.own.trim() || (!!a.ja.trim() && !JA_RE.test(a.ja));
+export const needsJa = needsJapanese;
+/** 1 回に訳す答えの数（長い答えが多くても返事が切れないように分ける） */
+const JA_CHUNK = 25;
 
 /** 試しの ID（student_test01 など・国籍「テスト」）は採点に出さない */
 const isTest = (participant: string, group?: string) => group === TEST_GROUP || studentGroup(participant) === TEST_GROUP;
@@ -156,32 +157,37 @@ scoring.post("/:id/scoring/translate", async (c) => {
   if (!rows.length) return c.json({ translated: 0 });
   const client = claudeClient(c.env);
   if (!client) return c.json({ error: "Claude の鍵が無い" }, 503);
-  const input = rows.map((r) => ({ target: r.target, japanese_field: r.ja, own_language_field: r.own }));
-  const msg = await guardedCall(
-    { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) },
-    {
-      purpose: "app",
-      label: "採点の参考の訳",
-      params: {
-        model: TRANSLATE_MODEL,
-        max_tokens: 16000,
-        system:
-          "外国籍の新入社員が、安全の絵のカードを見て書いた答えを、採点する日本人が読めるように日本語に訳す。答えは日本語の欄と母語の欄（ベトナム語・クメール語・ミャンマー語など）がある。母語の欄があれば母語の欄を、無ければ日本語の欄の日本語でない部分を訳す。書いてあることだけを、そのまま素直に訳す。足さない・直さない・正しい答えに寄せない。読めない字は「（読めない）」と書く。",
-        output_config: { format: { type: "json_schema", schema: JA_SCHEMA } },
-        messages: [{ role: "user", content: JSON.stringify(input) }],
-      } as unknown as Parameters<typeof guardedCall>[1]["params"],
-    },
-  );
-  const out = msg.content.find((b) => b.type === "text");
-  let items: { target: string; ja: string }[] = [];
-  try {
-    items = (JSON.parse(out && out.type === "text" ? out.text : "{}") as { items?: { target: string; ja: string }[] }).items ?? [];
-  } catch {
-    return c.json({ error: "訳を読めなかった" }, 502);
+  let done = 0;
+  for (let i = 0; i < rows.length; i += JA_CHUNK) {
+    const part = rows.slice(i, i + JA_CHUNK);
+    const input = part.map((r) => ({ target: r.target, japanese_field: r.ja, own_language_field: r.own }));
+    const msg = await guardedCall(
+      { client, log: new D1CallLog(c.env.DB), dayBudgetUsd: dayBudget(c.env) },
+      {
+        purpose: "app",
+        label: "採点の参考の訳",
+        params: {
+          model: TRANSLATE_MODEL,
+          max_tokens: 16000,
+          system:
+            "外国籍の新入社員が、安全の絵のカードを見て書いた答えを、採点する日本人が読めるように日本語に訳す。答えは日本語の欄と母語の欄（ベトナム語・クメール語・ミャンマー語など）がある。母語の欄と、日本語の欄の日本語でない部分を、両方とも訳す（日本語で書いてある部分はそのまま入れて、1 つの日本語の文にする）。書いてあることだけを、そのまま素直に訳す。足さない・直さない・正しい答えに寄せない。読めない字は「（読めない）」と書く。",
+          output_config: { format: { type: "json_schema", schema: JA_SCHEMA } },
+          messages: [{ role: "user", content: JSON.stringify(input) }],
+        } as unknown as Parameters<typeof guardedCall>[1]["params"],
+      },
+    );
+    const out = msg.content.find((b) => b.type === "text");
+    let items: { target: string; ja: string }[] = [];
+    try {
+      items = (JSON.parse(out && out.type === "text" ? out.text : "{}") as { items?: { target: string; ja: string }[] }).items ?? [];
+    } catch {
+      continue;
+    }
+    const want = new Set(part.map((r) => r.target));
+    const ok = items.filter((x) => want.has(x.target) && typeof x.ja === "string" && x.ja.trim());
+    if (ok.length)
+      await c.env.DB.batch(ok.map((x) => c.env.DB.prepare("INSERT OR IGNORE INTO score_ja (trial_id, tenant_id, target, ja) VALUES (?, ?, ?, ?)").bind(s.t.id, c.var.tenant.id, x.target, x.ja.trim().slice(0, 4000))));
+    done += ok.length;
   }
-  const want = new Set(rows.map((r) => r.target));
-  const ok = items.filter((x) => want.has(x.target) && typeof x.ja === "string" && x.ja.trim());
-  if (ok.length)
-    await c.env.DB.batch(ok.map((x) => c.env.DB.prepare("INSERT OR IGNORE INTO score_ja (trial_id, tenant_id, target, ja) VALUES (?, ?, ?, ?)").bind(s.t.id, c.var.tenant.id, x.target, x.ja.trim().slice(0, 4000))));
-  return c.json({ translated: ok.length });
+  return c.json({ translated: done });
 });

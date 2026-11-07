@@ -2,7 +2,8 @@
 // 入口は「どちらが採点しますか」の 2 つのボタン（左に作者、右に監修者。名前は Worker の環境変数）。押すと会社の PIN、次にその人の PIN で入って、
 // 参加者ごとの答えに 1〜10 の点とコメントを付ける（11/7 作者「開いたらすぐ、一郎か黒須さんかを選ぶ」）。
 // もう 1 人の点は見えない（相談せずに付けるため）。母語の答えには、採点する人が読めるように参考の日本語の訳を付けられる
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { needsJapanese } from "../../shared/answer-fields";
 import type { CardMotion } from "../../shared/card";
 import { pinLost } from "../events";
 import { Frames } from "../read/ReadScreen";
@@ -35,8 +36,7 @@ const SCALE: [number, string][] = [
   [2, "ほとんど伝わっていない"],
   [1, "伝わっていない・逆の意味"],
 ];
-const JA_RE = /[぀-ヿ一-鿿]/;
-const needsJa = (a: Fields) => !!a.own.trim() || (!!a.ja.trim() && !JA_RE.test(a.ja));
+const needsJa = needsJapanese;
 
 /** 参加者の見せ方: student_V_1 → 「ベトナム 1」 */
 const who = (participant: string, group: string) => `${group} ${participant.split("_").pop() ?? ""}`;
@@ -140,6 +140,16 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
   const targets = [...sheet.responses.map((r) => r.target), ...sheet.cards.map((c) => c.target), ...sheet.pictures.map((p) => p.target)];
   const done = targets.filter((t) => scores[t]?.score).length;
   const untranslated = [...sheet.responses, ...sheet.pictures].filter((r) => needsJa(r.answer) && !sheet.ja[r.target]).length;
+  // 開いたら、訳の無い母語の答えに自動で訳を付ける（11/7 作者「全部翻訳入れてくれないとわからない」）。1 回の読み込みで 1 回だけ。
+  // 失敗したときは下のボタンでやり直す
+  const tried = useRef(false);
+  useEffect(() => {
+    if (untranslated > 0 && !tried.current) {
+      tried.current = true;
+      void translate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [untranslated]);
   const translate = async () => {
     setBusy(true);
     setErr("");
@@ -168,7 +178,7 @@ function Sheet({ tenant, sheet, reload }: { tenant: string; sheet: Sheet; reload
         {untranslated > 0 && (
           <p>
             <button type="button" className="big" disabled={busy} onClick={() => void translate()} data-testid="score-translate">
-              {busy ? "訳しています…" : `母語の答え ${untranslated} 件に参考の日本語の訳を付ける`}
+              {busy ? `母語の答え ${untranslated} 件に日本語の訳を付けています…（1 分ほど）` : `訳の付いていない母語の答え ${untranslated} 件に訳を付ける`}
             </button>
           </p>
         )}

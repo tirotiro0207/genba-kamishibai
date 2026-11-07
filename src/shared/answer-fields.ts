@@ -6,6 +6,13 @@ export interface AnswerFields {
 }
 
 /** answer の列に入れる長さの上限（2 つの欄を JSON にした長さ） */
+/**
+ * 採点で日本語の訳が要る答えか（11/7 作者「母語で書いたところは全部訳を入れて」）。母語の欄に何かあれば要る。
+ * 日本語の欄でも、ラテン文字（ベトナム語・英語・インドネシア語など）やタイ・ミャンマー・クメールなどの字が混ざっていれば要る
+ */
+const FOREIGN_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0E00-\u0FFF\u1000-\u109F\u1780-\u17FF\u0900-\u097F\u0980-\u09FF]/;
+export const needsJapanese = (a: AnswerFields) => !!a.own.trim() || FOREIGN_RE.test(a.ja);
+
 export const ANSWER_MAX = 2000;
 /** 1 つの欄に書ける長さ（2 つとも書き切っても、JSON にして ANSWER_MAX に収まる目安。画面の maxLength に使う） */
 export const ANSWER_FIELD_MAX = 900;
