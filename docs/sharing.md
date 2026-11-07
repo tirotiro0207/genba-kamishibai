@@ -24,7 +24,7 @@
 
 ## 取り込むと何が走るか
 
-- 手元: `npm run intake:install` で `.git/hooks/post-merge` に見張りを入れる（前からある pre-commit などには触らない）。`git merge`・`git pull` のあと、精度に効くファイルが変わっていれば、型と単体テストを流し、20 個の評価が要るかを調べる
+- 手元: `npm install` のときに `.git/hooks/post-merge` へ見張りが自動で入る（git は clone でフックを写さないので、package.json の prepare で入れる。入れ直すときは `npm run intake:install`。前からある pre-commit などには触らない）。`git merge`・`git pull` のあと、精度に効くファイルが変わっていれば、型と単体テストを流し、20 個の評価が要るかを調べる
   - 手元の作者のコミットだけ（もう 1 台の PC からの pull）で、同じ中身の評価がもう記録にあれば、その結果を使う。ほかの人のコミットが入っていれば流し直す
   - 20 個の評価は Claude の API を呼ぶので、勝手には流さない。見込みの費用（近い 5 回の最高の 1.2 倍）と今日の合計・1 日の上限を出し、`--run-paid` を付けたときだけ流す。上限を超えるなら流さない
 - CI: PR のたびに `.github/workflows/intake.yml` が同じ見分けをする。鍵を渡さないので API は呼ばない。PR に新しい評価の行が入っていれば前の点と比べ、無ければ「評価が要る」で止める。型と単体テストは `test.yml` が流す
