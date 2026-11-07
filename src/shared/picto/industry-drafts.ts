@@ -123,7 +123,7 @@ INDUSTRY_DRAFTS.push(
     r("作業員", "new", "hygiene", top("coat", "#fff", { wear: [{ kind: "apronLong" }], pants: "#fff", boots: "#fff" })),
   ] },
   { id: "18", name: "林業・製材", roles: [
-    r("班長", "new", "helmet", top("jacket", "#555", { ears: "muffs", visor: "mesh", armband: true, pants: "#555" })),
+    r("班長", "lead", "helmet", top("jacket", "#555", { ears: "muffs", visor: "mesh", armband: true, pants: "#555" })),
     r("作業員", "worker", "helmet", top("jacket", "#888", { ears: "muffs", pants: "#555" })),
   ] },
   { id: "19", name: "自動車運送", roles: [
@@ -136,7 +136,7 @@ INDUSTRY_DRAFTS.push(
     r("駅員", "new", "peaked", top("uniform", "#333", { stripes: 1, cuffs: 1, gloves: "#fff", pants: "#333" })),
   ] },
   { id: "21", name: "航空", roles: [
-    r("リーダー", "new", "helmet", top("jacket", "#bbb", { wear: [{ kind: "hivis", tone: "#666" }], ears: "headset", pants: "#bbb" })),
+    r("リーダー", "lead", "helmet", top("jacket", "#bbb", { wear: [{ kind: "hivis", tone: "#666" }], ears: "headset", pants: "#bbb" })),
     r("係員", "worker", "helmet", top("jacket", "#bbb", { wear: [{ kind: "hivis", tone: "#ccc" }], ears: "headset", pants: "#bbb" })),
   ] },
   { id: "22", name: "リネンサプライ", roles: [
@@ -144,7 +144,7 @@ INDUSTRY_DRAFTS.push(
     r("作業員", "new", "hygiene", top("tunic", "#fff", { mask: true, pants: "#fff" })),
   ] },
   { id: "23", name: "資源循環", roles: [
-    r("班長", "new", "helmet", top("coverall", "#777", { armband: true, gloves: "#999", pants: "#777" })),
+    r("班長", "lead", "helmet", top("coverall", "#777", { armband: true, gloves: "#999", pants: "#777" })),
     r("作業員", "worker", "cap", top("coverall", "#555", { mask: true, gloves: "#999", pants: "#555" })),
   ] },
   { id: "24", name: "金属の加工・溶接", roles: [
@@ -152,15 +152,15 @@ INDUSTRY_DRAFTS.push(
     r("作業員", "worker", "welder", top("jacket", "#888", { wear: [{ kind: "apronLong", tone: "#444" }], gloves: "#444", pants: "#888" })),
   ] },
   { id: "25", name: "鋳造", roles: [
-    r("班長", "new", "helmet", top("jacket", "#ccc", { visor: "clear", armband: true, gloves: "#888", pants: "#ccc" })),
+    r("班長", "lead", "helmet", top("jacket", "#ccc", { visor: "clear", armband: true, gloves: "#888", pants: "#ccc" })),
     r("作業員", "worker", "helmet", top("jacket", "#444", { visor: "clear", gloves: "#888", pants: "#444" })),
   ] },
   { id: "26", name: "塗装", roles: [
-    r("班長", "new", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff" })),
+    r("班長", "lead", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff" })),
     r("作業員", "new", "hood", top("coverall", "#fff", { mask: true, pants: "#fff" })),
   ] },
   { id: "27", name: "電子部品の組み立て", roles: [
-    r("班長", "new", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff", boots: "#fff" })),
+    r("班長", "lead", "hood", top("coverall", "#fff", { mask: true, armband: true, pants: "#fff", boots: "#fff" })),
     r("作業員", "new", "hood", top("coverall", "#fff", { mask: true, pants: "#fff", boots: "#fff" })),
   ] },
   { id: "28", name: "縫製・繊維", roles: [
@@ -176,15 +176,15 @@ INDUSTRY_DRAFTS.push(
     r("作業員", "new", "cap", top("jacket", "#eee", { pants: "#eee" })),
   ] },
   { id: "31", name: "解体", roles: [
-    r("職長", "new", "helmet", top("jacket", "#888", { stripes: 1, mask: true, armband: true, wear: [{ kind: "hivis", tone: "#555" }], pants: "#888" })),
+    r("職長", "lead", "helmet", top("jacket", "#888", { stripes: 1, mask: true, armband: true, wear: [{ kind: "hivis", tone: "#555" }], pants: "#888" })),
     r("作業員", "worker", "helmet", top("jacket", "#aaa", { mask: true, pants: "#aaa" })),
   ] },
   { id: "32", name: "配管・設備・空調", roles: [
-    r("職長", "new", "helmet", top("jacket", "#333", { stripes: 1, armband: true, toolBelt: true, pants: "#333" })),
+    r("職長", "lead", "helmet", top("jacket", "#333", { stripes: 1, armband: true, toolBelt: true, pants: "#333" })),
     r("若手", "worker", "helmet", top("jacket", "#ccc", { pants: "#ccc" })),
   ] },
   { id: "33", name: "内装", roles: [
-    r("職長", "new", "cap", top("jacket", "#fff", { stripes: 1, armband: true, wear: [{ kind: "apronShort", tone: "#888" }], pants: "#fff" })),
+    r("職長", "lead", "cap", top("jacket", "#fff", { stripes: 1, armband: true, wear: [{ kind: "apronShort", tone: "#888" }], pants: "#fff" })),
     r("若手", "worker", "cap", top("jacket", "#fff", { pants: "#fff" })),
   ] },
   { id: "34", name: "パン・製菓", roles: [
@@ -205,7 +205,7 @@ INDUSTRY_DRAFTS.push(
   ] },
   { id: "38", name: "引越し・宅配", roles: [
     r("リーダー", "lead", "cap", top("jacket", "#333", { armband: true, tag: "clip", gloves: "#fff", pants: "#333" })),
-    r("作業員", "lead", "cap", top("polo", "#333", { gloves: "#fff", pants: "#333" })),
+    r("作業員", "worker", "cap", top("polo", "#333", { gloves: "#fff", pants: "#333" })),
   ] },
   { id: "39", name: "クリーニング店", roles: [
     r("店長", "lead", "none", { wear: [{ kind: "apronLong", tone: "#333" }], neck: "tie", tag: "clip", sleeve: "#fff", pants: "#333" }),
