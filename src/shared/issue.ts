@@ -25,6 +25,29 @@ export async function pickSample(ids: string[], seed: string, n = SAMPLE_SIZE): 
   return ranked.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.id < b.id ? -1 : 1)).slice(0, n).map((x) => x.id);
 }
 
+/** 朝礼の組の枚数の上限（11/7 既定） */
+export const MORNING_MAX = 8;
+
+const grams = (s: string) => {
+  const t = s.replace(/[\s、。・,.（）()「」｜《》]/g, "");
+  const out = new Set<string>();
+  for (let i = 0; i + 1 < t.length; i++) out.add(t.slice(i, i + 2));
+  return out;
+};
+
+/**
+ * 朝礼の組（11/7）: その日の作業の言葉が、カードの文にどれだけ出てくるか。2 字ずつの重なりの数（大きいほど合う）。
+ * 作業の言葉が空なら 0（呼ぶ側は全部を候補にする）
+ */
+export function morningScore(work: string, text: string): number {
+  const w = grams(work);
+  if (!w.size) return 0;
+  const t = grams(text);
+  let n = 0;
+  for (const g of w) if (t.has(g)) n++;
+  return n;
+}
+
 /** 監修者の枠（今は 2 人。枠を足したら、ここに足す） */
 export const SUPERVISORS = ["supervisor.1", "supervisor.2"] as const;
 
