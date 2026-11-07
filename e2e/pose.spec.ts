@@ -3,6 +3,7 @@ import type { CardBody } from "../src/shared/card";
 import { sampleCard } from "../tests/fixtures/card";
 
 // 絵の部品を 1 つずつ動かす（091）: 人・時計・小物を 1 つずつ動かすと JSON に出て、保存すると版が上がり、経路は保たれる
+// JSON は画面に出さず data-value に置くので、値はその属性から読む
 
 /** 見本のカードに、壁の時計を足す（どのキーフレームにも同じ位置に置く） */
 function withClock(): CardBody {
@@ -31,18 +32,18 @@ test("人・時計・小物を 1 つずつ動かすと JSON に出て、保存�
   await expect(page.getByTestId("pose-controls")).toHaveAttribute("data-part", "p1");
   const svg0 = await face.innerHTML();
   await page.getByTestId("pose-arm_near_upper").fill("150");
-  await expect(page.getByTestId("pose-json")).toContainText('"arm_near_upper":150');
+  await expect(page.getByTestId("pose-json")).toHaveAttribute("data-value", /"arm_near_upper":150[,}]/);
   expect(await face.innerHTML()).not.toBe(svg0);
 
   // 時計: 一覧から選んで左へ
   await page.getByTestId("pose-part-p4").click();
   await page.getByTestId("pose-x").fill("0.6");
-  await expect(page.getByTestId("pose-json")).toContainText('"kind":"clock","x":0.6');
+  await expect(page.getByTestId("pose-json")).toHaveAttribute("data-value", /"kind":"clock","x":0\.6[,}]/);
 
   // 小物（手に持った検電器）: 手元からのずれ
   await page.getByTestId("pose-part-p2").click();
   await page.getByTestId("pose-dx").fill("0.3");
-  await expect(page.getByTestId("pose-json")).toContainText('"dx":0.3');
+  await expect(page.getByTestId("pose-json")).toHaveAttribute("data-value", /"dx":0\.3[,}]/);
   await page.waitForTimeout(500);
   await page.screenshot({ path: test.info().outputPath("pose.png"), fullPage: true });
 

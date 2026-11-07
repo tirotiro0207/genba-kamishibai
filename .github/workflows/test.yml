@@ -32,7 +32,15 @@ jobs:
         run: npx tsc
       - name: 動画の型
         run: npm ci --prefix video && npx tsc -p video/tsconfig.json
+      # 結果を JUnit の XML にも書き、落ちたテストの名前を成果物で読めるようにする
       - name: 単体テスト
-        run: npx vitest run
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=test-results/vitest-junit.xml
         env:
           EXPORT_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
+      - name: テストの結果を残す
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-junit
+          path: test-results/vitest-junit.xml
+          if-no-files-found: warn
