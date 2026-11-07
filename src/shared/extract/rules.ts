@@ -1,6 +1,6 @@
 // 正式な取り出し（021）。仮版（extract.ts）とは別に、ゼロから書いた指示。
 // 元の文に行番号を付けて渡し、決まりごとに「やること／やらないこと」と、元の文に書いてある理由を、
-// どの行のどの言葉からかを付けて返させる。表やチェックリストの決まりは中身を写さず「手元の✓」の型の印を付ける。
+// どの行のどの言葉からかを付けて返させる。点検表・チェックリストは、項目ごとに 1 つの決まりとして取り出し、順番（step）と親の見出し（parent）を付ける（11/7 既定。1 項目 1 枚の束になる）。
 // 理由は、元の文に理由の言葉があるもの（stated）と、文からはっきり分かる危険（stated でない）に分ける。stated でない理由をカードに使うと「AI 下書き」に落ちる（035）。
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SourceRef } from "../card";
@@ -21,7 +21,7 @@ const SYSTEM = `あなたは、工事の現場で働く人に向けたカード�
 5. 決まりを広げない。元の文が「足場の上では」と言っていれば、足場の外には広げない。対象・場所・条件は元の文のとおり
 6. 理由（reasons）は 2 種類。元の文に理由の言葉がある（「〜のため」「〜ので」「〜しないと〜になる」、文の中で名指しされた危険や目的）なら stated を true にする。元の文に理由の言葉は無いが、その決まりが防いでいる危険が文から誰にでもはっきり分かる（例: 熱した部品に素手で触るな → やけどをする）なら、短く書いて stated を false にする。stated を false にしてよいのは、危険が元の文に名指しされた物・場所・行為から直接読めるときだけ。元の文に無いしくみ（壊れ方・体の具合など）を推しはかった理由や、「事故やけがにつながる」のようにどの決まりにも言える理由は書かない。どちらでもなければ書かない。1 つの理由がいくつもの決まりに当てはまるときは、どの決まりにも同じ文で書く。quote には、理由の根拠にした元の文の言葉を入れる
 7. 会社・事業者・職長・監督が主語の決まりは 2 通りに分ける。作業のさせ方の決まり（「〜させること」「〜させなければならない」など）は、作業員がすることに言い換えて取り出し、reworded を true にする。賃金・休み・時間など、会社が働く人に対して守ることは、主語を会社のままにして do として取り出す（働く人が自分の権利を知るため）
-8. 表・点検表・チェックリストで点検の項目を並べている決まりは、項目の中身を書き写さない。「点検表の項目を 1 つずつ確かめて ✓ を付ける」のような 1 つの行動にまとめ、checklist を true にする。文の中の短い並び（2 の場合）は表ではない
+8. 表・点検表・チェックリストで、順番に確かめる項目を並べている決まりは、1 つの行動にまとめない。項目ごとに 1 つの決まり（その項目を確かめる行動）として取り出し、checklist を true、step にその項目の順番（1 から）、parent にその表の見出しか、表が何を点検するものかを短く書く（同じ表の項目は同じ parent の文にする）。checklist が false の決まりは step と parent を null にする。文の中の短い並び（2 の場合）は表ではない
 9. 見出し・目次・ページ番号・図の番号は取り出さない
 10. どこから: quote は、その決まりの根拠になった言葉を元の文からそのまま抜き出す（行番号は含めない。言い換えない。80 字まで）。lines はその言葉がある最初と最後の行番号
 11. 決まりが無ければ rules を空の並びにする`;
@@ -43,7 +43,7 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["kind", "text", "from", "reasons", "checklist", "reworded"],
+        required: ["kind", "text", "from", "reasons", "checklist", "reworded", "step", "parent"],
         properties: {
           kind: { type: "string", enum: ["do", "dont"] },
           text: { type: "string" },
@@ -54,6 +54,8 @@ const SCHEMA = {
           },
           checklist: { type: "boolean" },
           reworded: { type: "boolean" },
+          step: { type: ["integer", "null"] },
+          parent: { type: ["string", "null"] },
         },
       },
     },
@@ -75,7 +77,7 @@ export function rulesParams(text: string, focus?: string): Anthropic.MessageCrea
     max_tokens: 16000,
     system: SYSTEM,
     thinking: { type: "adaptive" },
-    // 深さは high（11/5。目隠しの合わせ込みで決めた。指示は eval/prompts/extract_v2.txt と同じ。docs/numbers.md）
+    // 深さは high（11/5。目隠しの合わせ込みで決めた。docs/numbers.md）。指示は eval/prompts/extract_v2.txt から、11/7 に指示 8（点検表は項目ごと）を変えた。測り直しが要る
     output_config: { effort: "high", format: { type: "json_schema", schema: SCHEMA } },
     // focus はチャットで作る人が書いた指示（11/5）。無いときは今までと 1 文字も同じ
     messages: [{ role: "user", content: `元の文:\n${numberLines(text)}${focus ? `\n\n作る人の指示（元の文に無いことは足さない。どの決まりを取り出すか・まとめ方だけに使う）:\n${focus}` : ""}` }],
@@ -98,6 +100,10 @@ export interface Rule {
   reasons: { text: string; from: From; stated: boolean }[];
   checklist: boolean;
   reworded: boolean;
+  /** 点検表の項目の順番（1 から）。点検表でなければ null（11/7。前に残した取り出しには無い） */
+  step?: number | null;
+  /** 点検表の見出し（同じ表の項目は同じ文）。点検表でなければ null（11/7。前に残した取り出しには無い） */
+  parent?: string | null;
 }
 
 const norm = (s: string) => s.replace(/\s+/g, "");
@@ -120,7 +126,7 @@ function locate(lines: string[], raw: { quote: string; lines: number[] }): From 
 export function parseRules(msg: Anthropic.Message, text: string): Rule[] {
   if (msg.stop_reason !== "end_turn") throw new Error(`取り出しが最後まで返らなかった: ${msg.stop_reason}`);
   const raw = JSON.parse(msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("")) as {
-    rules: { kind: "do" | "dont"; text: string; from: { quote: string; lines: number[] }; reasons: { text: string; from: { quote: string; lines: number[] }; stated: boolean }[]; checklist: boolean; reworded: boolean }[];
+    rules: { kind: "do" | "dont"; text: string; from: { quote: string; lines: number[] }; reasons: { text: string; from: { quote: string; lines: number[] }; stated: boolean }[]; checklist: boolean; reworded: boolean; step?: number | null; parent?: string | null }[];
   };
   const lines = text.replaceAll("\r\n", "\n").split("\n");
   return raw.rules.map((r) => ({
@@ -130,6 +136,9 @@ export function parseRules(msg: Anthropic.Message, text: string): Rule[] {
     reasons: r.reasons.map((x) => ({ text: x.text, from: locate(lines, x.from), stated: x.stated === true })),
     checklist: r.checklist,
     reworded: r.reworded,
+    // 前の形の答え（step・parent が無い）と、点検表でない決まりは null
+    step: r.checklist && Number.isInteger(r.step) && (r.step as number) >= 1 ? (r.step as number) : null,
+    parent: r.checklist && typeof r.parent === "string" && r.parent.trim() ? r.parent.trim().slice(0, 200) : null,
   }));
 }
 

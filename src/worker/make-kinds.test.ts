@@ -42,9 +42,7 @@ describe("束と原則の 1 コマの作成", () => {
     return x.id;
   };
 
-  // 今の取り出しは step と parent を返さないため、点検表の項目は束にならない。
-  // 取り出しの指示の分割（step と parent を残す）を入れるまで止めておく
-  it.skip("点検表の項目は、同じ見出しの束（順番・枚数・親の文）になる", async () => {
+  it("点検表の項目は、同じ見出しの束（順番・枚数・親の文）になる", async () => {
     const id = await start();
     const second = await call(`/api/t/practice/extract/${id}/make`, json("POST", { item: 1 }));
     expect(second.status).toBe(201);
