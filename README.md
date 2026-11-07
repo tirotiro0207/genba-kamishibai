@@ -38,6 +38,10 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 - The card's words are in plain Japanese only. A supervisor signs only what they have read and agreed with, so a translation the supervisor cannot read is not put on the card.
 - Direction of the project: [docs/compass.md](docs/compass.md).
 
+## Who pays, what stays free
+
+The author intends to offer this as a hosted service in the future — **not built**. The companies that would pay are companies that hire workers from abroad, starting with electrical work. They would pay to turn their own manuals into picture cards that a supervisor has signed, with an audit log for every card from source to signature ([src/worker/audit.ts](src/worker/audit.ts): append-only, each record chained to the one before it by a hash). MCP access uses a separate key for each company. This hosted service is separate from the paid translation service named under [Disclosure](#disclosure). What stays free is what is open today. The code is under AGPL-3.0, and anyone can run it on their own machine. Cards, logs and answers are stored on their own machine; the text sent to make a card goes to the AI API under their own key. The public demo for the fictional company needs no sign-in and no PIN. The documents and picture parts are under CC BY 4.0, so anyone can reuse them with credit.
+
 ## Ideas behind it
 
 From [docs/compass.md](docs/compass.md), the axis the project comes back to when in doubt:
@@ -253,12 +257,6 @@ The author provides a separate paid translation service to the company where thi
 
 This product deliberately has no translation feature, so that nothing a supervisor cannot read and check reaches the new hires. (The optional Vietnamese line of the word field, when it is written, stays internal and is never delivered.)
 
-The author intends to offer this as a hosted service in the future (MCP access uses a separate key for each company).
-
-## Who it is for
-
-TBD — one paragraph: who pays (companies that hire workers from abroad, starting with electrical work), what they pay for (turning their own manuals into signed picture cards, with an audit trail), and what stays free.
-
 ## Numbers
 
 | | |
@@ -276,6 +274,7 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 
 ## Not built
 
+- The paid hosted service (see “Who pays, what stays free”) — **not built**
 - Results of the on-site check with new hires — **not built** (scoring by two graders is under way)
 - Picture parts: only props can be redrawn for now (not poses, hair or clothes), and the redrawn part is used in pictures drawn in the browser, not yet in exports or video stills — **not built**
 - The paid part of the intake check (re-running the 20 tuning items) runs only when asked with `--run-paid`; CI never calls the API and stops with "evaluation needed" instead — by design, not a gap
