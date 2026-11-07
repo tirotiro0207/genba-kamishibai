@@ -61,11 +61,11 @@ describe("署名の記録（051a）", () => {
     expect(row!.status).toBe("signed");
     expect(s.content_sha256).toBe(await sha256Hex(canonical(JSON.parse(row!.body))));
 
-    const log = (await (await call(`/api/t/practice/audit/cards/${id}`)).json()) as { entries: { kind: string; step: number; actor: string; payload: { content_sha256: string } }[]; chain_ok: boolean };
+    const log = (await (await call(`/api/t/practice/audit/cards/${id}`)).json()) as { entries: { kind: string; step: number; actor: string; payload: { content_sha256: string } }[] };
     const sign = log.entries.filter((e) => e.kind === "sign");
     expect(sign).toHaveLength(1);
     expect(sign[0]).toMatchObject({ step: 5, actor: "supervisor.2", payload: { content_sha256: s.content_sha256 } });
-    expect(log.chain_ok).toBe(true);
+    expect(((await (await call("/api/t/practice/audit/verify")).json()) as { ok: boolean }).ok).toBe(true);
 
     // 署名の入力（051b）は種類と PNG のハッシュが ⑤ に残る
     expect((sign[0].payload as unknown as { mark: { kind: string; sha256: string } }).mark).toMatchObject({ kind: "finger", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });

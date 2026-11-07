@@ -2,9 +2,9 @@
 // 部品ごとの箱を絵の見える範囲に対する割合（0〜1）で出す。描いた SVG の中は変えない。
 import type { CardPart } from "./card";
 import { frameAt, type MotionJson } from "./picto/motion";
-import { anchorPoint } from "./picto/props";
-import { renderFrame, SIZE } from "./picto/scene";
-import { PROPORTION } from "./picto/skeleton";
+import { anchorPoint, propCenters } from "./picto/props";
+import { propGroups, renderFrame, SIZE } from "./picto/scene";
+import { PROPORTION, type Pt } from "./picto/skeleton";
 
 export interface Box {
   part: string;
@@ -21,6 +21,15 @@ export function partBoxes(m: MotionJson, t: number, parts: CardPart[]): Box[] {
   // 小物の何番目かは、キーフレームの props の並び（隠した小物も数える）
   const key = [...m.keyframes].reverse().find((k) => k.t <= t) ?? m.keyframes[0];
   const shown = key.props.map((p) => p.show !== false);
+  // 小物の真ん中は、絵と同じ組（propGroups）ごとに propCenters で出す。クレーンにつながった吊り荷は先の真下に寄る（11/7）
+  // コマの props は隠した小物を抜いた並びなので、キーフレームの番号から見えている順の番号に直して引く
+  const fprops = frame.props ?? [];
+  const centers: Pt[] = [];
+  for (const ks of Object.values(propGroups(fprops))) {
+    const cs = propCenters(ks.map((k) => fprops[k]), posed, SIZE);
+    ks.forEach((k, i) => (centers[k] = cs[i]));
+  }
+  const shownAt = key.props.map((_, i) => shown.slice(0, i).filter(Boolean).length);
   const [vx, vy, vw] = view;
   const rel = (x0: number, y0: number, x1: number, y1: number) => {
     const a = Math.max(0, (x0 - vx) / vw);
@@ -43,7 +52,7 @@ export function partBoxes(m: MotionJson, t: number, parts: CardPart[]): Box[] {
     } else if (tg.type === "prop" && shown[tg.index]) {
       const k = key.props[tg.index];
       const at = k.figure < 0 ? { x: k.x, y: k.y } : { figure: k.figure, joint: k.joint, dx: k.dx, dy: k.dy };
-      const { c } = anchorPoint(at, posed, SIZE);
+      const c = centers[shownAt[tg.index]] ?? anchorPoint(at, posed, SIZE).c;
       const half = (k.size * SIZE) / 2;
       r = rel(c[0] - half, c[1] - half, c[0] + half, c[1] + half);
     }

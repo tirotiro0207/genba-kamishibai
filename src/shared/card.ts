@@ -131,6 +131,8 @@ export const STATUS_LABEL: Record<CardStatus, string> = {
  * 中身を直す道（直す・作り直す・やり直す・元に戻す）はこの表を通らない。11/5 の決定で、署名済みも直せ、直すと版が上がって
  * 下書き（AI が書いた文が残っていれば AI 下書き）へ戻り、前の版に回収の知らせが出る（worker の reopenOnEdit）。
  * 11/5（作者）: ホームのカードの管理から、署名の前のカードも止められるようにした（使わないと決めた下書きを一覧で分けるため）
+ * 誰が移せるかはこの表ではなく worker の関所（cardsGate）が見る: 止める（stopped）のは監修者だけで、止める理由は必ず要る（空なら 400）。
+ * 署名（signed）はこの呼び出しでは移せず、署名の記録からだけ入る
  */
 export const TRANSITIONS: Record<CardStatus, readonly CardStatus[]> = {
   draft: ["ai_draft", "pending", "stopped"],

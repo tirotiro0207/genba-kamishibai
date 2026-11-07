@@ -53,16 +53,42 @@ async function intactOnly(db: D1Database, tenantId: string, rows: Row[]): Promis
   return keep;
 }
 
+interface Pair {
+  good: string;
+  bad: string;
+}
+
+/** ○× の組（11/7）。相手の枚も署名が崩れていないときだけ付ける。片方だけ見えると「×」の枚が説明なしに出るため */
+async function pairsOf(db: D1Database, tenantId: string, shown: Set<string>): Promise<Map<string, Pair>> {
+  const { results } = await db.prepare("SELECT good_card AS good, bad_card AS bad FROM card_pairs WHERE tenant_id = ?").bind(tenantId).all<Pair>();
+  const out = new Map<string, Pair>();
+  for (const p of results) {
+    if (!shown.has(p.good) || !shown.has(p.bad)) continue;
+    out.set(p.good, p);
+    out.set(p.bad, p);
+  }
+  return out;
+}
+
 read.get("/cards", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT id, body, version, updated_at FROM cards WHERE tenant_id = ? AND status = 'signed' ORDER BY created_at, id").bind(c.var.tenant.id).all<Row>();
+  const kept = await intactOnly(c.env.DB, c.var.tenant.id, results);
+  const pairs = await pairsOf(c.env.DB, c.var.tenant.id, new Set(kept.map((r) => r.id)));
   // 束の枚は、束の最初の 1 枚の場所に順番どおりに並べる（11/7）
-  return c.json({ cards: bundleSort((await intactOnly(c.env.DB, c.var.tenant.id, results)).map(view), (v) => v) });
+  return c.json({ cards: bundleSort(kept.map((r) => ({ ...view(r), pair: pairs.get(r.id) ?? null })), (v) => v) });
 });
 
 read.get("/cards/:id", async (c) => {
   const r = await c.env.DB.prepare("SELECT id, body, version, updated_at FROM cards WHERE id = ? AND tenant_id = ? AND status = 'signed'").bind(c.req.param("id"), c.var.tenant.id).first<Row>();
   const [ok] = r ? await intactOnly(c.env.DB, c.var.tenant.id, [r]) : [];
-  return ok ? c.json(view(ok)) : c.json({ error: "カードが無い" }, 404);
+  if (!ok) return c.json({ error: "カードが無い" }, 404);
+  const p = await c.env.DB.prepare("SELECT good_card AS good, bad_card AS bad FROM card_pairs WHERE tenant_id = ? AND (good_card = ? OR bad_card = ?)").bind(c.var.tenant.id, ok.id, ok.id).first<Pair>();
+  let pair: Pair | null = null;
+  if (p) {
+    const other = await c.env.DB.prepare("SELECT id, body, version, updated_at FROM cards WHERE id = ? AND tenant_id = ? AND status = 'signed'").bind(p.good === ok.id ? p.bad : p.good, c.var.tenant.id).first<Row>();
+    if (other && (await intactOnly(c.env.DB, c.var.tenant.id, [other])).length) pair = p;
+  }
+  return c.json({ ...view(ok), pair });
 });
 
 read.post("/cards/:id/seen", async (c) => {

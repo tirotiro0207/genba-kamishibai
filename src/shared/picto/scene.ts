@@ -61,6 +61,22 @@ const wornOn = (p: PropSpec): number | undefined => {
 /** 人に着せる小物か（小物の絵は描かず、服とかぶり物になる） */
 export const isWorn = (p: PropSpec) => wornOn(p) !== undefined;
 
+// 人の腰に付けた椅子（11/6）は、人より先に描く（座った人が椅子の前に来る）
+const behind = (p: PropSpec) => !("figure" in p.at) || p.kind === "chair";
+
+/**
+ * 小物を描く組（並びの番号）。絵の下（人より先）・人の上・吹き出しの 3 つで、着せる小物はどれにも入らない。
+ * クレーンと吊り荷は同じ組の中でだけつながるので、箱（タップの範囲）を作る側もこの組ごとに真ん中を出す（11/7）
+ */
+export function propGroups(props: PropSpec[]): { onCanvas: number[]; onFigure: number[]; bubbles: number[] } {
+  const idx = props.map((_, k) => k);
+  return {
+    onCanvas: idx.filter((k) => behind(props[k]) && !BUBBLES.has(props[k].kind)),
+    onFigure: idx.filter((k) => !behind(props[k]) && !BUBBLES.has(props[k].kind) && wornOn(props[k]) === undefined),
+    bubbles: idx.filter((k) => BUBBLES.has(props[k].kind)),
+  };
+}
+
 /** 1 人ぶんの CharacterSpec（役の表と、着けた小物から）。場面の人は斜め向きで描く */
 export function sceneCharacter(f: FrameFigure, worn: PropSpec[], size: number, groundY: number): CharacterSpec {
   const base = ROLE_LOOK[f.role ?? "none"];
@@ -216,11 +232,8 @@ export function renderFrame(frame: Frame, size = SIZE): Rendered {
   const chars = figs.map((f, i) => sceneCharacter(f, props.filter((_, k) => worn[k] === i), size, g));
   const posed: Posed[] = chars.map((c, i) => ({ joints: characterJoints(c), h: c.height, d: c.facing === "right" ? 1 : -1, ...(figs[i].lift ? { lift: figs[i].lift } : {}) }));
   const darkIdx = frame.figures.findIndex((f) => f.emphasis?.includes("dark"));
-  // 人の腰に付けた椅子（11/6）は、人より先に描く（座った人が椅子の前に来る）
-  const behind = (p: PropSpec) => !("figure" in p.at) || p.kind === "chair";
-  const onCanvas = props.filter((p) => behind(p) && !BUBBLES.has(p.kind));
-  const onFigure = props.filter((p, k) => !behind(p) && !BUBBLES.has(p.kind) && worn[k] === undefined);
-  const bubbles = props.filter((p) => BUBBLES.has(p.kind));
+  const grp = propGroups(props);
+  const [onCanvas, onFigure, bubbles] = [grp.onCanvas, grp.onFigure, grp.bubbles].map((ks) => ks.map((k) => props[k]));
   const body = [backdrop(size, g)];
   if (onCanvas.length) body.push(propsSvg(onCanvas, posed, size));
   posed.forEach((p, i) => {

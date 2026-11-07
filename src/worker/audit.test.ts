@@ -19,8 +19,8 @@ describe("監査の記録（020）", () => {
     await call(`/api/t/practice/cards/${c.id}`, { ...put, headers: { ...(put.headers as Record<string, string>), "x-role": sup } });
     await appendAudit(env.DB, "practice", { card_id: c.id, kind: "sign", actor: "安全の監修者", payload: { version: 2 } });
 
-    const r = (await (await call(`/api/t/practice/audit/cards/${c.id}`)).json()) as { chain_ok: boolean; entries: { kind: string; step: number | null; actor: string; payload: Record<string, unknown> }[] };
-    expect(r.chain_ok).toBe(true);
+    const r = (await (await call(`/api/t/practice/audit/cards/${c.id}`)).json()) as { entries: { kind: string; step: number | null; actor: string; payload: Record<string, unknown> }[] };
+    expect(((await (await call("/api/t/practice/audit/verify")).json()) as { ok: boolean }).ok).toBe(true);
     // 確認待ちから下書きに戻ったことも状態の 1 行で残る
     expect(r.entries.map((e) => e.kind)).toEqual(["source", "make", "status", "verify", "edit", "status", "sign"]);
     expect(r.entries[5].payload).toMatchObject({ from: "pending", to: "draft", version: 1 });

@@ -3,7 +3,7 @@
 // 決まりとなぜは、カードの文（statements）にも同じ文を入れる。1 つの欄が 2 文以上に分かれていたら、最初の文に新しい文と元の位置を全部まとめ、
 // ほかの文を指していた部品はその文を指すように付け替える（経路は切らない）。言葉の訳（vi）は変えずに残す
 import { useState } from "react";
-import type { CardBody, Statement } from "../../shared/card";
+import { type CardBody, type Statement, wordsRubyErrors } from "../../shared/card";
 import { req } from "../make/MakeScreen";
 import type { CheckedCard } from "./Check";
 import { Ruby } from "../Ruby";
@@ -47,6 +47,9 @@ export function TextEdit({ tenant, card, onSaved }: { tenant: string; card: Chec
     if (!rule || !why || (b.words && !words)) return setErr("空の欄があります");
     let next = withText(withText(b, "rule", rule), "why", why);
     if (b.words && words !== b.words.ja) next = { ...next, words: { ...b.words, ja: words } };
+    // 言葉の欄のふりがなは、送る前に同じ決まり（wordsRubyErrors）で確かめる。どの漢字に足りないかをその場で出す（11/7）
+    const ruby = wordsRubyErrors(next, b);
+    if (ruby.length) return setErr(ruby.join(" / "));
     const fields = [b.words && words !== b.words.ja ? LABEL.words : "", rule !== b.rule ? "決まり" : "", why !== b.why ? LABEL.why : ""].filter(Boolean);
     if (!fields.length) return setEdit(false);
     setBusy(true);

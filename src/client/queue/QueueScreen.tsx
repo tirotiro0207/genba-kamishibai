@@ -26,6 +26,8 @@ interface QueueCard {
   night?: boolean;
   /** 脚本（11/5〜）を書いてから作ったカード。false は前の作り方で、見せ場・山場の脚本が無い（11/6） */
   scripted?: boolean;
+  /** 本文が今の型で読めない（11/7）。開いても絵が出ないので、印を付けて見分ける */
+  broken?: boolean;
   rule: string;
 }
 
@@ -90,6 +92,11 @@ export function QueueScreen({ tenant }: { tenant: string }) {
               {c.scripted === false && (
                 <span className="queue-noscript" data-testid="queue-noscript" title="11/5 より前の作り方。見せ場・山場の脚本が無い">
                   脚本なし
+                </span>
+              )}
+              {c.broken && (
+                <span className="queue-noscript" data-testid="queue-broken" title="本文が今の型で読めない。作り直すか止める">
+                  本文が壊れている
                 </span>
               )}
               <a href={`#/t/${encodeURIComponent(tenant)}/card/${encodeURIComponent(c.id)}`}>{c.rule}</a>
