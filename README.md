@@ -10,12 +10,12 @@ English | [日本語](README.ja.md)
 
 - Public demo: **https://genba-kamishibai.ikjshare.workers.dev** — opens on the fictional demo company. No sign-in, no PIN.
   - Look at the signed cards one by one, open the route from a picture back to its source sentence, and make a card from a short rule of your own (the demo has a daily cap).
-  - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only" (**not deployed yet** — on the next deploy).
+  - Try it yourself the way the new hires did: "answer against the clock" and "answer from the picture only".
 - Company tenants are private. They open with two PINs: the tenant PIN, then the PIN of your role (author, supervisor, trainer or new hire).
 
 ![Compass: from rules in text and in people's heads (start) to signed cards (end). Quality goes up, quantity (information) goes right](docs/img/shinro.en.svg)
 
-From rules that lived in text and in people's heads (start), fold the information into pictures without losing any of it (quality, quantity), and deliver it to new hires as signed cards (end). From there, spread to other industries and languages, and learn each company's wording (beyond the end).
+From rules that lived in text and in people's heads (start), fold the information into pictures without losing any of it (quality, quantity), and deliver it to new hires as signed cards (end). From there, spread to other industries; as more nationalities join, keep reaching them with pictures and plain Japanese (with furigana) rather than translations; and learn each company's wording (beyond the end).
 
 Quality goes up, quantity (information) goes right. Progress per task: [docs/dashboard.html](docs/dashboard.html) · [docs/plan.md](docs/plan.md); the hand-drawn sketch: [docs/sketches/shinro.jpg](docs/sketches/shinro.jpg)
 
@@ -24,6 +24,7 @@ Quality goes up, quantity (information) goes right. Progress per task: [docs/das
 - On a construction site, the safety rules live in written manuals and in the heads of veteran workers.
 - New hires from abroad often cannot read those rules in Japanese text.
 - The people who train them have no time to make teaching material that actually gets through.
+- Accidents happen at the edge where confidence turns into overconfidence. Veterans are readers of the rules too, not only the people who carry them in their heads; a card posted where the work happens is a second guard next to the screen.
 
 ## Why I built this
 
@@ -44,7 +45,7 @@ The flow (details in [docs/flow.md](docs/flow.md)):
 4. **Checking** — a second Claude call looks only at the frames, guesses the meaning, and grades the card red / yellow / green. Red cards go to the top of the review queue.
 5. **Human fixes** — a supervisor draws a box on the part that is wrong and says what to change; only that card is remade. Joints and props can also be moved by hand.
 6. **Signature** — a supervisor signs with a finger or a stamp. There is a daily cap per supervisor, and the server refuses to hand out unsigned cards.
-7. **Issue** — signed cards reach new hires one at a time, kamishibai-style. A card can be stopped (with a reason); new hires who saw it get a recall notice.
+7. **Issue** — signed cards reach new hires one at a time, kamishibai-style. Only a supervisor can stop a card, always with a reason; the trainer then gets a recall notice (who saw the card is listed on the issue screen, and posted copies to take down are listed with it).
 
 Screens (the fictional demo company; provisional — retaken once the pictures are final):
 
@@ -64,6 +65,15 @@ Also built:
 - Reader panel: 24 simulated readers (country of origin × Japanese reading level × background), each a Claude Code subagent, used to find pictures that do not get through before the real check. For the 30 rules whose answers were fixed (with a hash) before any reading, each reader saw all 30 pictures at once in a different order; two risky cards and one easy card were also read one at a time by the same 24 readers to check the score shift (no card was read the opposite way either way, so the fallback to one-at-a-time reading was not triggered). Results: [docs/readers.md](docs/readers.md).
 - MCP server: other tools can ask for cards; it can only make **unapproved drafts**.
 - PNG / SVG export with version, signature date and frame number on each picture.
+- Navigation: the home screen links to the review queue, issue, trials and making screens and to each card (route, folding, record, signature); every other screen has a "← Home" bar.
+- New card types (11/7 defaults, awaiting the author's review; details in [docs/decisions.md](docs/decisions.md)):
+  - **Principle cards** (`shape=principle`) are the one exception to 3–4 frames: a single frame, chosen with "make as a one-frame principle". All other cards keep 3–4 frames.
+  - **Bundles**: cards made from the same parent rule of one extraction are kept together (bundle name, n of total, the parent rule) and listed in order. Up to 30 cards per bundle.
+  - **Weight**: a supervisor marks a card "life-critical" or "normal". Life-critical cards get a red border outside the picture (on the reading screen and on the export/print frame), never inside it.
+  - **Poster version**: the frames of one card on one large landscape sheet (with furigana, version and date), and a sheet of principle cards in one row.
+  - **Morning-meeting set**: describe the day's work and up to 8 matching signed cards are suggested (life-critical first); the chosen set is kept.
+  - **Where it is posted**: signed cards can be recorded with the place they are posted; when a card is stopped, those sheets appear in the recall notice as "take down".
+  - **Past accidents** can be added as a source for the "why".
 
 Who owns the data: the edit and signature records belong to the company that signed up. The author's company only keeps them, and never uses them to draft cards for another company. Only how a picture was fixed ("this pose was read the wrong way") may go back into the shared drawing rules, with the company's text and all names removed, and only if the company chooses to allow it; the default is "no", and today every company is on "no" (there is no switch for it yet). If you run it yourself, all data stays with you. Details: [docs/consent.md](docs/consent.md).
 
@@ -75,7 +85,7 @@ Who owns the data: the edit and signature records belong to the company that sig
 | Extraction | Claude Opus 5.5 | Picks out rules (what to do / not to do / why) with their source positions |
 | Card making | Claude Opus 5.5 | Writes the keyframes and a route for every part of the picture, as numbers (it does not draw the picture directly) |
 | Checking | Claude Opus 5.5 | Looks only at the frames and grades the card; it never sees the card's text |
-| Word field | Claude Opus 5.5 | Writes short plain-Japanese lines from the card's text only (a Vietnamese line is also written and kept in the data, but not shown) |
+| Word field | Claude Opus 5.5 | Writes short plain-Japanese lines from the card's text only (a Vietnamese line is optional: when one is written it is kept internally only and never delivered) |
 | Overnight sorting | Claude Managed Agents | Reads a whole manual page by page and says which pages hold rules a worker must follow; resumable |
 | Grading the extraction | Claude Sonnet 5.5 | Compares extracted rules with the evaluation answers |
 | Reader panel | Claude Code subagents (Sonnet 5.5 by default) | Each simulated reader is one subagent; the model ID is kept with every answer |
@@ -115,11 +125,16 @@ npm ci
 npm test
 ```
 
+Tests marked 【手元限定】 (local only) need files under `private/` or the manual PDF and skip when they are missing (they always skip on CI).
+
 To run the app locally, put `SESSION_SECRET` (any long random string) and `ANTHROPIC_API_KEY` in `.dev.vars`. `SESSION_SECRET` is required: without it, signing in with a role fails. Without the API key the app still starts and every screen opens, but calls to Claude (extraction, card making, checking) return 503. To start with only `SESSION_SECRET`:
 
 ```bash
-node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .dev.vars
+node -e "require('fs').writeFileSync('.dev.vars', 'SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '
+')"
 ```
+
+Node writes the file itself, so this works the same in bash and in Windows PowerShell (with `> .dev.vars`, Windows PowerShell 5 writes UTF-16, which wrangler cannot read, and `SESSION_SECRET` looks missing). It overwrites `.dev.vars`.
 
  The names shown for each role (`SUPERVISOR_1_NAME`, `SUPERVISOR_2_NAME`, `TRAINER_NAME`, `AUTHOR_NAME`) also go in `.dev.vars`; if they are missing, the name is left blank. The local Node scripts in `scripts/` read `.env` instead (see `.env.example`).
 
@@ -156,7 +171,7 @@ npx playwright test --workers=1
 
 The Worker is also an MCP server (Streamable HTTP) at `/mcp/<tenant>`. Ask "turn this document into cards" and the same pipeline runs: extraction → approval of the chosen rules → card making. There is no tool for signing, approving or stopping, and calls that try are refused. A supervisor signs on the screen.
 
-- Each company tenant needs its own key, sent as `Authorization: Bearer <key>`. Only the fictional demo company works without a key.
+- Each company tenant needs its own key, sent as `Authorization: Bearer <key>`. Only the fictional demo company works without a key — in the local environment. On the public deployment the practice and fictional tenants also need a key and are read-only (`list_documents` and `get_card`; extracting and making are refused, and `initialize` says so). The `/mcp/demo` example below is for the local environment.
 - Make a key for a local tenant (the key is written only to `private/tenants/<tenant>-mcp.json`; the database keeps its hash):
 
 ```bash
@@ -183,13 +198,13 @@ What existed before the build period (2026-11-02) and what was made during it.
 
 - All code was written from scratch. No code or HTML made before the build period was brought in.
 - All production prompts were written from scratch.
-- The Vietnamese in each card's word field was translated by Claude and collected in a small glossary (Japanese · Vietnamese · which card uses it). It is kept in the data but not shown on the cards until a Vietnamese speaker has checked it.
+- The Vietnamese in each card's word field was translated by Claude and collected in a small glossary (Japanese · Vietnamese · which card uses it). The Vietnamese line is optional: when it is written it is kept internally only and is not delivered (cards are in plain Japanese only).
 
 ## Disclosure
 
 The author provides a separate paid translation service to the company where this was piloted (an electrical contractor founded in 1923). So that the results cannot be tilted in the author's favor, every new hire's answer is recorded by the app itself (append-only — no edits, no deletions), and the answers of those who agree to publication are published anonymously in `docs/answers.csv`.
 
-This product deliberately has no translation feature, so that nothing a supervisor cannot read and check reaches the new hires.
+This product deliberately has no translation feature, so that nothing a supervisor cannot read and check reaches the new hires. (The optional Vietnamese line of the word field, when it is written, stays internal and is never delivered.)
 
 The author intends to offer this as a hosted service in the future (MCP access uses a separate key for each company).
 
@@ -216,7 +231,8 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 
 - Results of the on-site check with new hires — **not built** (after the check day)
 - The 2-minute and 3-minute videos — **not built**
-- Navigation between the maker screens (today they are opened by address) — **not built** (see [docs/audit.md](docs/audit.md))
+- A screen to list, edit and delete a company's own words (they are saved and mixed into the examples for the next card, but there is no screen) — **not built**
+- Skills for electrical work and labor conditions (`skills/`): drafts only, not connected to any call yet — **not built**
 
 ## Appendix
 
@@ -226,6 +242,9 @@ Measured numbers and their sources: [docs/numbers.md](docs/numbers.md).
 - Measured numbers: [docs/numbers.md](docs/numbers.md)
 - Build log: [docs/build-log.md](docs/build-log.md)
 - Screen check list: [docs/audit.md](docs/audit.md)
+- API notes (endpoints the screens do not call, and the 11/7 additions): [docs/api.md](docs/api.md)
+- Running it: production steps, overnight batch, CI, copy tools: [docs/operations.md](docs/operations.md)
+- How the yellow rows will be measured: [docs/numbers.md](docs/numbers.md)
 
 ## License
 
