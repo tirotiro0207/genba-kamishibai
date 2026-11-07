@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { privatePath } from "../src/node/private-dir";
+import { OPEN_PROBES, probePath } from "../src/shared/probes";
 import { copiedRuns } from "../src/shared/overlap";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -155,6 +156,8 @@ async function demoDocs(): Promise<[string, string][]> {
   for (const m of top.t.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) await get(m[1]);
   const cards = await get("/api/t/demo/cards");
   for (const p of ["/api/t/demo/glossary", "/api/t/demo/samples", "/api/t/demo/stats", "/api/t/demo/session"]) await get(p);
+  // 採点・アセット・朝礼の口（GET だけ。採点の入口の名前・採点の表・アセットの一覧・朝礼の組）。ゲストと MCP は書く／鍵が要る口なので、ここでは叩かずファイルの検査に任せる
+  for (const p of OPEN_PROBES.filter((x) => x.method === "GET" && !x.path.includes("guest-"))) await get(probePath(p));
   if (cards.ok) {
     const ids = [...cards.t.matchAll(/"id":"([0-9a-f-]{36})"/g)].map((m) => m[1]);
     for (const id of [...new Set(ids)].slice(0, 40)) await get(`/api/t/demo/cards/${id}`);

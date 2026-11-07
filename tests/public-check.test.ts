@@ -46,3 +46,11 @@ describe("公開物の検査（102）", () => {
     expect(JSON.stringify(h)).not.toMatch(/太郎|花子/);
   });
 });
+
+describe("公開デモの検査の対象（採点・アセット・朝礼の口）", () => {
+  it("見回りの口の GET は、採点の入口の名前・採点の表・アセット・朝礼を含む", async () => {
+    const { OPEN_PROBES, probePath } = await import("../src/shared/probes");
+    const paths = OPEN_PROBES.filter((p) => p.method === "GET").map((p) => probePath(p));
+    for (const want of ["/api/score-names", "/api/t/demo/trials/latest/scoring", "/api/t/demo/assets", "/api/t/demo/issue/morning"]) expect(paths).toContain(want);
+  });
+});

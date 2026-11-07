@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify, compare, type EvalRow, estimateUsd, evalRows, logLine } from "../scripts/intake-check";
+import { classify, compare, type EvalRow, estimateUsd, evalRows, logLine, reviewCode } from "../scripts/intake-check";
 
 const row = (p: Partial<EvalRow>): EvalRow => ({ at: "2026-11-07 10:30", hash: "h", gold: 54, pred: 41, matched: 38, wording: 17, missed: 16, extra: 3, dangerous: 0, usd: 0.44, ...p });
 
@@ -9,6 +9,18 @@ describe("取り込みの見張り（11/7）", () => {
     expect([...m.keys()].sort()).toEqual(["evaldata", "extract", "judge", "picto"]);
     expect(m.get("judge")).toEqual(["src/shared/eval/judge.ts"]);
     expect(classify(["docs/flow.md", "src/worker/index.ts"]).size).toBe(0);
+  });
+
+  it("絵の部品・姿勢・絵のプロンプト・確かめる AI の変更も、見直しが要る場所として数える", () => {
+    const m = classify(["src/shared/pose/svg.ts", "eval/prompts/draw_d3.txt", "src/shared/verify/verify.ts", "src/shared/redo.ts", "src/shared/readers/prompt.ts"]);
+    expect([...m.keys()].sort()).toEqual(["make", "picto", "safety"]);
+  });
+
+  it("見直しが要る場所だけが変わったとき、--reviewed と言うまで通さない（評価を流さずに通さない）", () => {
+    expect(reviewCode(new Set(["review"]), false, 0)).toBe(2);
+    expect(reviewCode(new Set(["review"]), true, 0)).toBe(0);
+    expect(reviewCode(new Set(["review"]), false, 1)).toBe(1);
+    expect(reviewCode(new Set(["paid"]), false, 0)).toBe(0);
   });
 
   it("numbers.md の 20 項目の表を古い順に読む", () => {

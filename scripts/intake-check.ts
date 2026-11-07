@@ -6,6 +6,7 @@
 //   npx tsx scripts/intake-check.ts                       # 直前の merge / pull（ORIG_HEAD..HEAD）を調べる。git の post-merge から呼ぶ
 //   npx tsx scripts/intake-check.ts --base origin/main    # 取り込む前の点をその ref から読む
 //   npx tsx scripts/intake-check.ts --run-paid            # お金のかかる評価（調整用の 20 個・Claude の API）も流す
+//   npx tsx scripts/intake-check.ts --reviewed            # 絵・プロンプト・確かめる AI の変更を、人が見直した（20 個の評価では測れないので、見直したと言わないと通さない）
 //   npx tsx scripts/intake-check.ts --ci                  # CI（PR）。API は呼ばず、型と単体テストも test.yml に任せる
 //
 // 終わりの番号: 0 通った・1 落ちた（点が下がった・型か単体テストが落ちた）・2 評価が要る（まだ流していない）・3 基準が変わった
@@ -16,14 +17,14 @@ import { join } from "node:path";
 import { dayBudgetUsd, startOfJstDay, sumAllUsd } from "../src/shared/claude";
 import { readState, ROOT, WATCHED } from "./eval-hook";
 
-/** 精度に効く場所。check: paid は 20 個の評価（API）、rebase は比べる元そのものが変わる、unit は型と単体テスト、review は人の見直しも要る */
+/** 精度に効く場所。check: paid は 20 個の評価（API）、rebase は比べる元そのものが変わる、unit は型と単体テスト、review は 20 個では測れないので人の見直しが要る（--reviewed と言うまで通さない） */
 export const AREAS = [
   { key: "extract", label: "取り出しのプロンプトと決まり", paths: ["src/shared/extract/"], check: "paid" },
   { key: "judge", label: "採点の判定と数え方", paths: ["src/shared/eval/"], check: "paid" },
   { key: "evaldata", label: "評価データ（調整用の 20 個）", paths: ["eval/items_tune_"], check: "rebase" },
-  { key: "safety", label: "危ない読み違いの安全網", paths: ["src/shared/verify/"], check: "unit" },
-  { key: "make", label: "脚本と絵の下書きのプロンプト", paths: ["src/shared/make/", "eval/prompts/", "src/shared/card.ts"], check: "review" },
-  { key: "picto", label: "絵の部品（ピクトグラム）", paths: ["src/shared/picto/"], check: "review" },
+  { key: "safety", label: "危ない読み違いの安全網と確かめる AI", paths: ["src/shared/verify/"], check: "review" },
+  { key: "make", label: "脚本と絵の下書きのプロンプト", paths: ["src/shared/make/", "eval/prompts/", "src/shared/card.ts", "src/shared/redo.ts", "src/shared/rework.ts", "src/shared/readers/", "src/shared/sort/"], check: "review" },
+  { key: "picto", label: "絵の部品（ピクトグラム・姿勢）", paths: ["src/shared/picto/", "src/shared/pose/"], check: "review" },
 ] as const;
 export type AreaKey = (typeof AREAS)[number]["key"];
 
@@ -38,6 +39,14 @@ export function classify(files: string[]): Map<AreaKey, string[]> {
     if (a) out.set(a.key, [...(out.get(a.key) ?? []), f]);
   }
   return out;
+}
+
+/**
+ * 20 個の評価では測れない場所（絵・プロンプト・確かめる AI）が変わったとき。人が見直した（--reviewed）と言うまで「評価が要る」(2) にする。
+ * すでに落ちている（0 以外）ときはその番号のまま
+ */
+export function reviewCode(checks: ReadonlySet<string>, reviewed: boolean, code: number): number {
+  return checks.has("review") && !reviewed && code === 0 ? 2 : code;
 }
 
 export interface EvalRow {
@@ -237,7 +246,15 @@ async function main() {
       }
     }
   }
-  if (checks.has("review")) notes.push("脚本・絵の部品は 20 個の評価では測れない。カードの見た目を監修者が見直す（キャラの部品は見直し台、カードは確認待ちの列）");
+  if (checks.has("review")) {
+    const reviewed = process.argv.includes("--reviewed");
+    notes.push(
+      reviewed
+        ? "脚本・絵の部品・確かめる AI は 20 個の評価では測れない。見直し済み（--reviewed）として通した"
+        : "脚本・絵の部品・確かめる AI は 20 個の評価では測れない。カードの見た目を監修者が見直し（キャラの部品は見直し台、カードは確認待ちの列）、済んだら --reviewed を付けて流し直す",
+    );
+    code = reviewCode(checks, reviewed, code);
+  }
 
   const verdict = code === 0 ? "通った" : code === 1 ? "落ちた" : code === 2 ? "評価が要る" : "基準が変わった";
   for (const n of notes) say(`- ${n}`);

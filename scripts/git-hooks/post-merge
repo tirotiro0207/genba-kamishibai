@@ -9,6 +9,6 @@ code=$?
 if [ "$code" = 1 ] || [ "$code" = 3 ]; then
   echo "取り込んだ更新で精度の確認が通らなかった（記録: eval/intake-log.md）。戻すなら: git reset --merge ORIG_HEAD" >&2
 elif [ "$code" = 2 ]; then
-  echo "20 個の評価がまだ。流すなら: npm run intake -- --run-paid（Claude の API を呼ぶ）" >&2
+  echo "評価か見直しがまだ。20 個の評価は npm run intake -- --run-paid（Claude の API を呼ぶ）。絵・プロンプト・確かめる AI の変更は、見直したあと npm run intake -- --reviewed" >&2
 fi
 exit 0

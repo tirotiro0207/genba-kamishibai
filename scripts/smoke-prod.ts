@@ -3,6 +3,7 @@
 //
 //   npx tsx scripts/smoke-prod.ts [URL]   （既定は PROD_URL、無ければ下の URL）
 import { existsSync, readFileSync } from "node:fs";
+import { OPEN_PROBES, type Probe, probePath } from "../src/shared/probes";
 import { pinsPath, type Pins } from "./add-company";
 
 const BASE = (process.argv[2] ?? process.env.PROD_URL ?? "https://genba-kamishibai.ikjshare.workers.dev").replace(/\/$/, "");
@@ -14,6 +15,20 @@ function check(name: string, ok: boolean, got: unknown) {
 const status = async (path: string, init?: RequestInit) => (await fetch(BASE + path, init)).status;
 const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
+/** 採点・ゲスト・アセット・朝礼・MCP の口を、公開の置き場（demo）に PIN も役割も無しで叩く。書き込みはせず、Claude を呼ぶ口は閉じていることを見る（期待の番号は src/shared/probes.ts） */
+export async function runProbes(base: string, probes: Probe[] = OPEN_PROBES, fetcher: typeof fetch = fetch): Promise<{ name: string; ok: boolean; got: number }[]> {
+  const out: { name: string; ok: boolean; got: number }[] = [];
+  for (const p of probes) {
+    const res = await fetcher(base + probePath(p), {
+      method: p.method,
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: p.body === undefined ? undefined : JSON.stringify(p.body),
+    });
+    out.push({ name: p.name, ok: p.status.includes(res.status), got: res.status });
+  }
+  return out;
+}
+
 async function main() {
   const page = await fetch(`${BASE}/?cb=${Date.now()}`, { headers: { "cache-control": "no-cache" } });
   check("画面が開く", page.status === 200 && (page.headers.get("content-type") ?? "").includes("text/html"), page.status);
@@ -24,6 +39,8 @@ async function main() {
   check("違う PIN は断る", (await status("/api/t/company/session", post({ pin: "x" }))) === 401, "");
   const bad = { headers: { authorization: "Bearer company.9999999999.00" } };
   check("偽のしるしは断る", (await status("/api/t/company/cards", bad)) === 401, "");
+
+  for (const r of await runProbes(BASE)) check(r.name, r.ok, r.got);
 
   const path = pinsPath("company", true);
   if (!existsSync(path)) {
@@ -46,7 +63,9 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main().catch((e) => {
-  console.error(e instanceof Error ? e.message : e);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.filename === process.argv[1]) {
+  main().catch((e) => {
+    console.error(e instanceof Error ? e.message : e);
+    process.exit(1);
+  });
+}
