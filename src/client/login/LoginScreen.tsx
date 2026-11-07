@@ -60,6 +60,7 @@ export function LoginScreen() {
   return (
     <>
       <Backdrop />
+      {/* 入口の全部を 1 つの枠で包む（11/7 作者）。枠はログインしたあとの画面と同じ、黒のすりガラス */}
       <section className="login" data-testid="login">
         <h1>現場の紙芝居</h1>
         <form onSubmit={go} className="login-form">

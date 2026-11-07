@@ -44,10 +44,30 @@ const NEAR = 3;
 
 /** 行 → 位置 → 今見えている色（無い所は空） */
 const grid: string[][] = [];
+/** 行 → 位置 → 今見えている人の職業（業種と役の名前。11/7 作者「隣同士が同じ職業なのをやめて」） */
+const jobs: string[][] = [];
 
 export function resetGrid(rows: number, cols: number) {
   grid.length = 0;
-  for (let r = 0; r < rows; r++) grid.push(Array.from({ length: cols }, () => ""));
+  jobs.length = 0;
+  for (let r = 0; r < rows; r++) {
+    grid.push(Array.from({ length: cols }, () => ""));
+    jobs.push(Array.from({ length: cols }, () => ""));
+  }
+}
+
+export function setShownJob(r: number, c: number, job: string) {
+  if (jobs[r]) jobs[r][c] = job;
+}
+
+/** (r, c) の隣（左右 NEAR 枚と上下の行の同じ位置）に今見えている職業。色と同じく、行は流れる速さが違うので上下は配るときだけ守れる */
+export function nearJobs(r: number, c: number): string[] {
+  const row = jobs[r] ?? [];
+  const n = row.length;
+  const out: string[] = [];
+  for (let d = -NEAR; d <= NEAR; d++) if (d && n && row[(c + d + n) % n]) out.push(row[(c + d + n) % n]);
+  for (const rr of [r - 1, r + 1]) if (jobs[rr]?.[c]) out.push(jobs[rr][c]);
+  return out;
 }
 
 export function setShown(r: number, c: number, color: string) {

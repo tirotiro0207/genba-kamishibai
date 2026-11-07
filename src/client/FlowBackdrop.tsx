@@ -14,6 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flowTune, onFlowTune } from "./flowTune";
 import { LINE_COLORS } from "./login/palette";
+import { useNeonFlicker } from "./neonFlick";
 
 export const FLOW_TEXT = "Genba-Kamishibai v1.0";
 const FONT = 46;
@@ -48,52 +49,18 @@ export function FlowBackdrop() {
     if (textW > 0) setPitch(textW + tune.gap * FONT);
   }, [textW, tune.gap]);
   const svg = useRef<SVGSVGElement>(null);
-  useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    let timer = 0;
-    const tick = () => {
-      const root = svg.current;
-      if (root) {
-        // 画面の中に見えている単語（光の字と組で動く）から、4〜5 個を選ぶ。選んだ段の上下 2 段は、その回はもう選ばない
-        // 光が画面の片隅に固まらないよう、画面を 6 つの区画（横長は横 3×縦 2、縦長は横 2×縦 3）に分け、1 つの区画からは 1 個だけ選ぶ（11/7 作者「バランスよく」）
-        const W = window.innerWidth;
-        const H = window.innerHeight;
-        const [cols, rowsN] = W >= H ? [3, 2] : [2, 3];
-        const cellOf = (b: DOMRect) => {
-          const cx = (b.left + b.right) / 2;
-          const cy = (b.top + b.bottom) / 2;
-          if (cx < 0 || cy < 0 || cx >= W || cy >= H) return -1;
-          return Math.floor((cy / H) * rowsN) * cols + Math.floor((cx / W) * cols);
-        };
-        const seen = Array.from(root.querySelectorAll<SVGTSpanElement>("text.flow-bd-text tspan[data-w]"))
-          .map((t) => ({ t, cell: cellOf(t.getBoundingClientRect()) }))
-          .filter((x) => x.cell >= 0);
-        const n = 4 + Math.floor(Math.random() * 2);
-        const used: number[] = [];
-        const cells = new Set<number>();
-        while (used.length < n && seen.length) {
-          const { t, cell } = seen.splice(Math.floor(Math.random() * seen.length), 1)[0];
-          const row = t.closest<SVGGElement>("g[data-r]");
-          const r = Number(row?.dataset.r);
-          if (!row || cells.has(cell) || used.some((u) => Math.abs(u - r) < 3)) continue;
-          used.push(r);
-          cells.add(cell);
-          const i = (t.parentElement as unknown as SVGTextElement).dataset.i;
-          const glow = row.querySelector(`text.flow-bd-glow[data-i="${i}"] tspan[data-w="${t.dataset.w}"]`);
-          for (const el of [t, glow]) {
-            if (!el) continue;
-            el.classList.remove("flick");
-            void el.getBoundingClientRect();
-            el.classList.add("flick");
-            el.addEventListener("animationend", () => el.classList.remove("flick"), { once: true });
-          }
-        }
-      }
-      timer = window.setTimeout(tick, 2000 + Math.random() * 1000);
-    };
-    timer = window.setTimeout(tick, 1500);
-    return () => window.clearTimeout(timer);
-  }, []);
+  // 画面に見えている単語（光の字と組で動く）を候補にして、ネオン管のように瞬かせる（選び方は neonFlick.ts）
+  useNeonFlicker(() => {
+    const root = svg.current;
+    if (!root) return [];
+    return Array.from(root.querySelectorAll<SVGTSpanElement>("text.flow-bd-text tspan[data-w]")).flatMap((t) => {
+      const row = t.closest<SVGGElement>("g[data-r]");
+      if (!row) return [];
+      const i = (t.parentElement as unknown as SVGTextElement).dataset.i;
+      const glow = row.querySelector(`text.flow-bd-glow[data-i="${i}"] tspan[data-w="${t.dataset.w}"]`);
+      return [{ els: glow ? [t, glow] : [t], row: Number(row.dataset.r), rect: t.getBoundingClientRect() }];
+    });
+  });
   useEffect(() => {
     const on = () => setSize(viewport());
     window.addEventListener("resize", on);
