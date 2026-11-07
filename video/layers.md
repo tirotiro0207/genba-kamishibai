@@ -15,6 +15,10 @@
 - どれも 1920×1080・30 コマ・5400 コマ。L2〜L5 は透明のまま（ProRes 4444 の .mov）。L1 だけ地の色を塗る
 - 置き場は `video/out/layers/<Composition>.mov`（git の外）。重ねた mp4 は `private/material/<VIDEO_TAG>/full.mp4`
 - 全部を書き出す: `node render-layers.mjs`（名前を渡すとそのレイヤーだけ）。一部を直す: `node patch.mjs`
+- `full`（`node render-full.mjs --stills` の静止画と一覧）は、L1〜L5 を 1 つずつ描いて下から重ねる。重ねた full.mp4 と同じ見え方になる（前は 1 度に描いていて、L1 の扇の光と L2 の輪・ライトが紙の上に出ていた）
+- 書き出しの前に、録画の使う長さ（full.tsx の CLIPS）が `out/pub` の mp4 に収まるかを見る。1 コマを超えてはみ出したら止まる
+- 仕上げの書き出しは `VIDEO_FINAL=1` を付ける。「仮」の札・版の札・括弧の仮の字幕が残っていたら止まる
+- 録画を撮り直したあとや、枠の描き方を直したあとは、古いレイヤーの .mov が残っていないか確かめる（11/7 の点検: L1・L2 の .mov は枠の直しより前の書き出しのまま。仕上げの前に `node patch.mjs L1-ground 0 389` と `node patch.mjs L2-box 0 389` で揃える。そのときは VIDEO_TAG を新しい名前にして、前の full.mp4 を上書きしない）
 
 ## 場面とコマ
 

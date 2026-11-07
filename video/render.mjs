@@ -1,4 +1,6 @@
-// 冒頭の 7 場面を書き出す: 場面ごとの mp4 と、場面の終わりの静止画 1 枚。最後に ffmpeg で 1 本（1280×720）につなぐ。
+// 冒頭の 8 場面（timeline.ts の SCENES）を書き出す: 場面ごとの mp4 と、場面の終わりの静止画 1 枚。最後に ffmpeg で 1 本（1280×720）につなぐ。
+// 前の版の道具（11/5 昼まで）。通しの v4（render-full.mjs・render-layers.mjs）は s1〜s6 と opening を使わない（0:00〜0:13 は intro.tsx、0:13〜0:19 は s7・s8 だけ）。
+// 前の版の書き出し直しと、ポータルの単体の書き出しに残す（古い版は消さない決まり）。
 // 書き出すのは git の外（../private/material/<日付>-冒頭/）。ローカルで書き出すだけで、API は使わない。
 // 使い方: node render.mjs [場面の id ...]（無ければ冒頭の全部）。ブラウザは CHROME_PATH（無ければ Chrome の標準の場所）
 // ポータル: VIDEO_TAG=2026-11-05-ポータル node render.mjs p1-portal
