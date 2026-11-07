@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "genba-kamishibai",
+  // 手元の名前は本番と分ける。--env production を付け忘れて deploy しても、本番の Worker に手元用の D1 と R2 が載らない
+  "name": "genba-kamishibai-local",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-15",
   "compatibility_flags": ["nodejs_compat"],

@@ -33,3 +33,8 @@ eval/holdout/
 # wrangler の手元の DB と一時ファイル
 .wrangler/
 .dev.vars
+
+# 道具の作業場（worktree・別の道具の設定）と、手元の仮の台本（tsconfig の *.ts にも当たる）
+.claude/worktrees/
+.codex/
+*.tmp.ts

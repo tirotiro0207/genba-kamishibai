@@ -30,6 +30,8 @@ ${text}` }] } as never);
       return { ...r, usd: costUsd(MA_MODEL, m.usage), ms: Date.now() - t0 };
     };
   } else if (args.includes("--fake")) {
+    // 作りものの答えを本番に書くと、夜間の作成が監修者の答えとして読んでしまう
+    if (args.includes("--remote")) throw new Error("--fake は手元の D1 だけ（本番には書かない）");
     sortPage = async (text) => ({ card: text.length > 200, reason: "（API を呼ばない確かめ）", usd: 0, ms: 0 });
   } else {
     const client = makeClient();

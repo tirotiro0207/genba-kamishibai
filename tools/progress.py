@@ -79,6 +79,9 @@ def read_plan(text):
                           "extra": EXTRA in c[1],
                           # 録画に絵が映るマス。ピクトグラムが決まったら録画を取り直す（11/3 作者）
                           "retake": RETAKE in c[3]})
+        elif c and re.match(r"^\d{3}[ab]?$", c[0]):
+            # | を 1 本落としたマスが進み具合から黙って消えないよう止める
+            raise SystemExit(f"plan.md: {c[0]} の行の列が {len(c)} 個（12 個のはず）")
     return milestones, tasks
 
 
@@ -691,14 +694,15 @@ def mask_generated(s):
 
 
 def own_commit(task_id):
-    """件名の頭がそのマスの番号とコロン（「037:」「002・002b:」）の、いちばん新しいコミット。「109 の直し:」のような続きは選ばない。
+    """件名の頭がそのマスの番号とコロンか空白（「037:」「002・002b:」「066 当日の…」）の、いちばん新しいコミット。
+    「109 の直し:」「109 の続き」のような続きは選ばない。
     HEAD をそのまま使うと、間に別のコミットが挟まったときに次のコミットの番号が入る（11/2 に 12 行ずれた）。
     当たるコミットが無ければ HEAD を使い、そのことを知らせる"""
     import subprocess
     log = subprocess.run(["git", "log", "--format=%h %s"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True).stdout
     for line in log.splitlines():
         h, _, subject = line.partition(" ")
-        head = re.match(r"^(\d{3}[ab]?(?:・\d{3}[ab]?)*):", subject)
+        head = re.match(r"^(\d{3}[ab]?(?:・\d{3}[ab]?)*)(?::|\s(?!の(?:直し|続き)))", subject)
         if head and task_id in head.group(1).split("・"):
             return h
     h = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()

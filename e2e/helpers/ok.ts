@@ -8,12 +8,13 @@ import { AGENT } from "../../src/shared/verify/formal";
 
 // 録画のテストで、カードを本物の AI を呼ばずに OK まで進める（052 の gate.spec.ts から切り出した）。
 // 確認待ちにしてから、テスト用の確かめる AI の証拠を、テナントの監査の連鎖に正しいハッシュで足し、OK にする
-export const sql = (q: string) => execSync(`npx wrangler d1 execute DB --local --command "${q}"`, { stdio: "pipe" });
 export const sqlFile = (text: string) => {
   const f = join(mkdtempSync(join(tmpdir(), "e2e-sql-")), "q.sql");
   writeFileSync(f, text);
   execSync(`npx wrangler d1 execute DB --local --file "${f}"`, { stdio: "pipe" });
 };
+// SQL をシェルの引用符に埋めると " を含む文で壊れるので、いつもファイルで渡す
+export const sql = (q: string) => sqlFile(q);
 export const MARK = { kind: "stamp", png: "data:image/png;base64," + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]).toString("base64") };
 
 /** 使い捨てのテナントを作る（署名の数は監修者ごと・日ごとなので、前の回の署名が数に入らないように） */

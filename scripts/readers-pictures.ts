@@ -6,6 +6,7 @@
 //
 //   npx tsx scripts/readers-pictures.ts <名前> <テナント> <カードの ID> [<カードの ID> …]
 import { execSync } from "node:child_process";
+import { parseJson } from "./demo-rows";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { svgToPng } from "../src/node/png";
@@ -29,7 +30,7 @@ function main() {
   if (!name || !tenant || !ids.length || !/^[\w-]+$/.test(tenant) || !ids.every((x) => /^[\w-]+$/.test(x))) throw new Error("名前・テナント・カードの ID を渡す");
   const q = `SELECT id, body FROM cards WHERE tenant_id = '${tenant}' AND id IN (${ids.map((x) => `'${x}'`).join(", ")})`;
   const out = execSync(`npx wrangler d1 execute DB --local --json --command "${q}"`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
-  const rows = (JSON.parse(out) as { results: { id: string; body: string }[] }[])[0].results;
+  const rows = (parseJson(out) as { results: { id: string; body: string }[] }[])[0].results;
   const dir = privatePath("readers", "pics", name);
   mkdirSync(dir, { recursive: true });
   for (const id of ids) {

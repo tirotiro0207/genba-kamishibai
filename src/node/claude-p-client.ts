@@ -4,7 +4,7 @@
 // 返す usage は claude -p が数えたトークンなので、costUsd で API の値段に換算できる（サブスクリプションでは払っていない）。
 import type Anthropic from "@anthropic-ai/sdk";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MessagesClient } from "../shared/claude";
@@ -58,15 +58,23 @@ export function claudePMessage(params: Params, cwd = process.cwd()): Promise<Ant
     p.stderr.on("data", (x) => (se += x));
     p.on("error", reject);
     p.on("close", (code) => {
+      // 1 回ごとに作った一時のフォルダを中身ごと消す
       try {
-        unlinkSync(sysFile);
+        rmSync(d, { recursive: true, force: true });
       } catch {}
-      const result = so
-        .split("\n")
-        .filter((l) => l.startsWith("{"))
-        .map((l) => JSON.parse(l) as { type: string; structured_output?: unknown; result?: string; is_error?: boolean; usage?: Anthropic.Usage; total_cost_usd?: number })
-        .find((j) => j.type === "result");
-      if (!result || code !== 0 || result.is_error) return reject(new Error(`claude -p が失敗した（${code}）: ${(result?.result ?? se ?? so).slice(0, 300)}`));
+      type Line = { type: string; structured_output?: unknown; result?: string; is_error?: boolean; usage?: Anthropic.Usage; total_cost_usd?: number };
+      let result: Line | undefined;
+      // 壊れた行があってもプロセスごと落とさず、この呼び出しの失敗にする
+      try {
+        result = so
+          .split("\n")
+          .filter((l) => l.startsWith("{"))
+          .map((l) => JSON.parse(l) as Line)
+          .find((j) => j.type === "result");
+      } catch (e) {
+        return reject(new Error(`claude -p の出力を読めない（${code}）: ${(e as Error).message.slice(0, 200)}`));
+      }
+      if (!result || code !== 0 || result.is_error) return reject(new Error(`claude -p が失敗した（${code}）: ${(result?.result || se || so).slice(0, 300)}`));
       const text = result.structured_output !== undefined ? JSON.stringify(result.structured_output) : (result.result ?? "");
       const u = result.usage;
       resolve({

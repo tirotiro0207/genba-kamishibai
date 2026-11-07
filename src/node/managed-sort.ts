@@ -2,6 +2,7 @@
 // 毎回はセッションを 1 つ作る → ページの文を送る → 止まるまで流れを読む → 費用を読む → セッションを消す（§5 L4: 記録はサーバーに残さない）。
 // セッションには費用の上限（list cost）を付け、上限に当たると止まる。
 import type Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseSort, SORT_SYSTEM, type SortResult } from "../shared/sort/page";
 import { privatePath } from "./private-dir";
@@ -16,20 +17,27 @@ export interface ManagedIds {
 
 const idsPath = () => privatePath("ma", "ids.json");
 
-/** エージェントと環境を、まだ無ければ 1 回だけ作る。道具は全部切る（ページの文を読んで答えるだけ） */
+/** 仕分けの指示のハッシュ。エージェントは作ったときの指示で固定されるので、指示が変わったら作り直す */
+export const sortSystemHash = (system = SORT_SYSTEM) => createHash("sha256").update(system).digest("hex").slice(0, 16);
+
+/** エージェントと環境を、まだ無ければ 1 回だけ作る。道具は全部切る（ページの文を読んで答えるだけ）。指示が変わっていればエージェントを作り直す */
 export async function ensureAgent(client: Anthropic): Promise<ManagedIds> {
-  if (existsSync(idsPath())) return JSON.parse(readFileSync(idsPath(), "utf-8")) as ManagedIds;
-  const environment = await client.beta.environments.create({
-    name: "kamishibai-sort",
-    config: { type: "cloud", networking: { type: "limited", allow_package_managers: false, allow_mcp_servers: false } },
-  });
+  const saved = existsSync(idsPath()) ? (JSON.parse(readFileSync(idsPath(), "utf-8")) as ManagedIds & { system_sha?: string }) : null;
+  if (saved && saved.system_sha === sortSystemHash()) return saved;
+  if (saved) console.warn("仕分けの指示が、エージェントを作ったときと違う。エージェントを作り直す");
+  const environment = saved
+    ? { id: saved.environment_id }
+    : await client.beta.environments.create({
+        name: "kamishibai-sort",
+        config: { type: "cloud", networking: { type: "limited", allow_package_managers: false, allow_mcp_servers: false } },
+      });
   const agent = await client.beta.agents.create({
     name: "kamishibai-sort",
     model: MA_MODEL,
     system: SORT_SYSTEM,
     tools: [{ type: "agent_toolset_20260401", default_config: { enabled: false } }],
   });
-  const ids = { agent_id: agent.id, agent_version: agent.version, environment_id: environment.id };
+  const ids = { agent_id: agent.id, agent_version: agent.version, environment_id: environment.id, system_sha: sortSystemHash() };
   mkdirSync(privatePath("ma"), { recursive: true });
   writeFileSync(idsPath(), JSON.stringify(ids, null, 2) + "\n", "utf-8");
   return ids;

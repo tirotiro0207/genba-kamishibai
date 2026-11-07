@@ -23,7 +23,7 @@ export interface Steps {
   /** OK した 1 つの決まりから、カードの下書き（文・動き・部品）を作る */
   make(rule: OkRule, locate: ReturnType<typeof locator>): Promise<CardBody>;
   /** 言葉の欄（やさしい日本語とベトナム語）と、出てきた現場の言葉 */
-  words(card: CardBody): Promise<{ words: { ja: string; vi: string }; terms: Term[] }>;
+  words(card: CardBody): Promise<{ words: { ja: string; vi?: string }; terms: Term[] }>;
   /** コマを PNG にする（人形の絵） */
   render(card: CardBody): Uint8Array[];
   /** 確かめる AI（正式版・047）。絵だけを順に見せる */
@@ -156,7 +156,10 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
   if (now.status === "draft" || now.status === "ai_draft") {
     // 記録を先に書く。間で止まっても、状態の変化が記録の無いまま残らない（走らせ直しで記録がもう 1 行増えることはある）
     await appendAudit(db, o.tenant, { card_id: cardId, kind: "status", actor: ACTOR, payload: { version: now.version, from: now.status, to: "pending" } });
-    await db.prepare("UPDATE cards SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(cardId, o.tenant, now.status).run();
+    const moved = await db.prepare("UPDATE cards SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status = ?").bind(cardId, o.tenant, now.status).run();
+    // 間で状態が変わって移らなかったときは、その旨をもう 1 行書く（記録だけが「移した」と言い張らない）
+    if (!moved.meta.changes)
+      await appendAudit(db, o.tenant, { card_id: cardId, kind: "status", actor: ACTOR, payload: { version: now.version, from: now.status, to: now.status, note: "pending へ移せなかった（間で状態が変わった）" } });
   }
   return { e, drop, read_pass };
 }
@@ -164,6 +167,9 @@ async function draftOne(o: DraftOptions, x: { id: string; rules: Rule[]; text: s
 export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
   const { db } = o;
   const log = o.log ?? (() => {});
+  // night_drafts の主キーはテナントを含まないので、同じ番号を別のテナントで使うと行が混ざる。始める前に断る
+  const other = Number((await db.prepare("SELECT count(*) AS n FROM night_drafts WHERE run_id = ? AND tenant_id != ?").bind(o.runId, o.tenant).first<{ n: number }>())?.n ?? 0);
+  if (other) throw new Error(`走り手 ${o.runId} は別のテナントで使われている。別の --run にする`);
   // 枚数の上限は、この回の合計で数える（止めて同じ上限で走らせ直しても、前の回の分を足して超えない）
   const doneBefore = Number((await db.prepare("SELECT count(*) AS n FROM night_drafts WHERE run_id = ? AND item >= 0 AND state = 'done'").bind(o.runId).first<{ n: number }>())?.n ?? 0);
   const max = (o.maxCards ?? Infinity) - doneBefore;
@@ -213,7 +219,9 @@ export async function runDrafts(o: DraftOptions): Promise<DraftSummary> {
         await set(db, o.runId, r.page, r.item, { state: "done", band: e.band, dangerous: e.dangerous ? 1 : 0, rate: e.rate, usd, ms: Date.now() - t0, error: null });
         madeNow++;
         inRow = 0;
-        const dropText = read_pass === undefined ? "" : `・場を抜いて ${drop ? `${drop.evidence.rate}%` : "なし"}・新人役の試し ${read_pass ? "合格" : "不合格"}`;
+        // 場を抜いた版は、脚本で「場」のコマが決まっているカードだけ。脚本の無いカードは全部のコマの読みだけで決まる
+        const dropText =
+          read_pass === undefined ? "" : `・場を抜いて ${drop ? `${drop.evidence.rate}%` : passes(e) ? "抜けない（脚本なし）" : "読ませない"}・新人役の試し ${read_pass ? "合格" : "不合格"}${!drop && read_pass ? "（全部のコマだけ）" : ""}`;
         log(`p${r.page}-${r.item}: ${e.dangerous ? "危険" : e.band}（${e.rate}%）${dropText}・${usd.toFixed(3)} USD`);
         if (usd > o.cardMaxUsd) {
           stopped = `1 枚の費用 ${usd.toFixed(3)} USD が上限 ${o.cardMaxUsd} USD を超えた`;

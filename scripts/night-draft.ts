@@ -19,7 +19,7 @@ import { FileCallLog } from "../src/node/file-log";
 import { readPages } from "../src/node/night";
 import { CARD_MAX_USD, runDrafts, type Steps } from "../src/node/night-draft";
 import { imageBlock, svgToPng } from "../src/node/png";
-import { dayBudgetUsd, MemoryCallLog, sumAllUsd } from "../src/shared/claude";
+import { dayBudgetUsd, MemoryCallLog, sumAllUsd, type MessagesClient } from "../src/shared/claude";
 import { extractRules, type Rule } from "../src/shared/extract/rules";
 import { addDrawExtra } from "../src/shared/make/lessons";
 import { makeCard } from "../src/shared/make/maker";
@@ -30,8 +30,11 @@ import { renderFrame } from "../src/shared/picto/scene";
 import { droppableFrame } from "../src/shared/verify/drop";
 import { verifyCard } from "../src/shared/verify/formal";
 
-/** 見込みの元（008 の実測と 093 の測り）: 取り出し 1 回 0.098 USD、1 枚（作成・言葉の欄・確かめる AI）0.152 USD・60 秒。本番の D1 に書く分を 1 枚 30 秒足す */
-const EST = { extractUsd: 0.098, cardUsd: 0.152, cardSec: 60, d1Sec: { local: 5, remote: 30 } };
+/**
+ * 見込みの元（008 の実測と 093 の測り）: 取り出し 1 回 0.143 USD（深さ high の実測。medium のときは 0.098）、
+ * 1 枚（作成・言葉の欄・確かめる AI）0.152 USD・60 秒。本番の D1 に書く分を 1 枚 30 秒足す
+ */
+const EST = { extractUsd: 0.143, cardUsd: 0.152, cardSec: 60, d1Sec: { local: 5, remote: 30 } };
 
 async function main() {
   const args = process.argv.slice(2);
@@ -43,6 +46,13 @@ async function main() {
   const sub = args.includes("--sub");
   if (sub && where === "remote") throw new Error("--sub は手元の D1 だけ（本番には書かない）");
   const shard = opt("--shard")?.split("/").map(Number);
+  if (shard) {
+    if (shard.length !== 2 || !(shard[1] >= 1) || !(shard[0] >= 1 && shard[0] <= shard[1])) throw new Error("--shard は i/n（1 ≦ i ≦ n）");
+    // API の費用の記録（private/logs/api-calls.jsonl）は 1 つなので、同時に流すと他の本の費用まで 1 枚の費用に数えて止まる
+    if (!sub) throw new Error("--shard は --sub のときだけ（API の費用の記録を分けていない）");
+    // 枚数の上限はこの回の全部の組の済みで数えるので、組ごとの上限にならない
+    if (opt("--max")) throw new Error("--shard と --max は一緒に使えない（上限が組ごとにならない）");
+  }
   const only = opt("--pages")?.split(",").map(Number);
   const pickSystem = opt("--pick-prompt") ? readFileSync(opt("--pick-prompt")!, "utf-8") : undefined;
   const tenant = opt("--tenant") ?? "company";
@@ -72,7 +82,7 @@ async function main() {
   console.log(`今日の費用（手元の記録・全部の用途）${today.toFixed(2)} USD・1 日の上限 ${dayBudgetUsd()} USD（.env の API_BUDGET_USD_PER_DAY）・1 枚の上限 ${opt("--card-max-usd") ?? CARD_MAX_USD} USD`);
   if (args.includes("--estimate")) return;
 
-  const base = sub ? claudePClient() : makeClient();
+  const base: MessagesClient = sub ? claudePClient() : makeClient();
   const drawExtra = opt("--draw-extra") ? readFileSync(opt("--draw-extra")!, "utf-8").trim() : "";
   // 角度と人形の呼び出し（指示が「人形の姿勢と小物を数字で決める係」で始まるもの）にだけ、足す決まりを付ける。
   // 教訓はもう作る係に入っているので、addDrawExtra が同じ行と教訓で置き換えた古い行を省いて足す
@@ -91,7 +101,8 @@ async function main() {
     },
     render: (card) => (card.motion.kind === "keyframes" ? cutFrames(card.motion.json).map(({ frame }) => svgToPng(renderFrame(frame).svg)) : []),
     verify: (card, frames) => verifyCard(deps, "night", card, frames.map(imageBlock)),
-    // 新人役の試しの場を抜いた版（11/5）。--no-drop で外す
+    // 新人役の試しの場を抜いた版（11/5）。--no-drop で外す。
+    // ここの作成は脚本なし（makeCard に script を渡さない）なので、抜く「場」のコマが決まらず、今は全部のコマの読みだけで合否が決まる（ログに「抜けない（脚本なし）」と出る）
     ...(args.includes("--no-drop")
       ? {}
       : {

@@ -38,7 +38,8 @@ async function main() {
       const r = await fetch(`${BASE}/api/t/company/cards`, { headers: { authorization: `Bearer ${token}` } });
       const body = await r.text();
       check("しるしでテナントの関所を越える", !body.includes("PIN で入ってください"), r.status);
-      check("しるしは別のテナントで使えない", (await status("/api/t/other/cards", { headers: { authorization: `Bearer ${token}` } })) === 404, "");
+      // 「しるしは別のテナントで使えない」は、本番に別の会社のテナントが無いので確かめられない（無いテナントはしるしに関係なく 404）。
+      // しるしの束縛はテストの src/worker の側で見る
     }
   }
   console.log(failed ? `${failed} 件が NG` : "全部 OK");

@@ -4,6 +4,7 @@
 //
 //   npx tsx scripts/readers-text-prompts.ts <種> <テナント> <カードの ID> [<カードの ID> …]
 import { execSync } from "node:child_process";
+import { parseJson } from "./demo-rows";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { privatePath } from "../src/node/private-dir";
@@ -33,7 +34,7 @@ function main() {
   const [seed, tenant, ...ids] = process.argv.slice(2);
   if (!seed || !tenant || !ids.length || !/^[\w-]+$/.test(tenant) || !ids.every((x) => /^[\w-]+$/.test(x))) throw new Error("種・テナント・カードの ID を渡す");
   const q = `SELECT id, body FROM cards WHERE tenant_id = '${tenant}' AND id IN (${ids.map((x) => `'${x}'`).join(", ")})`;
-  const rows = (JSON.parse(execSync(`npx wrangler d1 execute DB --local --json --command "${q}"`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] })) as { results: { id: string; body: string }[] }[])[0].results;
+  const rows = (parseJson(execSync(`npx wrangler d1 execute DB --local --json --command "${q}"`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] })) as { results: { id: string; body: string }[] }[])[0].results;
   const page = (doc: string, n: number) => (JSON.parse(readFileSync(privatePath("pdf", doc, `p${String(n).padStart(3, "0")}.json`), "utf-8")) as { lines: { text: string }[] }).lines.map((x) => x.text);
   // 名前の付け方も乱数にして、渡した順番が読み手の答えに出ないようにする（絵の側と同じ）
   const r = rng(`labels:${seed}`);

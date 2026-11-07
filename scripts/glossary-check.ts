@@ -3,13 +3,14 @@
 //
 //   npx tsx scripts/glossary-check.ts <テナント>
 import { execSync } from "node:child_process";
+import { parseJson } from "./demo-rows";
 import type { CardBody } from "../src/shared/card";
 import { checkGlossary, type GlossaryRow } from "../src/shared/make/glossary-check";
 
 // カードの本文は 1 枚で数百 KB になることがあり、execSync の既定（1 MB）では入りきらずに落ちた（11/5）。上限を 256 MB にする
 const MAX_BUFFER = 256 * 1024 * 1024;
 const d1 = <T>(q: string) =>
-  (JSON.parse(execSync(`npx wrangler d1 execute DB --local --json --command "${q}"`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: MAX_BUFFER })) as { results: T[] }[])[0].results;
+  (parseJson(execSync(`npx wrangler d1 execute DB --local --json --command "${q}"`, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: MAX_BUFFER })) as { results: T[] }[])[0].results;
 
 function main() {
   const tenant = process.argv[2];

@@ -48,7 +48,7 @@ def page():
         d = progress.build(WATCH[1].read_text(encoding="utf-8"), WATCH[0].read_text(encoding="utf-8"), now.date())
         d["now"] = now
         body = progress.render_html(d)
-    except BaseException as ex:  # 表を書きかけのときは止まらずに知らせ、直るのを待つ
+    except (Exception, SystemExit) as ex:  # 表を書きかけのときは止まらずに知らせ、直るのを待つ（読めない表は SystemExit。Ctrl+C は止める）
         body = f'<!doctype html><meta charset="utf-8"><p style="font:16px sans-serif;padding:16px">表を読めませんでした（書きかけかもしれません）: {html.escape(str(ex))}</p>'
     return body.replace("</body>", RELOAD + "</body>")
 

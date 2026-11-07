@@ -20,14 +20,16 @@ async function main() {
   const tenant = args.find((a) => !a.startsWith("--")) ?? "company";
   if (!/^[a-z][a-z0-9-]{1,30}$/.test(tenant)) throw new Error("テナントの名前は英小文字・数字・-");
   if (tenant === "demo") throw new Error("架空の会社は鍵なしで入れる");
-  const where = args.includes("--remote") ? "--remote" : "--local";
+  const remote = args.includes("--remote");
+  // 本番の D1 は env.production にだけある。--env production が無いと最上位の手元用の DB に向かう
+  const where = remote ? "--remote --env production" : "--local";
   let sql: string;
   if (args.includes("--revoke")) sql = revokeSql(tenant);
   else {
     const key = newKey();
     mkdirSync(privatePath("tenants"), { recursive: true });
     writeFileSync(keyPath(tenant), JSON.stringify({ tenant, key, url: `/mcp/${tenant}`, at: new Date().toISOString() }, null, 2) + "\n", "utf-8");
-    sql = addKeySql(tenant, await hashKey(key), `${where.slice(2)} ${new Date().toISOString().slice(0, 10)}`);
+    sql = addKeySql(tenant, await hashKey(key), `${remote ? "remote" : "local"} ${new Date().toISOString().slice(0, 10)}`);
   }
   mkdirSync(privatePath("tmp"), { recursive: true });
   const file = privatePath("tmp", `mcp-key-${tenant}.sql`);

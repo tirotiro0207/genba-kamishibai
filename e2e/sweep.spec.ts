@@ -13,7 +13,8 @@ import { MARK, sql, toOk } from "./helpers/ok";
 test.skip(!process.env.SWEEP, "見回りは SWEEP=1 のときだけ流す");
 test.setTimeout(30 * 60_000);
 
-const AI = /\/(extract(\/[^/]+\/make)?|cards\/[^/]+\/(verify|redo)|demo\/make)$/;
+// 作り直し（rework）とチャットの送信（chats/<id>/messages）も Claude を呼ぶ
+const AI = /\/(extract(\/[^/]+\/make)?|cards\/[^/]+\/(verify|redo|rework)|chats\/[^/]+\/messages|demo\/make)$/;
 const DANGER = /空にする|リセット|消す|削除/;
 const W = { width: 390, height: 844 };
 
@@ -62,18 +63,25 @@ async function seed(request: APIRequestContext, kind: Kind) {
 /** 画面ごとの役（その画面を使う人） */
 const SCREENS = (s: { ok: string; signed: string; trial: string }) =>
   [
+    ["home", "author"],
+    ["new", "author"],
     ["make", "author"],
     [`card/${s.ok}`, "author"],
     [`route/${s.ok}`, "supervisor"],
     [`fix/${s.ok}`, "supervisor"],
+    [`fix/${s.ok}/words`, "supervisor"],
     [`fold/${s.ok}`, "author"],
     [`pose/${s.ok}`, "supervisor"],
     [`sign/${s.ok}`, "supervisor"],
     [`audit/${s.signed}`, "trainer"],
     ["read", "newhire"],
+    ["student", "newhire"],
     ["issue", "supervisor"],
     ["queue", "supervisor"],
+    ["trials", "trainer"],
     ["trial/new", "trainer"],
+    [`trial/${s.trial}/material`, "trainer"],
+    [`trial/${s.trial}/self/p1`, "newhire"],
     [`trial/${s.trial}/time`, "trainer"],
     [`trial/${s.trial}/answer/p1`, "trainer"],
     [`trial/${s.trial}/grade/g1`, "trainer"],
@@ -187,8 +195,9 @@ function save() {
 
 test.use({ viewport: W });
 
-test("見回り: 公開デモの入口と絵の部品の一覧（入らずに見る画面）", async ({ page }) => {
-  for (const hash of ["#/", "#/demo/time", "#/demo/picture", "#/picto/poses"]) await sweepScreen(page, "公開デモ（架空の会社・local）", hash);
+// #/ は入口（会社の名前を入れるか、ゲストで公開デモへ）。公開デモの入口は #/demo
+test("見回り: 入口と公開デモと絵の部品の一覧（入らずに見る画面）", async ({ page }) => {
+  for (const hash of ["#/", "#/demo", "#/demo/time", "#/demo/picture", "#/picto/poses"]) await sweepScreen(page, "公開デモ（架空の会社・local）", hash);
   save();
 });
 
