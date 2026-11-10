@@ -6,10 +6,10 @@
 
 > **コードは非公開です。導入・協業のご相談は、下の連絡先へ。**
 
-- 動画（3 分）: https://youtu.be/Gd8hjogxsgA
-- デモ・操作の動画（16 分・待ち時間だけ省略）: https://youtu.be/9WRtGGyaGUM
-- 公開デモ（ログイン不要。監修者が署名したカードの写し 2 枚と、絵の部品）: https://genba-kamishibai.ikjshare.workers.dev/#/t/demo
-- 作る側を試す（ゲストの部屋）: https://genba-kamishibai.ikjshare.workers.dev を開き、「ゲストで動作確認する」を押す。あなただけの使い捨ての置き場で、ログイン不要。AI を呼ぶ操作は 1 日 5 回まで。**2026-11-20 23:59（日本時間）まで**
+- 動画（3 分）: [https://youtu.be/Gd8hjogxsgA](https://youtu.be/Gd8hjogxsgA)
+- デモ・操作の動画（16 分・待ち時間だけ省略）: [https://youtu.be/9WRtGGyaGUM](https://youtu.be/9WRtGGyaGUM)
+- 公開デモ（ログイン不要。監修者が署名したカードの写し 2 枚と、絵の部品）: [https://genba-kamishibai.ikjshare.workers.dev/#/t/demo](https://genba-kamishibai.ikjshare.workers.dev/#/t/demo)
+- 作る側を試す（ゲストの部屋）: [https://genba-kamishibai.ikjshare.workers.dev](https://genba-kamishibai.ikjshare.workers.dev) を開き、「ゲストで動作確認する」を押す。あなただけの使い捨ての置き場で、ログイン不要。AI を呼ぶ操作は 1 日 5 回まで。**2026-11-20 23:59（日本時間）まで**
 
 ## 前 → 後
 
@@ -64,9 +64,9 @@ flowchart LR
 
 ## 協力・連絡先
 
-- 協力: 東光電気工事株式会社（https://www.tokodenko.co.jp/）（現場での試用・安全の書類・監修）
-- 導入・協業のご相談: ichiromiki1997@gmail.com
-- X: https://x.com/tirotiro_dev
+- 協力: [東光電気工事株式会社](https://www.tokodenko.co.jp/)（現場での試用・安全の書類・監修）
+- 導入・協業のご相談: [ichiromiki1997@gmail.com](mailto:ichiromiki1997@gmail.com)
+- X: [https://x.com/tirotiro_dev](https://x.com/tirotiro_dev)
 
 ---
 
@@ -78,10 +78,10 @@ genba-kamishibai turns a company's safety documents into cards that new hires fr
 
 > **The code is private. For adoption or partnership, please use the contact below.**
 
-- Video (3 min): https://youtu.be/Gd8hjogxsgA
-- Demo / walkthrough video (16 min, only idle waits cut): https://youtu.be/9WRtGGyaGUM
-- Public demo (no sign-in; copies of 2 cards signed by supervisors, and the picture parts): https://genba-kamishibai.ikjshare.workers.dev/#/t/demo
-- Try the authoring side (guest space): open https://genba-kamishibai.ikjshare.workers.dev and press "ゲストで動作確認する" (Try as a guest). A throwaway space just for you, no sign-in, up to 5 AI operations a day. **Open until 2026-11-20 23:59 Japan time** (the screens are in Japanese)
+- Video (3 min): [https://youtu.be/Gd8hjogxsgA](https://youtu.be/Gd8hjogxsgA)
+- Demo / walkthrough video (16 min, only idle waits cut): [https://youtu.be/9WRtGGyaGUM](https://youtu.be/9WRtGGyaGUM)
+- Public demo (no sign-in; copies of 2 cards signed by supervisors, and the picture parts): [https://genba-kamishibai.ikjshare.workers.dev/#/t/demo](https://genba-kamishibai.ikjshare.workers.dev/#/t/demo)
+- Try the authoring side (guest space): open [https://genba-kamishibai.ikjshare.workers.dev](https://genba-kamishibai.ikjshare.workers.dev) and press "ゲストで動作確認する" (Try as a guest). A throwaway space just for you, no sign-in, up to 5 AI operations a day. **Open until 2026-11-20 23:59 Japan time** (the screens are in Japanese)
 
 ## Before → After
 
@@ -118,6 +118,6 @@ Sources and caveats: [NUMBERS.md](NUMBERS.md). The "before" figures were provide
 
 ## Thanks and contact
 
-- Partner: Toko Electrical Construction Co., Ltd. (https://www.tokodenko.co.jp/) — on-site trial, safety documents, supervision
-- For adoption or partnership: ichiromiki1997@gmail.com
-- X: https://x.com/tirotiro_dev
+- Partner: [Toko Electrical Construction Co., Ltd.](https://www.tokodenko.co.jp/) — on-site trial, safety documents, supervision
+- For adoption or partnership: [ichiromiki1997@gmail.com](mailto:ichiromiki1997@gmail.com)
+- X: [https://x.com/tirotiro_dev](https://x.com/tirotiro_dev)
