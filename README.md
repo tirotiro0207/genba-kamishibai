@@ -64,7 +64,7 @@ flowchart LR
 
 ## 協力・連絡先
 
-- 協力: 東光電気工事株式会社（現場での試用・安全の書類・監修）
+- 協力: 東光電気工事株式会社（https://www.tokodenko.co.jp/）（現場での試用・安全の書類・監修）
 - 導入・協業のご相談: ichiromiki1997@gmail.com
 - X: https://x.com/tirotiro_dev
 
@@ -118,6 +118,6 @@ Sources and caveats: [NUMBERS.md](NUMBERS.md). The "before" figures were provide
 
 ## Thanks and contact
 
-- In cooperation with: the electrical contractor credited in the Japanese section above (on-site trial, safety documents, supervision)
+- Partner: Toko Electrical Construction Co., Ltd. (https://www.tokodenko.co.jp/) — on-site trial, safety documents, supervision
 - For adoption or partnership: ichiromiki1997@gmail.com
 - X: https://x.com/tirotiro_dev
